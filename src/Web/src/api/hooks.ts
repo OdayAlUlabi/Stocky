@@ -62,6 +62,20 @@ export function useDeletePortfolio() {
   });
 }
 
+export function useUpdatePortfolio() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async ({ id, body }: { id: string; body: { name: string; baseCurrency: string; costBasisMethod?: string } }) =>
+      request<PortfolioDto>(`/api/portfolios/${id}`, { method: 'PUT', body, token: await getToken() }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['portfolios'] });
+      qc.invalidateQueries({ queryKey: ['portfolios', vars.id, 'capital-gains'] });
+      qc.invalidateQueries({ queryKey: ['portfolios', vars.id, 'reports'] });
+    }
+  });
+}
+
 export function useHoldings(portfolioId: string | undefined) {
   const getToken = useApiToken();
   return useQuery({

@@ -110,7 +110,7 @@ Deferred: SCR-005, SCR-007, SCR-008, SCR-009, SCR-010, SCR-020, SCR-021, SCR-030
 
 ## Post-MVP backlog (from full spec)
 
-- **Portfolio**: broker sync (Plaid/Alpaca), CSV/OFX import, multi-currency FX, crypto exchange sync, options Greeks, dividend automation, corporate actions, tax-lot methods.
+- **Portfolio**: broker sync (Plaid/Alpaca), CSV/OFX import, multi-currency FX, crypto exchange sync, options Greeks, dividend automation, corporate actions, tax-lot methods ✅ (FIFO / LIFO / HighestCost / LowestCost selectable per portfolio).
 - **Analytics**: screener, TradingView Lightweight Charts, analyst ratings, earnings calendar, correlation matrix, risk metrics, backtesting.
 - **Data**: real-time quotes, Level 2, news, SEC filings, insider trades, short interest, economic calendar, options flow.
 - **Trading**: live order execution, advanced order types, paper trading, automated trading, rebalancing ✅ (`RebalanceService` + `/rebalance` + target editor UI), margin.

@@ -4,7 +4,10 @@ export interface PortfolioDto {
   baseCurrency: string;
   createdAt: string;
   cashBalance: number;
+  costBasisMethod: CostBasisMethod;
 }
+
+export type CostBasisMethod = 'Fifo' | 'Lifo' | 'HighestCost' | 'LowestCost';
 
 export interface HoldingDto {
   id: string;

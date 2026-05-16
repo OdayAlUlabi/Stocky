@@ -14,6 +14,10 @@ public sealed class TaxLotService(StockyDbContext db)
 
     public async Task RecomputeAsync(Guid portfolioId, CancellationToken ct = default)
     {
+        var portfolio = await db.Portfolios
+            .FirstOrDefaultAsync(p => p.Id == portfolioId, ct);
+        var method = portfolio?.CostBasisMethod ?? CostBasisMethod.Fifo;
+
         var oldLots = await db.TaxLots.Where(l => l.PortfolioId == portfolioId).ToListAsync(ct);
         var oldGains = await db.RealizedGains.Where(g => g.PortfolioId == portfolioId).ToListAsync(ct);
         db.TaxLots.RemoveRange(oldLots);
@@ -65,7 +69,8 @@ public sealed class TaxLotService(StockyDbContext db)
             {
                 var remainingToSell = tx.Quantity;
                 var proceedsPerShare = tx.Price - (tx.Quantity == 0 ? 0 : tx.Fee / tx.Quantity);
-                foreach (var lot in lots.Where(l => l.RemainingQuantity > 0).OrderBy(l => l.OpenedAt).ToList())
+                var ordered = SelectLots(lots.Where(l => l.RemainingQuantity > 0), method).ToList();
+                foreach (var lot in ordered)
                 {
                     if (remainingToSell <= 0) break;
                     var take = Math.Min(lot.RemainingQuantity, remainingToSell);
@@ -98,4 +103,13 @@ public sealed class TaxLotService(StockyDbContext db)
         }
         await db.SaveChangesAsync(ct);
     }
+
+    private static IEnumerable<TaxLot> SelectLots(IEnumerable<TaxLot> lots, CostBasisMethod method) =>
+        method switch
+        {
+            CostBasisMethod.Lifo => lots.OrderByDescending(l => l.OpenedAt),
+            CostBasisMethod.HighestCost => lots.OrderByDescending(l => l.CostPerShare).ThenBy(l => l.OpenedAt),
+            CostBasisMethod.LowestCost => lots.OrderBy(l => l.CostPerShare).ThenBy(l => l.OpenedAt),
+            _ => lots.OrderBy(l => l.OpenedAt),
+        };
 }

@@ -1,8 +1,8 @@
 namespace Stocky.Api.Dtos;
 
-public record PortfolioDto(Guid Id, string Name, string BaseCurrency, DateTimeOffset CreatedAt, decimal CashBalance = 0m);
-public record CreatePortfolioRequest(string Name, string BaseCurrency = "USD");
-public record UpdatePortfolioRequest(string Name, string BaseCurrency);
+public record PortfolioDto(Guid Id, string Name, string BaseCurrency, DateTimeOffset CreatedAt, decimal CashBalance = 0m, string CostBasisMethod = "Fifo");
+public record CreatePortfolioRequest(string Name, string BaseCurrency = "USD", string? CostBasisMethod = null);
+public record UpdatePortfolioRequest(string Name, string BaseCurrency, string? CostBasisMethod = null);
 
 public record HoldingDto(Guid Id, string Symbol, decimal Quantity, decimal AverageCost, decimal? LatestPrice, decimal? MarketValue);
 

@@ -13,6 +13,13 @@ namespace Stocky.Api.Controllers;
 [Route("api/[controller]")]
 public class PortfoliosController(StockyDbContext db, PortfolioLedgerService ledger) : ControllerBase
 {
+    private static bool TryParseMethod(string? value, out CostBasisMethod method)
+    {
+        method = CostBasisMethod.Fifo;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        return Enum.TryParse(value, ignoreCase: true, out method);
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<PortfolioDto>>> List()
     {
@@ -25,7 +32,7 @@ public class PortfoliosController(StockyDbContext db, PortfolioLedgerService led
         foreach (var p in portfolios)
         {
             var cash = await ledger.GetCashBalanceAsync(p.Id);
-            items.Add(new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, cash));
+            items.Add(new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, cash, p.CostBasisMethod.ToString()));
         }
         return Ok(items);
     }
@@ -37,7 +44,7 @@ public class PortfoliosController(StockyDbContext db, PortfolioLedgerService led
         var p = await db.Portfolios.FirstOrDefaultAsync(x => x.Id == id && x.OwnerId == ownerId);
         if (p is null) return NotFound();
         var cash = await ledger.GetCashBalanceAsync(p.Id);
-        return new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, cash);
+        return new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, cash, p.CostBasisMethod.ToString());
     }
 
     [HttpPost]
@@ -48,24 +55,36 @@ public class PortfoliosController(StockyDbContext db, PortfolioLedgerService led
         {
             OwnerId = ownerId,
             Name = request.Name,
-            BaseCurrency = string.IsNullOrWhiteSpace(request.BaseCurrency) ? "USD" : request.BaseCurrency
+            BaseCurrency = string.IsNullOrWhiteSpace(request.BaseCurrency) ? "USD" : request.BaseCurrency,
+            CostBasisMethod = TryParseMethod(request.CostBasisMethod, out var m) ? m : CostBasisMethod.Fifo,
         };
         db.Portfolios.Add(p);
         await db.SaveChangesAsync();
-        return CreatedAtAction(nameof(Get), new { id = p.Id }, new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt));
+        return CreatedAtAction(nameof(Get), new { id = p.Id },
+            new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, 0m, p.CostBasisMethod.ToString()));
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<ActionResult<PortfolioDto>> Update(Guid id, UpdatePortfolioRequest request)
+    public async Task<ActionResult<PortfolioDto>> Update(Guid id, UpdatePortfolioRequest request, [FromServices] TaxLotService taxLots)
     {
         var ownerId = User.GetOwnerId();
         var p = await db.Portfolios.FirstOrDefaultAsync(x => x.Id == id && x.OwnerId == ownerId);
         if (p is null) return NotFound();
         p.Name = request.Name;
         p.BaseCurrency = request.BaseCurrency;
+        var methodChanged = false;
+        if (TryParseMethod(request.CostBasisMethod, out var m) && m != p.CostBasisMethod)
+        {
+            p.CostBasisMethod = m;
+            methodChanged = true;
+        }
         await db.SaveChangesAsync();
+        if (methodChanged)
+        {
+            await taxLots.RecomputeAsync(p.Id);
+        }
         var cash = await ledger.GetCashBalanceAsync(p.Id);
-        return new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, cash);
+        return new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, cash, p.CostBasisMethod.ToString());
     }
 
     [HttpDelete("{id:guid}")]

@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Anchor, Badge, Button, Card, FileButton, Group, Modal, ScrollArea, Stack, Table, Tabs, Text, Textarea, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Anchor, Badge, Button, Card, FileButton, Group, Modal, ScrollArea, Select, Stack, Table, Tabs, Text, Textarea, Title, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconDownload, IconEdit, IconPlus, IconTrash, IconUpload } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router-dom';
 import { useState } from 'react';
@@ -9,11 +9,19 @@ import {
   useHoldings,
   useImportTransactions,
   usePortfolios,
-  useTransactions
+  useTransactions,
+  useUpdatePortfolio
 } from '../../api/hooks';
 import { EmptyState } from '../../components/EmptyState';
 import { TradeDrawer } from './TradeDrawer';
-import type { TransactionDto } from '../../api/types';
+import type { CostBasisMethod, TransactionDto } from '../../api/types';
+
+const COST_BASIS_OPTIONS: { value: CostBasisMethod; label: string }[] = [
+  { value: 'Fifo', label: 'FIFO — first in, first out' },
+  { value: 'Lifo', label: 'LIFO — last in, first out' },
+  { value: 'HighestCost', label: 'Highest cost (HIFO)' },
+  { value: 'LowestCost', label: 'Lowest cost' },
+];
 
 function txTypeColor(type: string): string {
   switch (type) {
@@ -37,6 +45,7 @@ export function PortfolioDetail() {
   const transactions = useTransactions(id);
   const delTx = useDeleteTransaction(id);
   const importTx = useImportTransactions(id);
+  const updatePortfolio = useUpdatePortfolio();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<TransactionDto | null>(null);
@@ -109,6 +118,32 @@ export function PortfolioDetail() {
           </Stack>
         </Group>
         <Group gap="xs">
+          <Tooltip label="Lot-selection method used when realising gains on Sell trades.">
+            <Select
+              size="xs"
+              w={240}
+              value={portfolio?.costBasisMethod ?? 'Fifo'}
+              data={COST_BASIS_OPTIONS}
+              onChange={async (val) => {
+                if (!val || !portfolio || val === portfolio.costBasisMethod) return;
+                try {
+                  await updatePortfolio.mutateAsync({
+                    id,
+                    body: {
+                      name: portfolio.name,
+                      baseCurrency: portfolio.baseCurrency,
+                      costBasisMethod: val,
+                    },
+                  });
+                  notifications.show({ message: `Cost basis: ${val} — gains recomputed`, color: 'teal' });
+                } catch (e) {
+                  notifications.show({ message: (e as Error).message, color: 'red' });
+                }
+              }}
+              disabled={!portfolio || updatePortfolio.isPending}
+              aria-label="Cost basis method"
+            />
+          </Tooltip>
           <Button variant="default" component={Link} to={`/portfolios/${id}/history`}>History</Button>
           <Button variant="default" component={Link} to={`/portfolios/${id}/capital-flow`}>Capital flow</Button>
           <Button variant="default" component={Link} to={`/portfolios/${id}/analytics`}>Analytics</Button>

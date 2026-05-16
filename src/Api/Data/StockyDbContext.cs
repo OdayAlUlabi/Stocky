@@ -53,6 +53,7 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
             e.Property(x => x.Name).HasMaxLength(120).IsRequired();
             e.Property(x => x.BaseCurrency).HasMaxLength(8);
+            e.Property(x => x.CostBasisMethod).HasConversion<string>().HasMaxLength(16);
         });
 
         modelBuilder.Entity<Holding>(e =>
