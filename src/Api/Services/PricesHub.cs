@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using Stocky.Api.Data;
 using Stocky.Api.Dtos;
 
 namespace Stocky.Api.Services;
@@ -30,6 +32,39 @@ public sealed class PricesHub : Hub
             if (string.IsNullOrWhiteSpace(s)) continue;
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, s.ToUpperInvariant());
         }
+    }
+
+    // M14 #92 — per-portfolio streaming. Clients join "portfolio:{id}" groups
+    // and receive a "portfolioUpdated" event whenever a relevant ledger or
+    // quote change touches the portfolio.
+    public async Task SubscribePortfolio(string portfolioId, [Microsoft.AspNetCore.Mvc.FromServices] StockyDbContext db)
+    {
+        if (!Guid.TryParse(portfolioId, out var pid)) return;
+        var ownerId = Context.User?.GetOwnerId();
+        if (string.IsNullOrWhiteSpace(ownerId)) return;
+        var owned = await db.Portfolios.AnyAsync(p => p.Id == pid && p.OwnerId == ownerId);
+        if (!owned) return;
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"portfolio:{pid}");
+    }
+
+    public Task UnsubscribePortfolio(string portfolioId)
+    {
+        if (!Guid.TryParse(portfolioId, out var pid)) return Task.CompletedTask;
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, $"portfolio:{pid}");
+    }
+}
+
+/// <summary>
+/// M14 #92 — Fans-out a lightweight "portfolioUpdated" event to all clients
+/// currently subscribed to a portfolio's group. Called by the ledger service
+/// after transactions and by QuoteRefresher after relevant ticks.
+/// </summary>
+public sealed class PortfolioUpdatedBroadcaster(IHubContext<PricesHub> hub)
+{
+    public Task BroadcastAsync(Guid portfolioId, string reason, CancellationToken ct = default)
+    {
+        var payload = new { portfolioId, reason, at = DateTimeOffset.UtcNow };
+        return hub.Clients.Group($"portfolio:{portfolioId}").SendAsync("portfolioUpdated", payload, ct);
     }
 }
 

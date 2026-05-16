@@ -66,3 +66,52 @@ export function usePriceTicks(symbols: string[], onTick?: (t: PriceTickDto) => v
     };
   }, [symbols.join(','), getToken, qc]);
 }
+
+/// M14 #92 — subscribe to a portfolio group on the same /hubs/prices hub.
+/// Server emits "portfolioUpdated" when transactions or quote ticks affect
+/// the portfolio. We invalidate the relevant TanStack-Query keys so the
+/// Dashboard refreshes within ~1s.
+const portfolioSubscribed = new Map<string, number>();
+
+export function usePortfolioStream(portfolioId: string | undefined) {
+  const getToken = useApiToken();
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    if (!portfolioId) return;
+    let cancelled = false;
+
+    const onUpdate = (payload: { portfolioId: string }) => {
+      const pid = payload?.portfolioId;
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      if (pid) {
+        qc.invalidateQueries({ queryKey: ['portfolios', pid, 'holdings'] });
+        qc.invalidateQueries({ queryKey: ['portfolios', pid, 'transactions'] });
+        qc.invalidateQueries({ queryKey: ['portfolios', pid, 'allocation'] });
+        qc.invalidateQueries({ queryKey: ['portfolios', pid, 'history'] });
+      }
+    };
+
+    (async () => {
+      const conn = await ensureConnection(getToken);
+      if (cancelled) return;
+      conn.off('portfolioUpdated', onUpdate);
+      conn.on('portfolioUpdated', onUpdate);
+      portfolioSubscribed.set(portfolioId, (portfolioSubscribed.get(portfolioId) ?? 0) + 1);
+      try { await conn.invoke('SubscribePortfolio', portfolioId); } catch { /* will retry */ }
+    })();
+
+    return () => {
+      cancelled = true;
+      const n = (portfolioSubscribed.get(portfolioId) ?? 1) - 1;
+      if (n <= 0) {
+        portfolioSubscribed.delete(portfolioId);
+        if (connection && connection.state === HubConnectionState.Connected) {
+          connection.invoke('UnsubscribePortfolio', portfolioId).catch(() => { /* noop */ });
+        }
+      } else {
+        portfolioSubscribed.set(portfolioId, n);
+      }
+    };
+  }, [portfolioId, getToken, qc]);
+}

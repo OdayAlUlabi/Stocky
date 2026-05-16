@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { MetricCard } from '../../components/MetricCard';
 import { EmptyState } from '../../components/EmptyState';
 import { useDashboard, usePortfolios } from '../../api/hooks';
+import { usePortfolioStream } from '../../api/priceStream';
 
 const PIE_COLORS = ['#228be6', '#15aabf', '#40c057', '#fab005', '#fa5252', '#7950f2', '#e64980'];
 
@@ -20,6 +21,7 @@ export function Dashboard() {
   const [scope, setScope] = useState<string>('all');
   const portfolioId = scope === 'all' ? undefined : scope;
   const { data, isLoading } = useDashboard(portfolioId);
+  usePortfolioStream(portfolioId);
 
   const segments = useMemo(() => {
     const opts = [{ label: 'All', value: 'all' }];

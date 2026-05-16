@@ -172,4 +172,62 @@ public class M14PlatformTests
         await db.SaveChangesAsync();
         Assert.Empty(await db.PositionNotes.ToListAsync());
     }
+
+    // -------- ApiKeyService (M14 #91) ------------------------------------
+
+    [Fact]
+    public async Task ApiKeyService_generates_unique_sk_prefixed_plaintext()
+    {
+        var db = NewDb();
+        var svc = new ApiKeyService(db);
+        var a = await svc.GenerateAsync("u1", "key-a");
+        var b = await svc.GenerateAsync("u1", "key-b");
+        Assert.StartsWith("sk_", a.Plaintext);
+        Assert.StartsWith("sk_", b.Plaintext);
+        Assert.NotEqual(a.Plaintext, b.Plaintext);
+        Assert.NotEqual(a.Record.HashedKey, b.Record.HashedKey);
+    }
+
+    [Fact]
+    public async Task ApiKeyService_validates_and_rejects_revoked()
+    {
+        var db = NewDb();
+        var svc = new ApiKeyService(db);
+        var g = await svc.GenerateAsync("u1", "primary");
+        Assert.NotNull(await svc.ValidateAsync(g.Plaintext));
+        Assert.True(await svc.RevokeAsync(g.Record.Id, "u1"));
+        Assert.Null(await svc.ValidateAsync(g.Plaintext));
+    }
+
+    [Fact]
+    public async Task ApiKeyService_rejects_expired_key()
+    {
+        var db = NewDb();
+        var svc = new ApiKeyService(db);
+        var g = await svc.GenerateAsync("u1", "expired", expiresAt: DateTimeOffset.UtcNow.AddSeconds(-5));
+        Assert.Null(await svc.ValidateAsync(g.Plaintext));
+    }
+
+    [Fact]
+    public async Task ApiKeyService_rejects_unknown_or_malformed_keys()
+    {
+        var db = NewDb();
+        var svc = new ApiKeyService(db);
+        Assert.Null(await svc.ValidateAsync(""));
+        Assert.Null(await svc.ValidateAsync("not-a-real-key"));
+        Assert.Null(await svc.ValidateAsync("sk_nope_nope"));
+    }
+
+    [Fact]
+    public async Task ApiKeyService_lists_only_owner_keys()
+    {
+        var db = NewDb();
+        var svc = new ApiKeyService(db);
+        await svc.GenerateAsync("u1", "u1-a");
+        await svc.GenerateAsync("u1", "u1-b");
+        await svc.GenerateAsync("u2", "u2-a");
+        var list = await svc.ListAsync("u1");
+        Assert.Equal(2, list.Count);
+        Assert.All(list, k => Assert.Equal("u1", k.OwnerId));
+    }
 }

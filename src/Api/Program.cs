@@ -22,18 +22,44 @@ builder.Services.AddDbContext<StockyDbContext>(options =>
     }
 });
 
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
-
 var entraClientIdAtStartup = builder.Configuration["AzureAd:ClientId"];
+var authBuilder = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
 if (!string.IsNullOrWhiteSpace(entraClientIdAtStartup))
 {
-    builder.Services
-        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
+    authBuilder.AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
 }
+else
+{
+    // Register a no-op JwtBearer handler so UseAuthentication() can resolve
+    // the default scheme even when Entra isn't configured (dev / tests).
+    authBuilder.AddJwtBearer(_ => { });
+}
+// M14 #91 — API-key bearer scheme (sk_*) for /v1/public endpoints
+authBuilder.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+    ApiKeyAuthenticationHandler.SchemeName, _ => { });
 
 builder.Services.AddAuthorization();
+builder.Services.AddScoped<ApiKeyService>();
+
+// M14 #91 — per-key rate limit: 60 req/min/key, 1000 req/min/IP fallback.
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.AddPolicy("api-key", httpContext =>
+    {
+        var keyId = httpContext.User.FindFirst("apikey_id")?.Value
+            ?? httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "anon";
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            keyId,
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+});
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
@@ -97,6 +123,7 @@ builder.Services.AddHostedService<SnapshotJob>();
 builder.Services.AddScoped<IExtendedMarketDataProvider, StubExtendedMarketDataProvider>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<PriceTickBroadcaster>();
+builder.Services.AddSingleton<PortfolioUpdatedBroadcaster>();
 
 // M9 — Advanced Analytics & Charts
 builder.Services.AddScoped<IAdvancedMarketDataProvider, StubAdvancedMarketDataProvider>();
@@ -170,26 +197,31 @@ app.UseCors(CorsPolicy);
 // App Insights customDimensions can be filtered per user/portfolio/symbol.
 app.UseMiddleware<TelemetryEnricherMiddleware>();
 
-// Dev-only auth bypass: when Entra isn't configured, inject a synthetic user so the UI is browsable.
+// Always run authentication so the ApiKey scheme can authorize /v1/public requests
+// even when Entra is not configured.
+app.UseAuthentication();
+
+// Dev-only auth bypass: when Entra isn't configured AND the request didn't already
+// authenticate via an API key, inject a synthetic user so the UI is browsable.
 var entraClientId = builder.Configuration["AzureAd:ClientId"];
 if (app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(entraClientId))
 {
     app.Use(async (ctx, next) =>
     {
-        var identity = new System.Security.Claims.ClaimsIdentity(new[]
+        if (ctx.User?.Identity?.IsAuthenticated != true)
         {
-            new System.Security.Claims.Claim("oid", "00000000-0000-0000-0000-000000000001"),
-            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "Local Dev User")
-        }, "DevBypass");
-        ctx.User = new System.Security.Claims.ClaimsPrincipal(identity);
+            var identity = new System.Security.Claims.ClaimsIdentity(new[]
+            {
+                new System.Security.Claims.Claim("oid", "00000000-0000-0000-0000-000000000001"),
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "Local Dev User")
+            }, "DevBypass");
+            ctx.User = new System.Security.Claims.ClaimsPrincipal(identity);
+        }
         await next();
     });
 }
-else
-{
-    app.UseAuthentication();
-}
 app.UseAuthorization();
+app.UseRateLimiter();
 app.MapControllers();
 app.MapHub<PricesHub>("/hubs/prices");
 
