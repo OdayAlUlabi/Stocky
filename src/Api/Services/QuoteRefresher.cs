@@ -7,17 +7,23 @@ namespace Stocky.Api.Services;
 /// <summary>
 /// Periodic refresher: pulls quotes for every symbol that appears in any
 /// holding or watchlist, writes a new PriceQuote row, and runs the alert
-/// evaluator. Interval comes from MarketData:RefreshSeconds (default 60).
+/// evaluator. Interval comes from MarketData:RefreshSeconds (default 10,
+/// minimum 5). Skips iterations when the US equity market is closed unless
+/// MarketData:AlwaysRefresh=true.
 /// </summary>
 public sealed class QuoteRefresher(
     IServiceProvider services,
     IConfiguration config,
     ILogger<QuoteRefresher> logger) : BackgroundService
 {
+    private static readonly TimeZoneInfo EasternTz = ResolveEasternTimeZone();
+    private bool _lastMarketOpenState = true;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var seconds = config.GetValue("MarketData:RefreshSeconds", 60);
-        var delay = TimeSpan.FromSeconds(Math.Max(seconds, 10));
+        var seconds = config.GetValue("MarketData:RefreshSeconds", 10);
+        var delay = TimeSpan.FromSeconds(Math.Max(seconds, 5));
+        var alwaysRefresh = config.GetValue("MarketData:AlwaysRefresh", false);
 
         // Small startup delay so the API can warm up first.
         try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); } catch { return; }
@@ -26,7 +32,20 @@ public sealed class QuoteRefresher(
         {
             try
             {
-                await RefreshOnceAsync(stoppingToken);
+                if (alwaysRefresh || IsUsEquityMarketOpen(DateTimeOffset.UtcNow))
+                {
+                    if (!_lastMarketOpenState)
+                    {
+                        logger.LogInformation("US equity market opened; resuming quote refresh.");
+                        _lastMarketOpenState = true;
+                    }
+                    await RefreshOnceAsync(stoppingToken);
+                }
+                else if (_lastMarketOpenState)
+                {
+                    logger.LogInformation("US equity market is closed; pausing quote refresh.");
+                    _lastMarketOpenState = false;
+                }
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
@@ -65,5 +84,30 @@ public sealed class QuoteRefresher(
         await db.SaveChangesAsync(ct);
         await evaluator.EvaluateAsync(quotes, ct);
         logger.LogInformation("Refreshed {Count} quotes", quotes.Count);
+    }
+
+    /// <summary>
+    /// US equity regular trading hours: Mon-Fri, 09:30-16:00 America/New_York.
+    /// Federal market holidays are NOT modelled — a full holiday calendar
+    /// can be added later. Off-hours requests just no-op cheaply.
+    /// </summary>
+    internal static bool IsUsEquityMarketOpen(DateTimeOffset utcNow)
+    {
+        var et = TimeZoneInfo.ConvertTime(utcNow, EasternTz);
+        if (et.DayOfWeek == DayOfWeek.Saturday || et.DayOfWeek == DayOfWeek.Sunday) return false;
+        var minutes = et.Hour * 60 + et.Minute;
+        return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
+    }
+
+    private static TimeZoneInfo ResolveEasternTimeZone()
+    {
+        // Windows uses "Eastern Standard Time"; Linux/macOS use IANA "America/New_York".
+        foreach (var id in new[] { "America/New_York", "Eastern Standard Time" })
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+            catch (TimeZoneNotFoundException) { }
+            catch (InvalidTimeZoneException) { }
+        }
+        return TimeZoneInfo.Utc;
     }
 }

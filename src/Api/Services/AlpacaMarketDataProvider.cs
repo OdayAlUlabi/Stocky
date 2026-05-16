@@ -19,7 +19,7 @@ public sealed class AlpacaMarketDataProvider(
     StubMarketDataProvider fallback,
     ILogger<AlpacaMarketDataProvider> log) : IMarketDataProvider
 {
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(5);
 
     public async Task<IReadOnlyList<QuoteDto>> GetQuotesAsync(IReadOnlyCollection<string> symbols, CancellationToken ct = default)
     {
