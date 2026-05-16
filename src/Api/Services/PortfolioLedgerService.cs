@@ -71,7 +71,8 @@ public sealed class PortfolioLedgerService(StockyDbContext db)
             .Where(t => t.PortfolioId == portfolioId && t.Symbol != null &&
                         (t.Type == TransactionType.Buy ||
                          t.Type == TransactionType.Sell ||
-                         t.Type == TransactionType.Split))
+                         t.Type == TransactionType.Split ||
+                         t.Type == TransactionType.SpinOff))
             .OrderBy(t => t.ExecutedAt)
             .ToListAsync(ct);
 
@@ -99,6 +100,16 @@ public sealed class PortfolioLedgerService(StockyDbContext db)
                 {
                     qty /= t.Price;
                     avg *= t.Price;
+                }
+                else if (t.Type == TransactionType.SpinOff && t.Quantity > 0)
+                {
+                    // Treat a SpinOff row on a new symbol as receiving shares
+                    // at zero cost basis. If the symbol already has a position
+                    // we add to it without changing the running average cost.
+                    var addQty = t.Quantity;
+                    var totalCost = qty * avg; // existing basis is preserved
+                    qty += addQty;
+                    avg = qty == 0 ? 0 : totalCost / qty;
                 }
             }
 

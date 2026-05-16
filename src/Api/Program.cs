@@ -39,7 +39,24 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 builder.Services.AddMemoryCache();
 
-builder.Services.AddSingleton<IMarketDataProvider, StubMarketDataProvider>();
+// Market data: prefer Finnhub when an API key is configured, otherwise fall
+// back to the deterministic stub so dev still works without secrets.
+var finnhubKey = builder.Configuration["MarketData:Finnhub:ApiKey"];
+builder.Services.AddSingleton<StubMarketDataProvider>();
+if (!string.IsNullOrWhiteSpace(finnhubKey))
+{
+    builder.Services.AddHttpClient<FinnhubMarketDataProvider>(client =>
+    {
+        client.BaseAddress = new Uri("https://finnhub.io/api/v1/");
+        client.DefaultRequestHeaders.Add("X-Finnhub-Token", finnhubKey);
+        client.Timeout = TimeSpan.FromSeconds(10);
+    });
+    builder.Services.AddScoped<IMarketDataProvider>(sp => sp.GetRequiredService<FinnhubMarketDataProvider>());
+}
+else
+{
+    builder.Services.AddScoped<IMarketDataProvider>(sp => sp.GetRequiredService<StubMarketDataProvider>());
+}
 builder.Services.AddScoped<AlertEvaluator>();
 builder.Services.AddScoped<TaxLotService>();
 builder.Services.AddScoped<PortfolioLedgerService>();

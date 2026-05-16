@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Button, Card, Group, ScrollArea, Stack, Table, Tabs, Text, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Card, Group, ScrollArea, Stack, Table, Tabs, Text, Title, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconDownload, IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router-dom';
 import { useState } from 'react';
@@ -13,6 +13,20 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import { TradeDrawer } from './TradeDrawer';
 import type { TransactionDto } from '../../api/types';
+
+function txTypeColor(type: string): string {
+  switch (type) {
+    case 'Buy': return 'teal';
+    case 'Sell': return 'red';
+    case 'Dividend': return 'green';
+    case 'Deposit': return 'blue';
+    case 'Withdrawal': return 'orange';
+    case 'Fee': return 'gray';
+    case 'Split': return 'violet';
+    case 'SpinOff': return 'grape';
+    default: return 'gray';
+  }
+}
 
 export function PortfolioDetail() {
   const { id = '' } = useParams<{ id: string }>();
@@ -96,6 +110,23 @@ export function PortfolioDetail() {
         </Group>
       </Group>
 
+      {portfolio && (
+        <Group gap="md" wrap="wrap">
+          <Card withBorder radius="md" padding="md" miw={180}>
+            <Text size="xs" c="dimmed" tt="uppercase">Market value</Text>
+            <Text fw={600} size="xl">{fmt(totalValue)}</Text>
+          </Card>
+          <Card withBorder radius="md" padding="md" miw={180}>
+            <Text size="xs" c="dimmed" tt="uppercase">Cash</Text>
+            <Text fw={600} size="xl" c={portfolio.cashBalance < 0 ? 'red' : undefined}>{fmt(portfolio.cashBalance)}</Text>
+          </Card>
+          <Card withBorder radius="md" padding="md" miw={180}>
+            <Text size="xs" c="dimmed" tt="uppercase">Total equity</Text>
+            <Text fw={600} size="xl">{fmt(totalValue + portfolio.cashBalance)}</Text>
+          </Card>
+        </Group>
+      )}
+
       <Tabs defaultValue="positions">
         <Tabs.List>
           <Tabs.Tab value="positions">Positions</Tabs.Tab>
@@ -178,7 +209,7 @@ export function PortfolioDetail() {
                     {transactions.data.map((t) => (
                       <Table.Tr key={t.id}>
                         <Table.Td>{dayjs(t.executedAt).format('MMM D, YYYY')}</Table.Td>
-                        <Table.Td>{t.type}</Table.Td>
+                        <Table.Td><Badge color={txTypeColor(t.type)} variant="light">{t.type}</Badge></Table.Td>
                         <Table.Td>{t.symbol ?? '—'}</Table.Td>
                         <Table.Td ta="right">{t.quantity}</Table.Td>
                         <Table.Td ta="right">{fmt(t.price)}</Table.Td>

@@ -1,4 +1,9 @@
 <Solution>
   <Folder Name="/src/" />
-  <Folder Name="/src/Api/" />
+  <Folder Name="/src/Api/">
+    <Project Path="src/Api/Stocky.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Api.Tests/">
+    <Project Path="src/Api.Tests/Stocky.Api.Tests.csproj" />
+  </Folder>
 </Solution>
