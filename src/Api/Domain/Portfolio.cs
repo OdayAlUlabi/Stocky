@@ -20,6 +20,11 @@ public class Portfolio
     public string BaseCurrency { get; set; } = "USD";
     public CostBasisMethod CostBasisMethod { get; set; } = CostBasisMethod.Fifo;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>
+    /// M9 #103. Optional benchmark ticker for performance / risk comparisons.
+    /// Null means "use default" (SPY) at the service layer.
+    /// </summary>
+    public string? BenchmarkSymbol { get; set; }
     public List<Holding> Holdings { get; set; } = new();
     public List<Transaction> Transactions { get; set; } = new();
 }

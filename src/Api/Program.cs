@@ -98,6 +98,14 @@ builder.Services.AddScoped<IExtendedMarketDataProvider, StubExtendedMarketDataPr
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<PriceTickBroadcaster>();
 
+// M9 — Advanced Analytics & Charts
+builder.Services.AddScoped<IAdvancedMarketDataProvider, StubAdvancedMarketDataProvider>();
+builder.Services.AddScoped<RiskMetricsService>();
+builder.Services.AddScoped<BenchmarkComparisonService>();
+builder.Services.AddScoped<BacktestService>();
+builder.Services.AddScoped<GoalsService>();
+builder.Services.AddSingleton<EarningsSurpriseService>();
+
 var appInsightsConnection = builder.Configuration["ApplicationInsights:ConnectionString"]
     ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 if (!string.IsNullOrWhiteSpace(appInsightsConnection))

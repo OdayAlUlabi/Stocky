@@ -39,6 +39,8 @@ const topItems: NavItem[] = [
   { to: '/news', label: 'News', icon: IconNews },
   { to: '/earnings', label: 'Earnings', icon: IconCalendarTime },
   { to: '/calendar/economic', label: 'Econ calendar', icon: IconCalendarTime },
+  { to: '/calendar/earnings', label: 'Earnings calendar', icon: IconCalendarTime },
+  { to: '/goals', label: 'Goals', icon: IconCash },
   { to: '/settings', label: 'Settings', icon: IconSettings }
 ];
 

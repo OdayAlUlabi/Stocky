@@ -1,12 +1,98 @@
-import { Anchor, Badge, Card, Group, Loader, NumberFormatter, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
+import { Anchor, Badge, Card, Group, Loader, NumberFormatter, Progress, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
 import { Link, useParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useEffect, useRef } from 'react';
+import { createChart, CandlestickSeries, type IChartApi, type CandlestickData, type Time } from 'lightweight-charts';
 import {
   usePositionDetail, useOrderBook, useExtendedQuote, useFilings,
-  useInsiderTrades, useShortInterest, useOptionsFlow
+  useInsiderTrades, useShortInterest, useOptionsFlow,
+  useBars, useAnalystRating, useEarningsSurprises
 } from '../../api/hooks';
 import { usePriceTicks } from '../../api/priceStream';
 import { EmptyState } from '../../components/EmptyState';
+import type { OhlcBarDto, AnalystRatingDto, EarningsSurprisePointDto } from '../../api/types';
+
+/** M9 #21 — TradingView Lightweight Charts candlestick on Position Detail. */
+function CandlestickChart({ bars }: { bars: OhlcBarDto[] }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const chart = createChart(containerRef.current, {
+      height: 320,
+      layout: { background: { color: 'transparent' }, textColor: '#888' },
+      grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
+      timeScale: { timeVisible: false, secondsVisible: false },
+      autoSize: true,
+    });
+    chartRef.current = chart;
+    const series = chart.addSeries(CandlestickSeries, {
+      upColor: '#26a69a', downColor: '#ef5350',
+      borderUpColor: '#26a69a', borderDownColor: '#ef5350',
+      wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+    });
+    const data: CandlestickData[] = bars.map(b => ({
+      time: b.date as Time,
+      open: b.open, high: b.high, low: b.low, close: b.close,
+    }));
+    series.setData(data);
+    chart.timeScale().fitContent();
+    return () => { chart.remove(); chartRef.current = null; };
+  }, [bars]);
+  return <div ref={containerRef} style={{ width: '100%', height: 320 }} />;
+}
+
+/** M9 #22 — Wall Street analyst-consensus panel. */
+function AnalystRatingPanel({ rating, surprises }: { rating: AnalystRatingDto; surprises: EarningsSurprisePointDto[] | undefined }) {
+  const d = rating.distribution;
+  const total = Math.max(1, rating.analystCount);
+  const seg = (n: number) => (n / total) * 100;
+  const labelColor = rating.consensusScore >= 4 ? 'teal' : rating.consensusScore >= 3 ? 'blue' : rating.consensusScore >= 2 ? 'yellow' : 'red';
+  return (
+    <Card withBorder>
+      <Group justify="space-between" mb="xs">
+        <Title order={5}>Analyst ratings</Title>
+        <Badge color={labelColor} variant="filled">{rating.consensusLabel}</Badge>
+      </Group>
+      <SimpleGrid cols={{ base: 2, md: 4 }} mb="sm">
+        <Card withBorder><Text size="xs" c="dimmed">Score</Text><Text fw={600}>{rating.consensusScore.toFixed(2)} / 5</Text></Card>
+        <Card withBorder><Text size="xs" c="dimmed">Analysts</Text><Text fw={600}>{rating.analystCount}</Text></Card>
+        <Card withBorder><Text size="xs" c="dimmed">Target (mean)</Text><Text fw={600}>${rating.priceTargetMean.toFixed(2)}</Text></Card>
+        <Card withBorder><Text size="xs" c="dimmed">Range</Text><Text fw={600}>${rating.priceTargetLow.toFixed(2)} – ${rating.priceTargetHigh.toFixed(2)}</Text></Card>
+      </SimpleGrid>
+      <Text size="xs" c="dimmed" mb={4}>Distribution</Text>
+      <Progress.Root size="xl">
+        <Progress.Section value={seg(d.strongBuy)} color="teal.7"><Progress.Label>SB {d.strongBuy}</Progress.Label></Progress.Section>
+        <Progress.Section value={seg(d.buy)} color="teal.4"><Progress.Label>B {d.buy}</Progress.Label></Progress.Section>
+        <Progress.Section value={seg(d.hold)} color="gray.5"><Progress.Label>H {d.hold}</Progress.Label></Progress.Section>
+        <Progress.Section value={seg(d.sell)} color="red.4"><Progress.Label>S {d.sell}</Progress.Label></Progress.Section>
+        <Progress.Section value={seg(d.strongSell)} color="red.7"><Progress.Label>SS {d.strongSell}</Progress.Label></Progress.Section>
+      </Progress.Root>
+      {surprises && surprises.length > 0 && (
+        <>
+          <Text size="xs" c="dimmed" mt="md" mb={4}>EPS surprise (last {surprises.length} quarters)</Text>
+          <Table fz="xs">
+            <Table.Thead>
+              <Table.Tr><Table.Th>Quarter</Table.Th><Table.Th>Est.</Table.Th><Table.Th>Actual</Table.Th><Table.Th>Surprise</Table.Th></Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {surprises.map(s => (
+                <Table.Tr key={s.date}>
+                  <Table.Td>{s.date}</Table.Td>
+                  <Table.Td>{s.epsEstimate?.toFixed(2) ?? '—'}</Table.Td>
+                  <Table.Td>{s.epsActual?.toFixed(2) ?? '—'}</Table.Td>
+                  <Table.Td c={(s.surprisePercent ?? 0) >= 0 ? 'teal' : 'red'}>
+                    {s.surprisePercent == null ? '—' : `${s.surprisePercent >= 0 ? '+' : ''}${s.surprisePercent.toFixed(1)}%`}
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </>
+      )}
+    </Card>
+  );
+}
 
 export function PositionDetail() {
   const { id, symbol } = useParams();
@@ -19,6 +105,9 @@ export function PositionDetail() {
   const insider = useInsiderTrades(sym, 15);
   const shortInt = useShortInterest(sym);
   const options = useOptionsFlow(sym, 15);
+  const bars = useBars(sym, 180);
+  const rating = useAnalystRating(sym);
+  const surprises = useEarningsSurprises(sym, 8);
 
   if (isLoading) return <Loader />;
   if (error) return <EmptyState title="Could not load position" description={String(error)} />;
@@ -59,18 +148,24 @@ export function PositionDetail() {
 
       <Card withBorder>
         <Title order={5} mb="xs">Price history (180d)</Title>
-        {data.priceHistory.length === 0 ? <Text c="dimmed">No history yet.</Text> : (
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={data.priceHistory.map(p => ({ ...p, date: p.date.slice(0, 10) }))}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis domain={['auto', 'auto']} />
-              <Tooltip />
-              <Line type="monotone" dataKey="value" stroke="#228be6" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+        {bars.isLoading ? <Loader size="sm" /> : !bars.data || bars.data.length === 0 ? (
+          data.priceHistory.length === 0 ? <Text c="dimmed">No history yet.</Text> : (
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={data.priceHistory.map(p => ({ ...p, date: p.date.slice(0, 10) }))}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis domain={['auto', 'auto']} />
+                <Tooltip />
+                <Line type="monotone" dataKey="value" stroke="#228be6" dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )
+        ) : (
+          <CandlestickChart bars={bars.data} />
         )}
       </Card>
+
+      {rating.data && <AnalystRatingPanel rating={rating.data} surprises={surprises.data} />}
 
       <Card withBorder>
         <Title order={5} mb="xs">Open lots</Title>
