@@ -114,7 +114,7 @@ Deferred: SCR-005, SCR-007, SCR-008, SCR-009, SCR-010, SCR-020, SCR-021, SCR-030
 - **Analytics**: screener, TradingView Lightweight Charts, analyst ratings, earnings calendar, correlation matrix, risk metrics, backtesting.
 - **Data**: real-time quotes, Level 2, news, SEC filings, insider trades, short interest, economic calendar, options flow.
 - **Trading**: live order execution, advanced order types, paper trading, automated trading, rebalancing, margin.
-- **Reporting**: TWRR/MWRR ✅ (chain-linked daily TWRR + XIRR MWRR in `PerformanceController`), capital gains with wash-sale, dividend report, advisor sharing.
+- **Reporting**: TWRR/MWRR ✅ (chain-linked daily TWRR + XIRR MWRR in `PerformanceController`), capital gains with wash-sale ✅ (`WashSaleService` + `/wash-sales` endpoint + UI), dividend report ✅, advisor sharing.
 - **Alerts**: price / technical / earnings / news / drift / insider, multi-channel delivery, history.
 - **Admin**: mobile, public REST API, WebSocket streaming, RBAC, dark mode, i18n.
 

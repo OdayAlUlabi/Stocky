@@ -244,6 +244,31 @@ export interface CorrelationDto {
   matrix: number[][];
 }
 
+export interface WashSaleReplacementDto {
+  buyTransactionId: string;
+  buyAt: string;
+  shares: number;
+}
+
+export interface WashSaleAdjustmentDto {
+  lotId: string;
+  symbol: string;
+  soldAt: string;
+  lotQuantity: number;
+  lotLoss: number;
+  replacementShares: number;
+  disallowedLoss: number;
+  allowedLoss: number;
+  replacements: WashSaleReplacementDto[];
+}
+
+export interface WashSaleReportDto {
+  year: number;
+  totalLoss: number;
+  disallowedLoss: number;
+  adjustments: WashSaleAdjustmentDto[];
+}
+
 export interface AllocationDto {
   byAsset: AllocationSliceDto[];
   bySector: AllocationSliceDto[];

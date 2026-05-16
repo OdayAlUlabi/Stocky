@@ -25,7 +25,8 @@ import type {
   TransactionDto,
   UpdateAlertRequest,
   UserSettingsDto,
-  WatchlistDto
+  WatchlistDto,
+  WashSaleReportDto
 } from './types';
 
 type Opts<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -282,6 +283,15 @@ export function useCapitalGains(portfolioId: string | undefined, year?: number) 
     queryKey: ['portfolios', portfolioId, 'capital-gains', year ?? 'current'] as const,
     enabled: Boolean(portfolioId),
     queryFn: async () => request<CapitalGainsDto>(`/api/portfolios/${portfolioId}/capital-gains`, { query: { year }, token: await getToken() })
+  });
+}
+
+export function useWashSales(portfolioId: string | undefined, year?: number) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['portfolios', portfolioId, 'wash-sales', year ?? 'current'] as const,
+    enabled: Boolean(portfolioId),
+    queryFn: async () => request<WashSaleReportDto>(`/api/portfolios/${portfolioId}/wash-sales`, { query: { year }, token: await getToken() })
   });
 }
 

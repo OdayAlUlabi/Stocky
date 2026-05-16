@@ -88,6 +88,7 @@ builder.Services.AddScoped<TaxLotService>();
 builder.Services.AddScoped<PortfolioLedgerService>();
 builder.Services.AddScoped<PortfolioHistoryService>();
 builder.Services.AddScoped<PortfolioAnalyticsService>();
+builder.Services.AddScoped<WashSaleService>();
 builder.Services.AddHostedService<QuoteRefresher>();
 builder.Services.AddHostedService<SnapshotJob>();
 

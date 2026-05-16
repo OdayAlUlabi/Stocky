@@ -172,6 +172,27 @@ public record CapitalGainsDto(
     decimal TotalGain,
     IReadOnlyList<RealizedGainDto> Lots);
 
+// Wash-sale report (IRS §1091): disallowed losses where replacement shares were
+// purchased within ±30 days of a realised loss.
+public record WashSaleReplacementDto(Guid BuyTransactionId, DateTimeOffset BuyAt, decimal Shares);
+
+public record WashSaleAdjustmentDto(
+    Guid LotId,
+    string Symbol,
+    DateTimeOffset SoldAt,
+    decimal LotQuantity,
+    decimal LotLoss,
+    decimal ReplacementShares,
+    decimal DisallowedLoss,
+    decimal AllowedLoss,
+    IReadOnlyList<WashSaleReplacementDto> Replacements);
+
+public record WashSaleReportDto(
+    int Year,
+    decimal TotalLoss,
+    decimal DisallowedLoss,
+    IReadOnlyList<WashSaleAdjustmentDto> Adjustments);
+
 // SCR-030 News, SCR-031 Earnings
 public record NewsItemDto(long Id, string Headline, string? Summary, string Source, string? Url, string? Symbol, DateTimeOffset PublishedAt, string Category);
 public record EarningsEventDto(long Id, string Symbol, DateOnly Date, string? Time, decimal? EpsEstimate, decimal? EpsActual, decimal? RevenueEstimate, decimal? RevenueActual);
