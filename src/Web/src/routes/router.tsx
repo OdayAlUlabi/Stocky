@@ -27,6 +27,11 @@ import { Screener } from './screener/Screener';
 import { ReportSchedules } from './reports/ReportSchedules';
 import { ShareLinks } from './reports/ShareLinks';
 import { PublicPortfolioView } from './share/PublicPortfolioView';
+import { Cash } from './cash/Cash';
+import { PositionNotes } from './notes/PositionNotes';
+import { AuditLog } from './admin/AuditLog';
+import { ModelTemplates } from './templates/ModelTemplates';
+import { AccountSettings } from './account/AccountSettings';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -58,6 +63,11 @@ export const router = createBrowserRouter([
       { path: 'calendar/economic', element: <EconomicCalendar /> },
       { path: 'calendar/earnings', element: <EarningsCalendar /> },
       { path: 'goals', element: <Goals /> },
+      { path: 'cash', element: <Cash /> },
+      { path: 'notes', element: <PositionNotes /> },
+      { path: 'templates', element: <ModelTemplates /> },
+      { path: 'admin/audit', element: <AuditLog /> },
+      { path: 'account', element: <AccountSettings /> },
       { path: 'settings', element: <Settings /> }
     ]
   }

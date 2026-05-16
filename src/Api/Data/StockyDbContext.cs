@@ -27,6 +27,8 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
     public DbSet<ShareToken> ShareTokens => Set<ShareToken>();
     public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
     public DbSet<ReportDelivery> ReportDeliveries => Set<ReportDelivery>();
+    public DbSet<PositionNote> PositionNotes => Set<PositionNote>();
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -254,6 +256,30 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.Property(x => x.Trigger).HasMaxLength(16);
             e.Property(x => x.Channel).HasMaxLength(16);
             e.HasOne(x => x.Schedule).WithMany().HasForeignKey(x => x.ScheduleId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<PositionNote>(e =>
+        {
+            e.HasIndex(x => new { x.OwnerId, x.Symbol });
+            e.HasIndex(x => x.PortfolioId);
+            e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Symbol).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Body).HasMaxLength(4000).IsRequired();
+        });
+
+        modelBuilder.Entity<AuditEntry>(e =>
+        {
+            e.HasIndex(x => new { x.OwnerId, x.Timestamp });
+            e.HasIndex(x => new { x.Resource, x.ResourceId });
+            e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Action).HasMaxLength(24).IsRequired();
+            e.Property(x => x.Resource).HasMaxLength(64).IsRequired();
+            e.Property(x => x.ResourceId).HasMaxLength(64);
+            e.Property(x => x.Method).HasMaxLength(8);
+            e.Property(x => x.Path).HasMaxLength(300);
+            e.Property(x => x.ClientIp).HasMaxLength(64);
+            e.Property(x => x.UserAgent).HasMaxLength(300);
+            e.Property(x => x.Details).HasMaxLength(2000);
         });
     }
 }

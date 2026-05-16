@@ -634,3 +634,57 @@ public record ReportDeliveryDto(
     DateTimeOffset GeneratedAt,
     string? Trigger,
     string? Channel);
+
+// === M14 Platform & Admin ===
+
+public record CashTransactionDto(
+    Guid Id,
+    Guid PortfolioId,
+    string Type,                 // Deposit | Withdrawal | Fee | Dividend | Interest
+    decimal Amount,              // signed: deposits/dividends/interest positive; withdrawals/fees negative
+    string Currency,
+    DateTimeOffset ExecutedAt,
+    string? Notes);
+
+public record CreateCashTransactionRequest(
+    Guid PortfolioId,
+    string Type,
+    decimal Amount,
+    string Currency = "USD",
+    DateTimeOffset? ExecutedAt = null,
+    string? Notes = null);
+
+public record CashBalanceDto(Guid PortfolioId, string Currency, decimal Balance, int Count);
+
+public record PositionNoteDto(Guid Id, Guid? PortfolioId, string Symbol, string Body, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public record CreatePositionNoteRequest(string Symbol, string Body, Guid? PortfolioId = null);
+public record UpdatePositionNoteRequest(string Body);
+
+public record AuditEntryDto(
+    Guid Id,
+    DateTimeOffset Timestamp,
+    string Action,
+    string Resource,
+    string? ResourceId,
+    string? Method,
+    string? Path,
+    int? StatusCode,
+    string? ClientIp,
+    string? Details);
+
+public record ModelTemplateAllocationDto(string Symbol, string Name, string AssetClass, decimal WeightPercent);
+public record ModelPortfolioTemplateDto(string Slug, string Name, string Description, string Risk, IReadOnlyList<ModelTemplateAllocationDto> Allocations);
+
+public record ApplyTemplateRequest(string Slug, string PortfolioName, string BaseCurrency = "USD", decimal? InitialCashDeposit = null);
+
+public record GdprExportDto(
+    string OwnerId,
+    DateTimeOffset GeneratedAt,
+    object Portfolios,
+    object Holdings,
+    object Transactions,
+    object Watchlists,
+    object Alerts,
+    object PositionNotes,
+    object Goals,
+    object UserSettings);

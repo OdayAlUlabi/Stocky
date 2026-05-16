@@ -128,6 +128,10 @@ builder.Services.AddScoped<ShareTokenService>();
 builder.Services.AddScoped<ReportRenderer>();
 builder.Services.AddHostedService<ReportScheduleJob>();
 
+// M14 platform & admin
+builder.Services.AddScoped<AuditLogger>();
+builder.Services.AddScoped<CashService>();
+
 var appInsightsConnection = builder.Configuration["ApplicationInsights:ConnectionString"]
     ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 if (!string.IsNullOrWhiteSpace(appInsightsConnection))
