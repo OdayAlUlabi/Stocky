@@ -14,218 +14,294 @@ param tags object = {
   app: 'stocky'
 }
 
-@description('Entra ID Tenant Id used by the API for token validation.')
+@description('Entra ID tenant id used by the API.')
 param entraTenantId string
 
-@description('Entra ID API App registration Client Id (audience).')
+@description('Entra API app registration client id (audience).')
 param entraApiClientId string
 
-@description('SQL admin login (used only at provision time; runtime uses Managed Identity).')
-@secure()
-param sqlAdminLogin string
+@description('Object id of the Entra group/user that will be SQL Entra admin (break-glass).')
+param sqlEntraAdminObjectId string
 
-@secure()
-@description('SQL admin password.')
-param sqlAdminPassword string
+@description('Display name of the Entra SQL admin principal.')
+param sqlEntraAdminLogin string
 
-@description('Object Id of the user/group to grant SQL admin (Entra) at provision time.')
-param sqlEntraAdminObjectId string = ''
+@description('GitHub repo in owner/repo form for OIDC federated credentials.')
+param githubRepo string = 'OdayAlUlabi/Stocky'
 
-@description('Display name of the SQL Entra admin principal.')
-param sqlEntraAdminLogin string = ''
+@description('GitHub OIDC subjects to federate. Default: main + prod environment.')
+param githubSubjects array = [
+  'repo:OdayAlUlabi/Stocky:ref:refs/heads/main'
+  'repo:OdayAlUlabi/Stocky:environment:prod'
+]
+
+// ---------- ALZ / Hub-and-Spoke parameters ----------
+// All optional. Empty values keep the deployment self-contained for dev sandboxes.
+// Populate in prod/parameters file to connect into the platform landing zone.
+@description('Spoke VNet address space. Must not overlap the hub. Coordinate with platform team.')
+param vnetAddressSpace string = '10.40.0.0/20'
+
+@description('Resource id of the hub VNet in the connectivity subscription. When non-empty, spoke peers to hub.')
+param hubVnetResourceId string = ''
+
+@description('Private IP of the hub Azure Firewall. When non-empty, ACA + PE subnets force 0.0.0.0/0 through it (ALZ forced tunneling).')
+param hubFirewallPrivateIp string = ''
+
+@description('Use hub VNet remote gateway (ExpressRoute / VPN) for on-prem connectivity.')
+param useHubRemoteGateways bool = false
+
+@description('Resource id of the RG holding central Private DNS zones (in connectivity sub). When non-empty, zones are not created locally.')
+param centralDnsZonesRgId string = ''
+
+// ---------- Self-hosted GitHub runner parameters ----------
+@description('Deploy an in-VNet self-hosted GitHub Actions runner (KEDA ACA Job). Strongly recommended in ALZ mode so CI can reach private endpoints.')
+param deployGitHubRunner bool = true
+
+@description('GitHub owner (org or user) the runner registers to.')
+param githubOwner string = 'OdayAlUlabi'
+
+@description('GitHub repository name. Leave empty to register at org scope.')
+param githubRunnerRepo string = 'Stocky'
+
+@description('GitHub App id for runner registration tokens. Required when deployGitHubRunner=true.')
+param githubAppId string = ''
+
+@description('GitHub App installation id. Required when deployGitHubRunner=true.')
+param githubInstallationId string = ''
+
+@description('Key Vault secret name that holds the GitHub App PEM private key. Populated out-of-band before first runner execution.')
+param githubAppPrivateKeySecretName string = 'github-app-private-key'
+
+@description('Self-hosted runner labels (comma-separated) appended to "self-hosted, linux".')
+param githubRunnerLabels string = 'stocky'
+
+@description('Max parallel self-hosted runner replicas.')
+@minValue(1)
+@maxValue(50)
+param githubRunnerMaxReplicas int = 5
 
 var resourceToken = uniqueString(subscription().id, resourceGroup().id, environmentName)
 var prefix = 'stocky-${environmentName}'
+var alzConnected = !empty(hubVnetResourceId)
+var canDeployRunner = deployGitHubRunner && !empty(githubAppId) && !empty(githubInstallationId)
 
-// ------------------ Observability ------------------
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: '${prefix}-law-${resourceToken}'
-  location: location
-  tags: tags
-  properties: {
-    sku: { name: 'PerGB2018' }
-    retentionInDays: 30
+// ---------- Observability ----------
+module obs 'modules/observability.bicep' = {
+  name: 'obs'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
   }
 }
 
-resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
-  name: '${prefix}-appi-${resourceToken}'
-  location: location
-  tags: tags
-  kind: 'web'
-  properties: {
-    Application_Type: 'web'
-    WorkspaceResourceId: logAnalytics.id
+// ---------- Network + Private DNS ----------
+module net 'modules/network.bicep' = {
+  name: 'net'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    vnetAddressSpace: vnetAddressSpace
+    hubFirewallPrivateIp: hubFirewallPrivateIp
   }
 }
 
-// ------------------ Key Vault ------------------
-resource keyVault 'Microsoft.KeyVault/vaults@2024-04-01-preview' = {
-  name: 'kv-${take(replace(resourceToken, '-', ''), 20)}'
-  location: location
-  tags: tags
-  properties: {
-    sku: { family: 'A', name: 'standard' }
-    tenantId: subscription().tenantId
-    enableRbacAuthorization: true
-    publicNetworkAccess: 'Enabled'
-    softDeleteRetentionInDays: 7
-    enabledForTemplateDeployment: true
+module dns 'modules/privateDns.bicep' = {
+  name: 'dns'
+  params: {
+    vnetId: net.outputs.vnetId
+    tags: tags
+    acaRegion: location
+    centralDnsZonesRgId: centralDnsZonesRgId
   }
 }
 
-// ------------------ Azure SQL ------------------
-resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
-  name: '${prefix}-sql-${resourceToken}'
-  location: location
-  tags: tags
-  properties: {
-    administratorLogin: sqlAdminLogin
-    administratorLoginPassword: sqlAdminPassword
-    minimalTlsVersion: '1.2'
-    publicNetworkAccess: 'Enabled'
+// ---------- ALZ hub peering (only when hub VNet supplied) ----------
+module hub 'modules/hubSpoke.bicep' = if (alzConnected) {
+  name: 'hub'
+  params: {
+    spokeVnetName: net.outputs.vnetName
+    hubVnetResourceId: hubVnetResourceId
+    allowForwardedTraffic: true
+    useRemoteGateways: useHubRemoteGateways
   }
 }
 
-resource sqlFirewallAzure 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
-  parent: sqlServer
-  name: 'AllowAzureServices'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '0.0.0.0'
+// ---------- Identities ----------
+module ids 'modules/identities.bicep' = {
+  name: 'ids'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    githubRepo: githubRepo
+    githubSubjects: githubSubjects
   }
 }
 
-resource sqlEntraAdmin 'Microsoft.Sql/servers/administrators@2023-08-01-preview' = if (!empty(sqlEntraAdminObjectId)) {
-  parent: sqlServer
-  name: 'ActiveDirectory'
-  properties: {
-    administratorType: 'ActiveDirectory'
-    login: sqlEntraAdminLogin
-    sid: sqlEntraAdminObjectId
-    tenantId: subscription().tenantId
+// ---------- Data plane ----------
+module kv 'modules/keyvault.bicep' = {
+  name: 'kv'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    resourceToken: resourceToken
+    peSubnetId: net.outputs.peSubnetId
+    dnsZoneId: dns.outputs.kvZoneId
   }
 }
 
-resource sqlDb 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
-  parent: sqlServer
-  name: 'stocky'
-  location: location
-  tags: tags
-  sku: {
-    name: 'GP_S_Gen5_1'
-    tier: 'GeneralPurpose'
-    family: 'Gen5'
-    capacity: 1
-  }
-  properties: {
-    autoPauseDelay: 60
-    minCapacity: json('0.5')
-    zoneRedundant: false
+module sql 'modules/sql.bicep' = {
+  name: 'sql'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    resourceToken: resourceToken
+    peSubnetId: net.outputs.peSubnetId
+    dnsZoneId: dns.outputs.sqlZoneId
+    sqlEntraAdminObjectId: sqlEntraAdminObjectId
+    sqlEntraAdminLogin: sqlEntraAdminLogin
   }
 }
 
-// ------------------ Hosting Plan ------------------
-resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: '${prefix}-plan-${resourceToken}'
-  location: location
-  tags: tags
-  sku: {
-    name: 'B1'
-    tier: 'Basic'
-  }
-  kind: 'linux'
-  properties: {
-    reserved: true
+module acr 'modules/acr.bicep' = {
+  name: 'acr'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    resourceToken: resourceToken
+    peSubnetId: net.outputs.peSubnetId
+    dnsZoneId: dns.outputs.acrZoneId
   }
 }
 
-// ------------------ Managed Identities ------------------
-resource apiIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: '${prefix}-api-id-${resourceToken}'
-  location: location
-  tags: tags
-}
-
-// ------------------ API App Service ------------------
-resource apiApp 'Microsoft.Web/sites@2023-12-01' = {
-  name: '${prefix}-api-${resourceToken}'
-  location: location
-  tags: union(tags, { 'azd-service-name': 'api' })
-  kind: 'app,linux'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${apiIdentity.id}': {}
-    }
-  }
-  properties: {
-    serverFarmId: plan.id
-    httpsOnly: true
-    siteConfig: {
-      linuxFxVersion: 'DOTNETCORE|10.0'
-      alwaysOn: true
-      ftpsState: 'Disabled'
-      minTlsVersion: '1.2'
-      healthCheckPath: '/health'
-      appSettings: [
-        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
-        { name: 'ApplicationInsightsAgent_EXTENSION_VERSION', value: '~3' }
-        { name: 'AzureAd__Instance', value: 'https://login.microsoftonline.com/' }
-        { name: 'AzureAd__TenantId', value: entraTenantId }
-        { name: 'AzureAd__ClientId', value: entraApiClientId }
-        { name: 'AzureAd__Audience', value: 'api://${entraApiClientId}' }
-        { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Database=${sqlDb.name};Authentication=Active Directory Managed Identity;User Id=${apiIdentity.properties.clientId};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
-        { name: 'AllowedOrigins__0', value: 'https://${webApp.properties.defaultHostName}' }
-        { name: 'AZURE_CLIENT_ID', value: apiIdentity.properties.clientId }
-        { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
-      ]
-    }
+// ---------- RBAC (must precede containerApps so ACR pull works) ----------
+module rbac 'modules/rbac.bicep' = {
+  name: 'rbac'
+  params: {
+    prefix: prefix
+    kvId: kv.outputs.kvId
+    acrId: acr.outputs.acrId
+    apiPrincipalId: ids.outputs.apiIdPrincipalId
+    cicdPrincipalId: ids.outputs.cicdIdPrincipalId
+    migratorPrincipalId: ids.outputs.migratorIdPrincipalId
+    runnerPrincipalId: ids.outputs.runnerIdPrincipalId
   }
 }
 
-// ------------------ Web App Service (React static) ------------------
-resource webApp 'Microsoft.Web/sites@2023-12-01' = {
-  name: '${prefix}-web-${resourceToken}'
-  location: location
-  tags: union(tags, { 'azd-service-name': 'web' })
-  kind: 'app,linux'
-  properties: {
-    serverFarmId: plan.id
-    httpsOnly: true
-    siteConfig: {
-      linuxFxVersion: 'NODE|22-lts'
-      alwaysOn: true
-      ftpsState: 'Disabled'
-      minTlsVersion: '1.2'
-      appCommandLine: 'pm2 serve /home/site/wwwroot --no-daemon --spa'
-      appSettings: [
-        { name: 'WEBSITE_NODE_DEFAULT_VERSION', value: '~22' }
-        { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'false' }
-      ]
-    }
+// ---------- Container Apps env + workloads ----------
+module env 'modules/containerEnv.bicep' = {
+  name: 'env'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    infrastructureSubnetId: net.outputs.acaSubnetId
+    lawCustomerId: obs.outputs.lawCustomerId
+    lawPrimaryKey: obs.outputs.lawPrimaryKey
   }
 }
 
-// ------------------ Role Assignments ------------------
-// Key Vault Secrets User for API identity
-resource apiKvRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: keyVault
-  name: guid(keyVault.id, apiIdentity.id, 'kv-secrets-user')
-  properties: {
-    principalId: apiIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-    // Key Vault Secrets User
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-9d6c-5a8c-3c1d8c2d4adb')
+module apps 'modules/containerApps.bicep' = {
+  name: 'apps'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    envId: env.outputs.envId
+    acrLoginServer: acr.outputs.acrLoginServer
+    apiIdentityId: ids.outputs.apiIdId
+    apiIdentityClientId: ids.outputs.apiIdClientId
+    sqlServerFqdn: sql.outputs.serverFqdn
+    sqlDbName: sql.outputs.dbName
+    entraTenantId: entraTenantId
+    entraApiClientId: entraApiClientId
+    appiConnectionString: obs.outputs.appiConnectionString
+    publicHostname: 'placeholder.local' // CI updates AllowedOrigins to the AppGw FQDN after first deploy
+  }
+  dependsOn: [ rbac ]
+}
+
+module jobs 'modules/containerJobs.bicep' = {
+  name: 'jobs'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    envId: env.outputs.envId
+    acrLoginServer: acr.outputs.acrLoginServer
+    migratorIdentityId: ids.outputs.migratorIdId
+    migratorIdentityClientId: ids.outputs.migratorIdClientId
+    sqlServerFqdn: sql.outputs.serverFqdn
+    sqlDbName: sql.outputs.dbName
+  }
+  dependsOn: [ rbac ]
+}
+
+// ---------- Self-hosted GitHub Actions runner (in-spoke, ALZ-friendly) ----------
+module runner 'modules/githubRunner.bicep' = if (canDeployRunner) {
+  name: 'runner'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    envId: env.outputs.envId
+    acrLoginServer: acr.outputs.acrLoginServer
+    runnerIdentityId: ids.outputs.runnerIdId
+    runnerIdentityClientId: ids.outputs.runnerIdClientId
+    keyVaultUri: kv.outputs.kvUri
+    githubOwner: githubOwner
+    githubRepo: githubRunnerRepo
+    githubAppId: githubAppId
+    githubInstallationId: githubInstallationId
+    githubAppPrivateKeySecretName: githubAppPrivateKeySecretName
+    runnerLabels: githubRunnerLabels
+    maxReplicas: githubRunnerMaxReplicas
+  }
+  dependsOn: [ rbac ]
+}
+
+// ---------- App Gateway ----------
+module appgw 'modules/appGateway.bicep' = {
+  name: 'appgw'
+  params: {
+    prefix: prefix
+    location: location
+    tags: tags
+    subnetId: net.outputs.appGwSubnetId
+    apiBackendFqdn: apps.outputs.apiFqdn
+    webBackendFqdn: apps.outputs.webFqdn
   }
 }
 
-// ------------------ Outputs ------------------
+// ---------- Outputs ----------
+output GH_RUNNER_DEPLOYED bool = canDeployRunner
+output GH_RUNNER_JOB_NAME string = canDeployRunner ? runner!.outputs.runnerJobName : ''
+output GH_RUNNER_LABELS string = canDeployRunner ? runner!.outputs.runnerLabelsOut : ''
 output AZURE_LOCATION string = location
-output API_HOSTNAME string = apiApp.properties.defaultHostName
-output WEB_HOSTNAME string = webApp.properties.defaultHostName
-output API_IDENTITY_CLIENT_ID string = apiIdentity.properties.clientId
-output SQL_SERVER_FQDN string = sqlServer.properties.fullyQualifiedDomainName
-output SQL_DB_NAME string = sqlDb.name
-output APP_INSIGHTS_CONNECTION_STRING string = appInsights.properties.ConnectionString
-output KEYVAULT_NAME string = keyVault.name
+output AZURE_RESOURCE_GROUP string = resourceGroup().name
+output PUBLIC_IP string = appgw.outputs.appGwPublicIp
+output API_INTERNAL_FQDN string = apps.outputs.apiFqdn
+output WEB_INTERNAL_FQDN string = apps.outputs.webFqdn
+output API_IDENTITY_CLIENT_ID string = ids.outputs.apiIdClientId
+output CICD_CLIENT_ID string = ids.outputs.cicdIdClientId
+output CICD_TENANT_ID string = subscription().tenantId
+output CICD_SUBSCRIPTION_ID string = subscription().subscriptionId
+output ACR_LOGIN_SERVER string = acr.outputs.acrLoginServer
+output ACR_NAME string = acr.outputs.acrName
+output ACA_ENV_NAME string = env.outputs.envName
+output API_APP_NAME string = apps.outputs.apiAppName
+output WEB_APP_NAME string = apps.outputs.webAppName
+output MIGRATOR_JOB_NAME string = jobs.outputs.jobName
+output SQL_SERVER_FQDN string = sql.outputs.serverFqdn
+output SQL_DB_NAME string = sql.outputs.dbName
+output KEYVAULT_NAME string = kv.outputs.kvName
+output APP_INSIGHTS_CONNECTION_STRING string = obs.outputs.appiConnectionString
+output ALZ_CONNECTED bool = alzConnected
+output DNS_MODE string = dns.outputs.dnsMode
+output SPOKE_VNET_ID string = net.outputs.vnetId
+output SPOKE_VNET_NAME string = net.outputs.vnetName

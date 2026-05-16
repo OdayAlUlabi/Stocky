@@ -8,7 +8,11 @@ namespace Stocky.Api.Domain;
 public class ShareToken
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public string Token { get; set; } = default!;          // URL-safe slug
+    // M11 #54 hardening — plaintext token is shown to the caller exactly once at
+    // creation time. Persisted state is the SHA-256 hash (hex). TokenPrefix is
+    // a short non-secret display id so users can identify the link in lists.
+    public string TokenHash { get; set; } = default!;
+    public string TokenPrefix { get; set; } = default!;
     public Guid PortfolioId { get; set; }
     public Portfolio? Portfolio { get; set; }
     public string OwnerId { get; set; } = default!;

@@ -226,9 +226,10 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
 
         modelBuilder.Entity<ShareToken>(e =>
         {
-            e.HasIndex(x => x.Token).IsUnique();
+            e.HasIndex(x => x.TokenHash).IsUnique();
             e.HasIndex(x => x.OwnerId);
-            e.Property(x => x.Token).HasMaxLength(64).IsRequired();
+            e.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            e.Property(x => x.TokenPrefix).HasMaxLength(16).IsRequired();
             e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
             e.Property(x => x.Label).HasMaxLength(120);
             e.HasOne(x => x.Portfolio).WithMany().HasForeignKey(x => x.PortfolioId).OnDelete(DeleteBehavior.Cascade);

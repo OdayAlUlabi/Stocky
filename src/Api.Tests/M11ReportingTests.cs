@@ -60,7 +60,9 @@ public class M11ReportingTests
         using var db = NewDb();
         var p = Seed(db);
         var svc = new ShareTokenService(db);
-        var st = await svc.CreateAsync("u1", new CreateShareTokenRequest(p.Id, "Advisor", null, false, true));
+        var issued = await svc.CreateAsync("u1", new CreateShareTokenRequest(p.Id, "Advisor", null, false, true));
+        var st = issued.Record;
+        Assert.False(string.IsNullOrEmpty(issued.Plaintext));
         Assert.True(st.IsActive(DateTimeOffset.UtcNow));
         Assert.True(st.IncludeCostBasis);
         Assert.False(st.IncludeTransactions);
@@ -73,10 +75,10 @@ public class M11ReportingTests
         using var db = NewDb();
         var p = Seed(db);
         var svc = new ShareTokenService(db);
-        var st = await svc.CreateAsync("u1", new CreateShareTokenRequest(p.Id, null, null));
-        var ok = await svc.RevokeAsync("u1", st.Id);
+        var issued = await svc.CreateAsync("u1", new CreateShareTokenRequest(p.Id, null, null));
+        var ok = await svc.RevokeAsync("u1", issued.Record.Id);
         Assert.True(ok);
-        var resolved = await svc.ResolveAsync(st.Token);
+        var resolved = await svc.ResolveAsync(issued.Plaintext);
         Assert.Null(resolved);
     }
 
@@ -86,8 +88,8 @@ public class M11ReportingTests
         using var db = NewDb();
         var p = Seed(db);
         var svc = new ShareTokenService(db);
-        var st = await svc.CreateAsync("u1", new CreateShareTokenRequest(p.Id, null, DateTimeOffset.UtcNow.AddMinutes(-1)));
-        var resolved = await svc.ResolveAsync(st.Token);
+        var issued = await svc.CreateAsync("u1", new CreateShareTokenRequest(p.Id, null, DateTimeOffset.UtcNow.AddMinutes(-1)));
+        var resolved = await svc.ResolveAsync(issued.Plaintext);
         Assert.Null(resolved);
     }
 
@@ -97,10 +99,10 @@ public class M11ReportingTests
         using var db = NewDb();
         var p = Seed(db);
         var svc = new ShareTokenService(db);
-        var st = await svc.CreateAsync("u1", new CreateShareTokenRequest(p.Id, null, null));
-        await svc.ResolveAsync(st.Token);
-        await svc.ResolveAsync(st.Token);
-        var fresh = await db.ShareTokens.FirstAsync(s => s.Id == st.Id);
+        var issued = await svc.CreateAsync("u1", new CreateShareTokenRequest(p.Id, null, null));
+        await svc.ResolveAsync(issued.Plaintext);
+        await svc.ResolveAsync(issued.Plaintext);
+        var fresh = await db.ShareTokens.FirstAsync(s => s.Id == issued.Record.Id);
         Assert.Equal(2, fresh.ViewCount);
         Assert.NotNull(fresh.LastViewedAt);
     }

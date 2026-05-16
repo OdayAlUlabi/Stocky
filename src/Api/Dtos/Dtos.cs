@@ -548,7 +548,11 @@ public record GoalDto(
 // #54 sharing
 public record ShareTokenDto(
     Guid Id,
-    string Token,
+    // Plaintext token + share URL are returned ONLY at creation time.
+    // Subsequent reads (List) leave these null; clients should treat the
+    // creation response as the single opportunity to copy the link.
+    string? Token,
+    string TokenPrefix,
     Guid PortfolioId,
     string? Label,
     DateTimeOffset CreatedAt,
@@ -559,7 +563,7 @@ public record ShareTokenDto(
     bool IncludeTransactions,
     bool IncludeCostBasis,
     bool IsActive,
-    string ShareUrl);
+    string? ShareUrl);
 
 public record CreateShareTokenRequest(
     Guid PortfolioId,

@@ -692,7 +692,10 @@ export interface GoalDto {
 // ---------------- M11 Reporting & Sharing ----------------
 export interface ShareTokenDto {
   id: string;
-  token: string;
+  // Plaintext token + shareUrl are returned ONLY on creation; List omits them
+  // (tokens are stored hashed). Use tokenPrefix as a non-secret display id.
+  token: string | null;
+  tokenPrefix: string;
   portfolioId: string;
   label: string | null;
   createdAt: string;
@@ -703,7 +706,7 @@ export interface ShareTokenDto {
   includeTransactions: boolean;
   includeCostBasis: boolean;
   isActive: boolean;
-  shareUrl: string;
+  shareUrl: string | null;
 }
 
 export interface CreateShareTokenRequest {

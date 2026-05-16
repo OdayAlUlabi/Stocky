@@ -7,6 +7,10 @@ using Stocky.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// --migrate-only: short-circuit startup. Used by the ACA migrator job so the
+// API image doubles as the migration tool — no separate artifact required.
+var migrateOnly = args.Contains("--migrate-only", StringComparer.OrdinalIgnoreCase);
+
 var connectionString = builder.Configuration.GetConnectionString("Sql")
     ?? builder.Configuration["Sql:ConnectionString"];
 
@@ -22,7 +26,35 @@ builder.Services.AddDbContext<StockyDbContext>(options =>
     }
 });
 
+if (migrateOnly)
+{
+    using var migrateApp = builder.Build();
+    using var scope = migrateApp.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<StockyDbContext>();
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
+        Console.WriteLine("Migrations applied.");
+    }
+    else
+    {
+        Console.WriteLine("Skipping migrations: non-relational provider.");
+    }
+    return;
+}
+
 var entraClientIdAtStartup = builder.Configuration["AzureAd:ClientId"];
+
+// Production hardening: refuse to start outside Development without a configured
+// Entra audience. Prevents accidental deploys where the dev-bypass middleware
+// would otherwise inject a synthetic authenticated principal.
+if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(entraClientIdAtStartup))
+{
+    throw new InvalidOperationException(
+        "AzureAd:ClientId must be configured outside the Development environment. " +
+        "Refusing to start with anonymous-by-default authentication.");
+}
+
 var authBuilder = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
 if (!string.IsNullOrWhiteSpace(entraClientIdAtStartup))
 {
@@ -55,6 +87,20 @@ builder.Services.AddRateLimiter(o =>
             _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
             {
                 PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+    // Public share resolver: per-IP throttle so the hashed-token store can't
+    // be enumerated. 30 req/min/IP.
+    o.AddPolicy("public-share", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon";
+        return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            ip,
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             });
@@ -174,6 +220,11 @@ builder.Services.AddCors(options =>
         var origins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
         if (origins.Length == 0)
         {
+            if (!builder.Environment.IsDevelopment())
+            {
+                throw new InvalidOperationException(
+                    "AllowedOrigins must be configured outside Development.");
+            }
             origins = new[] { "http://localhost:5173" };
         }
         policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
@@ -188,8 +239,21 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
+    app.UseHsts();
     app.UseHttpsRedirection();
 }
+
+// Baseline security response headers (applied to every response).
+app.Use(async (ctx, next) =>
+{
+    var h = ctx.Response.Headers;
+    h["X-Content-Type-Options"] = "nosniff";
+    h["Referrer-Policy"] = "no-referrer";
+    h["X-Frame-Options"] = "DENY";
+    h["Cross-Origin-Opener-Policy"] = "same-origin";
+    h["Cross-Origin-Resource-Policy"] = "same-site";
+    await next();
+});
 
 app.UseCors(CorsPolicy);
 

@@ -1,0 +1,107 @@
+name: deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_CLIENT_ID:       ${{ vars.AZURE_CLIENT_ID }}        # cicd UAMI client id (from azd provision output)
+  AZURE_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_RESOURCE_GROUP:  ${{ vars.AZURE_RESOURCE_GROUP }}
+  ACR_NAME:              ${{ vars.ACR_NAME }}
+  ACR_LOGIN_SERVER:      ${{ vars.ACR_LOGIN_SERVER }}
+  API_APP_NAME:          ${{ vars.API_APP_NAME }}
+  WEB_APP_NAME:          ${{ vars.WEB_APP_NAME }}
+  MIGRATOR_JOB_NAME:     ${{ vars.MIGRATOR_JOB_NAME }}
+  PUBLIC_IP:             ${{ vars.PUBLIC_IP }}
+  IMAGE_TAG:             ${{ github.sha }}
+  # Override to '["self-hosted","linux","stocky"]' (JSON array as a single string)
+  # via repo Variable RUNS_ON_DEPLOY once the in-VNet runner is online. Defaults
+  # to GitHub-hosted, which only works while ACR public access is permitted.
+
+jobs:
+  build-and-deploy:
+    runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login (managed identity)
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Build + push api image
+        run: |
+          docker build -f src/Api/Dockerfile -t "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" .
+          docker push "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG"
+
+      - name: Build + push web image
+        run: |
+          docker build -f src/Web/Dockerfile -t "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG" .
+          docker push "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG"
+
+      - name: Run migrator job and wait
+        run: |
+          set -euo pipefail
+          # Update the job template to point at the new image, then start.
+          az containerapp job update \
+            --name "$MIGRATOR_JOB_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG"
+          EXEC_NAME=$(az containerapp job start \
+            --name "$MIGRATOR_JOB_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query name -o tsv)
+          echo "Started job execution: $EXEC_NAME"
+          # Poll for completion (max ~30 min).
+          for i in $(seq 1 60); do
+            STATUS=$(az containerapp job execution show \
+              --name "$MIGRATOR_JOB_NAME" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --job-execution-name "$EXEC_NAME" \
+              --query properties.status -o tsv)
+            echo "[$i] migrator status: $STATUS"
+            case "$STATUS" in
+              Succeeded) exit 0 ;;
+              Failed|Degraded|Stopped) echo "Migrator failed"; exit 1 ;;
+            esac
+            sleep 30
+          done
+          echo "Timed out waiting for migrator"; exit 1
+
+      - name: Update api container app
+        run: |
+          az containerapp update \
+            --name "$API_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
+            --set-env-vars "AllowedOrigins__0=https://${PUBLIC_IP}"
+
+      - name: Update web container app
+        run: |
+          az containerapp update \
+            --name "$WEB_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG"
+
+      - name: Smoke test /health
+        run: |
+          for i in $(seq 1 12); do
+            CODE=$(curl -ks -o /dev/null -w "%{http_code}" "http://${PUBLIC_IP}/health" || true)
+            echo "health: $CODE"
+            [ "$CODE" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "Smoke test failed"; exit 1

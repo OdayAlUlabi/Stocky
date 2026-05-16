@@ -7,23 +7,35 @@ using Stocky.Api.Dtos;
 
 namespace Stocky.Api.Services;
 
-/// <summary>M11 #54 — issues + resolves revocable share tokens.</summary>
+/// <summary>M11 #54 — issues + resolves revocable share tokens. Tokens are
+/// stored as SHA-256 hashes; the plaintext value is returned to the caller
+/// only once at creation time.</summary>
 public sealed class ShareTokenService(StockyDbContext db)
 {
+    public sealed record Issued(ShareToken Record, string Plaintext);
+
     public static string NewToken()
     {
         var bytes = RandomNumberGenerator.GetBytes(24);
         return Convert.ToBase64String(bytes).Replace("+", "-").Replace("/", "_").TrimEnd('=');
     }
 
-    public async Task<ShareToken> CreateAsync(string ownerId, CreateShareTokenRequest req, CancellationToken ct = default)
+    internal static string Hash(string plaintext)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(plaintext));
+        return Convert.ToHexString(bytes);
+    }
+
+    public async Task<Issued> CreateAsync(string ownerId, CreateShareTokenRequest req, CancellationToken ct = default)
     {
         var p = await db.Portfolios.FirstOrDefaultAsync(p => p.Id == req.PortfolioId && p.OwnerId == ownerId, ct)
             ?? throw new InvalidOperationException("Portfolio not found");
 
+        var plaintext = NewToken();
         var st = new ShareToken
         {
-            Token = NewToken(),
+            TokenHash = Hash(plaintext),
+            TokenPrefix = plaintext.Substring(0, Math.Min(8, plaintext.Length)),
             PortfolioId = p.Id,
             OwnerId = ownerId,
             Label = string.IsNullOrWhiteSpace(req.Label) ? null : req.Label!.Trim(),
@@ -33,7 +45,7 @@ public sealed class ShareTokenService(StockyDbContext db)
         };
         db.ShareTokens.Add(st);
         await db.SaveChangesAsync(ct);
-        return st;
+        return new Issued(st, plaintext);
     }
 
     public async Task<bool> RevokeAsync(string ownerId, Guid id, CancellationToken ct = default)
@@ -47,7 +59,9 @@ public sealed class ShareTokenService(StockyDbContext db)
 
     public async Task<ShareToken?> ResolveAsync(string token, CancellationToken ct = default)
     {
-        var st = await db.ShareTokens.FirstOrDefaultAsync(s => s.Token == token, ct);
+        if (string.IsNullOrWhiteSpace(token)) return null;
+        var hash = Hash(token);
+        var st = await db.ShareTokens.FirstOrDefaultAsync(s => s.TokenHash == hash, ct);
         if (st is null || !st.IsActive(DateTimeOffset.UtcNow)) return null;
         st.ViewCount += 1;
         st.LastViewedAt = DateTimeOffset.UtcNow;

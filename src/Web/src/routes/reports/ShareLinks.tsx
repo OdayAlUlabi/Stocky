@@ -14,6 +14,7 @@ export function ShareLinks() {
   const del = useDeleteShareToken();
 
   const [open, setOpen] = useState(false);
+  const [justCreated, setJustCreated] = useState<{ url: string; token: string } | null>(null);
   const [form, setForm] = useState<CreateShareTokenRequest>({
     portfolioId: '',
     label: '',
@@ -26,7 +27,7 @@ export function ShareLinks() {
 
   const submit = async () => {
     if (!form.portfolioId) return;
-    await create.mutateAsync({
+    const created = await create.mutateAsync({
       portfolioId: form.portfolioId,
       label: form.label || null,
       expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
@@ -35,6 +36,9 @@ export function ShareLinks() {
     });
     setOpen(false);
     setForm({ portfolioId: '', label: '', expiresAt: '', includeTransactions: false, includeCostBasis: false });
+    if (created?.token && created?.shareUrl) {
+      setJustCreated({ url: created.shareUrl, token: created.token });
+    }
   };
 
   return (
@@ -83,10 +87,7 @@ export function ShareLinks() {
                   <Table.Td>{t.lastViewedAt ? new Date(t.lastViewedAt).toLocaleString() : '—'}</Table.Td>
                   <Table.Td>
                     <Group gap={4} wrap="nowrap">
-                      <Anchor href={`/share/${t.token}`} target="_blank" rel="noreferrer" size="xs">open</Anchor>
-                      <CopyButton value={`${window.location.origin}/share/${t.token}`}>
-                        {({ copied, copy }) => <Button size="compact-xs" variant="subtle" onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>}
-                      </CopyButton>
+                      <Text size="xs" c="dimmed" ff="monospace">{t.tokenPrefix}…</Text>
                     </Group>
                   </Table.Td>
                   <Table.Td>
@@ -103,6 +104,26 @@ export function ShareLinks() {
           </Table>
         )}
       </Card>
+
+      <Modal opened={!!justCreated} onClose={() => setJustCreated(null)} title="Copy this link — it won't be shown again" centered>
+        <Stack>
+          <Text size="sm" c="dimmed">
+            For security, share-link URLs are stored hashed. This is your only opportunity to copy it.
+          </Text>
+          {justCreated && (
+            <Group gap="xs" wrap="nowrap">
+              <TextInput readOnly value={justCreated.url} style={{ flex: 1 }} />
+              <CopyButton value={justCreated.url}>
+                {({ copied, copy }) => <Button onClick={copy}>{copied ? 'Copied' : 'Copy'}</Button>}
+              </CopyButton>
+              <Anchor href={justCreated.url} target="_blank" rel="noreferrer">open</Anchor>
+            </Group>
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setJustCreated(null)}>Done</Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={open} onClose={() => setOpen(false)} title="New share link" centered>
         <Stack>

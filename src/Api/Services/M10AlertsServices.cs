@@ -188,9 +188,78 @@ public sealed class PushChannel(ILogger<PushChannel> logger) : IAlertChannel
 public sealed class WebhookChannel(IHttpClientFactory httpFactory, ILogger<WebhookChannel> logger) : IAlertChannel
 {
     public string Name => "Webhook";
+
+    /// <summary>
+    /// SSRF guard: only allow https URLs to publicly-routable hosts. Rejects
+    /// loopback / link-local / private (RFC1918) / CGNAT / IPv6 ULA targets
+    /// and any hostname that resolves to one. Returns the validated Uri or null.
+    /// </summary>
+    internal static async Task<Uri?> ValidateWebhookUrlAsync(string raw, CancellationToken ct)
+    {
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri)) return null;
+        if (uri.Scheme != Uri.UriSchemeHttps) return null;
+        if (uri.IsDefaultPort is false && uri.Port != 443) return null;
+
+        System.Net.IPAddress[] addrs;
+        if (uri.HostNameType is UriHostNameType.IPv4 or UriHostNameType.IPv6)
+        {
+            addrs = new[] { System.Net.IPAddress.Parse(uri.Host) };
+        }
+        else
+        {
+            try { addrs = await System.Net.Dns.GetHostAddressesAsync(uri.Host, ct); }
+            catch { return null; }
+        }
+        if (addrs.Length == 0) return null;
+        foreach (var ip in addrs) if (!IsPubliclyRoutable(ip)) return null;
+        return uri;
+    }
+
+    private static bool IsPubliclyRoutable(System.Net.IPAddress ip)
+    {
+        if (System.Net.IPAddress.IsLoopback(ip)) return false;
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            var b = ip.GetAddressBytes();
+            // 0.0.0.0/8, 10/8, 100.64/10 (CGNAT), 127/8, 169.254/16, 172.16/12, 192.168/16, 224/4 multicast, 240/4 reserved
+            if (b[0] == 0 || b[0] == 10 || b[0] == 127) return false;
+            if (b[0] == 100 && (b[1] & 0xC0) == 64) return false;
+            if (b[0] == 169 && b[1] == 254) return false;
+            if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return false;
+            if (b[0] == 192 && b[1] == 168) return false;
+            if (b[0] >= 224) return false;
+            return true;
+        }
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6Multicast) return false;
+            if (ip.Equals(System.Net.IPAddress.IPv6Loopback)) return false;
+            var b = ip.GetAddressBytes();
+            if ((b[0] & 0xFE) == 0xFC) return false;            // fc00::/7 unique-local
+            if (b[0] == 0 && b[1] == 0)                          // ::ffff:0:0/96 mapped IPv4
+            {
+                var allZero = true;
+                for (var i = 2; i < 10; i++) if (b[i] != 0) { allZero = false; break; }
+                if (allZero && b[10] == 0xFF && b[11] == 0xFF)
+                {
+                    var mapped = new System.Net.IPAddress(new[] { b[12], b[13], b[14], b[15] });
+                    return IsPubliclyRoutable(mapped);
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
     public async Task DeliverAsync(Alert alert, string message, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(alert.WebhookUrl)) return;
+        var target = await ValidateWebhookUrlAsync(alert.WebhookUrl, ct);
+        if (target is null)
+        {
+            logger.LogWarning("Webhook URL rejected by SSRF guard for alert {Id}", alert.Id);
+            return;
+        }
         try
         {
             var client = httpFactory.CreateClient("stocky-webhook");
@@ -204,9 +273,9 @@ public sealed class WebhookChannel(IHttpClientFactory httpFactory, ILogger<Webho
                 triggeredAt = DateTimeOffset.UtcNow,
                 message
             };
-            using var resp = await client.PostAsJsonAsync(alert.WebhookUrl, payload, ct);
+            using var resp = await client.PostAsJsonAsync(target, payload, ct);
             if (!resp.IsSuccessStatusCode)
-                logger.LogWarning("Webhook {Url} returned {Status} for alert {Id}", alert.WebhookUrl, (int)resp.StatusCode, alert.Id);
+                logger.LogWarning("Webhook {Url} returned {Status} for alert {Id}", target, (int)resp.StatusCode, alert.Id);
         }
         catch (Exception ex)
         {

@@ -24,7 +24,7 @@ public class ShareTokensController(StockyDbContext db, ShareTokenService tokens,
             .Where(s => s.OwnerId == ownerId)
             .OrderByDescending(s => s.CreatedAt)
             .ToListAsync(ct);
-        return Ok(list.Select(s => ToDto(s)));
+        return Ok(list.Select(s => ToDto(s, plaintext: null)));
     }
 
     [HttpPost]
@@ -33,8 +33,8 @@ public class ShareTokensController(StockyDbContext db, ShareTokenService tokens,
         var ownerId = User.GetOwnerId();
         try
         {
-            var st = await tokens.CreateAsync(ownerId, req, ct);
-            return CreatedAtAction(nameof(List), null, ToDto(st));
+            var issued = await tokens.CreateAsync(ownerId, req, ct);
+            return CreatedAtAction(nameof(List), null, ToDto(issued.Record, issued.Plaintext));
         }
         catch (InvalidOperationException ex)
         {
@@ -61,13 +61,18 @@ public class ShareTokensController(StockyDbContext db, ShareTokenService tokens,
         return NoContent();
     }
 
-    private ShareTokenDto ToDto(ShareToken s)
+    // Plaintext is non-null only on the creation response; List/Get omit it.
+    private ShareTokenDto ToDto(ShareToken s, string? plaintext)
     {
-        var req = http.HttpContext?.Request;
-        var baseUrl = req is null ? string.Empty : $"{req.Scheme}://{req.Host}";
-        var url = $"{baseUrl}/share/{s.Token}";
+        string? url = null;
+        if (plaintext is not null)
+        {
+            var req = http.HttpContext?.Request;
+            var baseUrl = req is null ? string.Empty : $"{req.Scheme}://{req.Host}";
+            url = $"{baseUrl}/share/{plaintext}";
+        }
         return new ShareTokenDto(
-            s.Id, s.Token, s.PortfolioId, s.Label, s.CreatedAt, s.ExpiresAt, s.RevokedAt,
+            s.Id, plaintext, s.TokenPrefix, s.PortfolioId, s.Label, s.CreatedAt, s.ExpiresAt, s.RevokedAt,
             s.ViewCount, s.LastViewedAt, s.IncludeTransactions, s.IncludeCostBasis,
             s.IsActive(DateTimeOffset.UtcNow), url);
     }
@@ -76,6 +81,7 @@ public class ShareTokensController(StockyDbContext db, ShareTokenService tokens,
 /// <summary>Anonymous read-only resolver for a shared portfolio link.</summary>
 [ApiController]
 [AllowAnonymous]
+[Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("public-share")]
 [Route("api/public/share/{token}")]
 public class PublicShareController(StockyDbContext db, ShareTokenService tokens) : ControllerBase
 {

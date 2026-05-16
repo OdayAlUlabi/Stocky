@@ -1,23 +1,38 @@
 # Azure Developer CLI configuration
 # https://aka.ms/azd
+#
+# Provision-only: `azd up` deploys the zero-trust infrastructure. Application
+# images are built and pushed by the GitHub Actions `deploy` workflow which has
+# OIDC federation to the cicd UAMI provisioned by main.bicep.
 name: stocky
 metadata:
-  template: stocky@1.0.0
-services:
-  api:
-    project: ./src/Api
-    language: dotnet
-    host: appservice
-  web:
-    project: ./src/Web
-    language: ts
-    host: appservice
-    dist: dist
+  template: stocky@2.0.0
+infra:
+  provider: bicep
+  path: infra
+  module: main
 hooks:
   postprovision:
     posix:
       shell: sh
-      run: echo "Provisioned. Now run 'azd deploy'."
+      run: |
+        echo "Infrastructure provisioned."
+        echo "Configure these GitHub repo Variables (Settings > Secrets and variables > Actions > Variables):"
+        echo "  AZURE_CLIENT_ID       = $(azd env get-value CICD_CLIENT_ID)"
+        echo "  AZURE_TENANT_ID       = $(azd env get-value CICD_TENANT_ID)"
+        echo "  AZURE_SUBSCRIPTION_ID = $(azd env get-value CICD_SUBSCRIPTION_ID)"
+        echo "  AZURE_RESOURCE_GROUP  = $(azd env get-value AZURE_RESOURCE_GROUP)"
+        echo "  ACR_NAME              = $(azd env get-value ACR_NAME)"
+        echo "  ACR_LOGIN_SERVER      = $(azd env get-value ACR_LOGIN_SERVER)"
+        echo "  API_APP_NAME          = $(azd env get-value API_APP_NAME)"
+        echo "  WEB_APP_NAME          = $(azd env get-value WEB_APP_NAME)"
+        echo "  MIGRATOR_JOB_NAME     = $(azd env get-value MIGRATOR_JOB_NAME)"
+        echo "  PUBLIC_IP             = $(azd env get-value PUBLIC_IP)"
     windows:
       shell: pwsh
-      run: Write-Host "Provisioned. Now run 'azd deploy'."
+      run: |
+        Write-Host "Infrastructure provisioned."
+        Write-Host "Configure these GitHub repo Variables:"
+        @('CICD_CLIENT_ID','CICD_TENANT_ID','CICD_SUBSCRIPTION_ID','AZURE_RESOURCE_GROUP','ACR_NAME','ACR_LOGIN_SERVER','API_APP_NAME','WEB_APP_NAME','MIGRATOR_JOB_NAME','PUBLIC_IP') |
+          ForEach-Object { Write-Host ("  {0} = {1}" -f $_, (azd env get-value $_)) }
+

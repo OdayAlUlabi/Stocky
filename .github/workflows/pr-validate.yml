@@ -1,0 +1,45 @@
+name: pr-validate
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  bicep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Bicep
+        run: az bicep install
+      - name: Build Bicep
+        run: az bicep build --file infra/main.bicep --stdout > /dev/null
+
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore Stocky.slnx
+      - run: dotnet build Stocky.slnx --no-restore -c Release
+      - run: dotnet test Stocky.slnx --no-build -c Release --logger "trx;LogFileName=test.trx"
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/Web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/Web/package-lock.json
+      - run: npm ci || npm install
+      - run: npm run lint
+      - run: npm run build

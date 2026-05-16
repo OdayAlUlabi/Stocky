@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location":                     { "value": "eastus2" },
+    "hubVnetResourceGroup":         { "value": "rg-connectivity-hub-eastus2" },
+    "hubVnetName":                  { "value": "vnet-hub-eastus2" },
+    "dnsZonesResourceGroup":        { "value": "rg-connectivity-dns" },
+    "firewallPolicyResourceGroup":  { "value": "rg-connectivity-hub-eastus2" },
+    "firewallPolicyName":           { "value": "afwp-hub-eastus2" },
+    "spokeVnetResourceId":          { "value": "/subscriptions/<app-sub-id>/resourceGroups/<app-rg>/providers/Microsoft.Network/virtualNetworks/vnet-stocky-prod" },
+    "spokeVnetName":                { "value": "vnet-stocky-prod" },
+    "spokeRegion":                  { "value": "eastus2" },
+    "spokeSourceAddresses":         { "value": [ "10.40.0.0/23", "10.40.2.0/27" ] },
+    "allowGatewayTransit":          { "value": false }
+  }
+}
