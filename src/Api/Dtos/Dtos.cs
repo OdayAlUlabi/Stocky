@@ -177,3 +177,34 @@ public record UserSettingsDto(string DisplayCurrency, string Theme, string Local
 
 // CSV import
 public record ImportResultDto(int Imported, int Skipped, IReadOnlyList<string> Errors);
+
+// Daily OHLC close for historical bar fetches
+public record DailyBarDto(DateOnly Date, decimal Close);
+
+// SCR-041 Portfolio history since first transaction
+public record PortfolioHistoryPointDto(
+    DateOnly Date,
+    decimal Cash,
+    decimal MarketValue,
+    decimal TotalEquity,
+    decimal NetContributions);
+
+public record PortfolioHistoryEventDto(
+    DateOnly Date,
+    string Type,
+    string? Symbol,
+    decimal Quantity,
+    decimal Amount,
+    string? Notes);
+
+public record PortfolioHistoryDto(
+    Guid PortfolioId,
+    string Currency,
+    DateOnly From,
+    DateOnly To,
+    decimal NetContributions,
+    decimal TotalEquity,
+    decimal TotalReturn,
+    decimal TotalReturnPercent,
+    IReadOnlyList<PortfolioHistoryPointDto> Series,
+    IReadOnlyList<PortfolioHistoryEventDto> Events);

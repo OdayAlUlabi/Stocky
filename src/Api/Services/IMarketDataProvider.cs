@@ -12,4 +12,14 @@ public interface IMarketDataProvider
     Task<IReadOnlyList<QuoteDto>> GetQuotesAsync(IReadOnlyCollection<string> symbols, CancellationToken ct = default);
     Task<IReadOnlyList<NewsItemDto>> GetNewsAsync(IReadOnlyCollection<string>? symbols, int limit, CancellationToken ct = default);
     Task<IReadOnlyList<EarningsEventDto>> GetEarningsAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
+
+    /// <summary>
+    /// Daily OHLC close bars per symbol between <paramref name="from"/> and
+    /// <paramref name="to"/> (both inclusive). Returns split-adjusted closes
+    /// when the provider supports it. Symbols the provider cannot resolve
+    /// simply yield an empty list — callers should carry forward the last
+    /// known price.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>>> GetDailyBarsAsync(
+        IReadOnlyCollection<string> symbols, DateOnly from, DateOnly to, CancellationToken ct = default);
 }

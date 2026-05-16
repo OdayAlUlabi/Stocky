@@ -171,6 +171,36 @@ export interface PerformanceDto {
   series: PerformancePointDto[];
 }
 
+export interface PortfolioHistoryPointDto {
+  date: string;
+  cash: number;
+  marketValue: number;
+  totalEquity: number;
+  netContributions: number;
+}
+
+export interface PortfolioHistoryEventDto {
+  date: string;
+  type: string;
+  symbol: string | null;
+  quantity: number;
+  amount: number;
+  notes: string | null;
+}
+
+export interface PortfolioHistoryDto {
+  portfolioId: string;
+  currency: string;
+  from: string;
+  to: string;
+  netContributions: number;
+  totalEquity: number;
+  totalReturn: number;
+  totalReturnPercent: number;
+  series: PortfolioHistoryPointDto[];
+  events: PortfolioHistoryEventDto[];
+}
+
 export interface AllocationDto {
   byAsset: AllocationSliceDto[];
   bySector: AllocationSliceDto[];

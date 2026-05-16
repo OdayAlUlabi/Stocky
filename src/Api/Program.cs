@@ -67,6 +67,7 @@ else
 builder.Services.AddScoped<AlertEvaluator>();
 builder.Services.AddScoped<TaxLotService>();
 builder.Services.AddScoped<PortfolioLedgerService>();
+builder.Services.AddScoped<PortfolioHistoryService>();
 builder.Services.AddHostedService<QuoteRefresher>();
 builder.Services.AddHostedService<SnapshotJob>();
 

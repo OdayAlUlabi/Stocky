@@ -76,6 +76,54 @@ public sealed class AlpacaMarketDataProvider(
     public Task<IReadOnlyList<EarningsEventDto>> GetEarningsAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
         => fallback.GetEarningsAsync(from, to, ct);
 
+    public async Task<IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>>> GetDailyBarsAsync(
+        IReadOnlyCollection<string> symbols, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var result = new Dictionary<string, IReadOnlyList<DailyBarDto>>(StringComparer.OrdinalIgnoreCase);
+        if (symbols.Count == 0 || from > to) return result;
+
+        var symList = symbols.Select(s => s.ToUpperInvariant()).Distinct().ToList();
+        var cacheKey = $"bars:{from:yyyyMMdd}:{to:yyyyMMdd}:{string.Join(',', symList.OrderBy(s => s))}";
+        if (cache.TryGetValue(cacheKey, out IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>>? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        foreach (var s in symList) result[s] = Array.Empty<DailyBarDto>();
+
+        try
+        {
+            string? pageToken = null;
+            do
+            {
+                var url = $"v2/stocks/bars?symbols={Uri.EscapeDataString(string.Join(',', symList))}"
+                          + $"&timeframe=1Day&start={from:yyyy-MM-dd}&end={to:yyyy-MM-dd}"
+                          + $"&adjustment=split&feed=iex&limit=10000"
+                          + (pageToken is null ? string.Empty : $"&page_token={Uri.EscapeDataString(pageToken)}");
+                var resp = await http.GetFromJsonAsync<AlpacaBarsResponse>(url, ct);
+                if (resp?.Bars is { Count: > 0 })
+                {
+                    foreach (var (sym, bars) in resp.Bars)
+                    {
+                        var existing = result.TryGetValue(sym, out var prev) ? prev.ToList() : new List<DailyBarDto>();
+                        foreach (var b in bars)
+                            existing.Add(new DailyBarDto(DateOnly.FromDateTime(b.Timestamp.UtcDateTime), b.Close));
+                        result[sym] = existing;
+                    }
+                }
+                pageToken = resp?.NextPageToken;
+            } while (!string.IsNullOrEmpty(pageToken));
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Alpaca bars fetch failed for {Count} symbols {From}..{To}", symList.Count, from, to);
+        }
+
+        IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>> readonlyResult = result;
+        cache.Set(cacheKey, readonlyResult, TimeSpan.FromHours(6));
+        return readonlyResult;
+    }
+
     private static QuoteDto? TryBuildQuote(string symbol, AlpacaSnapshot snap)
     {
         // Prefer the latest trade price; fall back to the daily bar close.
@@ -106,5 +154,11 @@ public sealed class AlpacaMarketDataProvider(
     {
         [JsonPropertyName("c")] public decimal Close { get; set; }
         [JsonPropertyName("t")] public DateTimeOffset Timestamp { get; set; }
+    }
+
+    private sealed class AlpacaBarsResponse
+    {
+        [JsonPropertyName("bars")] public Dictionary<string, List<AlpacaBar>>? Bars { get; set; }
+        [JsonPropertyName("next_page_token")] public string? NextPageToken { get; set; }
     }
 }

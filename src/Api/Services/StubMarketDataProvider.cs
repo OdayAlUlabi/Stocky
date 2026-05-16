@@ -71,6 +71,17 @@ public sealed class StubMarketDataProvider : IMarketDataProvider
         return Task.FromResult<IReadOnlyList<EarningsEventDto>>(list);
     }
 
+    public Task<IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>>> GetDailyBarsAsync(
+        IReadOnlyCollection<string> symbols, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        // Stub has no historical data: callers should carry forward the last
+        // known price (cost basis from transactions usually). Returning an
+        // empty dictionary keeps the history endpoint working offline.
+        IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>> empty =
+            new Dictionary<string, IReadOnlyList<DailyBarDto>>();
+        return Task.FromResult(empty);
+    }
+
     private static (decimal Price, decimal Change, decimal ChangePct) Synthesize(string symbol, DateTimeOffset now)
     {
         var hash = 0;
