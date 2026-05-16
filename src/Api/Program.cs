@@ -93,6 +93,11 @@ builder.Services.AddScoped<RebalanceService>();
 builder.Services.AddHostedService<QuoteRefresher>();
 builder.Services.AddHostedService<SnapshotJob>();
 
+// M8 — Data Providers & Real-Time
+builder.Services.AddScoped<IExtendedMarketDataProvider, StubExtendedMarketDataProvider>();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<PriceTickBroadcaster>();
+
 var appInsightsConnection = builder.Configuration["ApplicationInsights:ConnectionString"]
     ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 if (!string.IsNullOrWhiteSpace(appInsightsConnection))
@@ -152,6 +157,7 @@ else
 }
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<PricesHub>("/hubs/prices");
 
 using (var scope = app.Services.CreateScope())
 {

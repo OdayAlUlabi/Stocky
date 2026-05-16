@@ -306,3 +306,65 @@ public record RebalanceReportDto(
     decimal TargetWeightSumPercent,
     IReadOnlyList<RebalanceSuggestionDto> Suggestions);
 
+
+// SCR-080..M8 — Data Providers & Real-Time
+
+// #2 Level 2 order book
+public record OrderBookLevelDto(decimal Price, int Size);
+public record OrderBookDto(string Symbol, IReadOnlyList<OrderBookLevelDto> Bids, IReadOnlyList<OrderBookLevelDto> Asks, DateTimeOffset AsOf);
+
+// #102 After-hours / pre-market quotes
+public record ExtendedQuoteDto(
+    string Symbol,
+    decimal RegularPrice,
+    decimal ExtendedPrice,
+    decimal ExtendedChange,
+    decimal ExtendedChangePercent,
+    string Session, // PreMarket | Regular | AfterHours | Closed
+    DateTimeOffset AsOf);
+
+// #4 SEC EDGAR filings
+public record FilingDto(long Id, string Symbol, string Form, string Title, DateOnly FiledAt, string Url, string AccessionNumber);
+
+// #5 Insider trades
+public record InsiderTradeDto(long Id, string Symbol, string Insider, string Role, string Side, decimal Quantity, decimal Price, decimal Value, DateOnly FiledAt);
+
+// #6 Short interest
+public record ShortInterestPointDto(DateOnly ReportDate, decimal ShortInterest, decimal PercentOfFloat, decimal DaysToCover);
+public record ShortInterestDto(
+    string Symbol,
+    DateOnly ReportDate,
+    decimal ShortInterest,
+    decimal FloatShares,
+    decimal PercentOfFloat,
+    decimal DaysToCover,
+    IReadOnlyList<ShortInterestPointDto> History);
+
+// #7 Economic calendar
+public record EconomicEventDto(
+    long Id,
+    DateOnly Date,
+    string Time,
+    string Country,
+    string Indicator,
+    string Importance, // High | Medium | Low
+    decimal? Actual,
+    decimal? Forecast,
+    decimal? Previous,
+    string Unit);
+
+// #8 Options flow
+public record OptionsFlowRowDto(
+    string Symbol,
+    string Side, // Call | Put
+    decimal Strike,
+    DateOnly Expiry,
+    int Volume,
+    int OpenInterest,
+    decimal VolumeOverOpenInterest,
+    decimal Premium,
+    decimal NotionalValue);
+public record OptionsFlowDto(string Symbol, IReadOnlyList<OptionsFlowRowDto> Rows, DateTimeOffset AsOf);
+
+// #1 Real-time price tick (SignalR push payload)
+public record PriceTickDto(string Symbol, decimal Price, decimal? Change, decimal? ChangePercent, DateTimeOffset AsOf);

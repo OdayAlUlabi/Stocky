@@ -431,3 +431,45 @@ export interface ImportResultDto {
   skipped: number;
   errors: ImportResultRowError[];
 }
+
+// M8 — Data Providers & Real-Time
+export interface OrderBookLevelDto { price: number; size: number; }
+export interface OrderBookDto { symbol: string; bids: OrderBookLevelDto[]; asks: OrderBookLevelDto[]; asOf: string; }
+
+export interface ExtendedQuoteDto {
+  symbol: string;
+  regularPrice: number;
+  extendedPrice: number;
+  extendedChange: number;
+  extendedChangePercent: number;
+  session: 'PreMarket' | 'Regular' | 'AfterHours' | 'Closed';
+  asOf: string;
+}
+
+export interface FilingDto { id: number; symbol: string; form: string; title: string; filedAt: string; url: string; accessionNumber: string; }
+
+export interface InsiderTradeDto {
+  id: number; symbol: string; insider: string; role: string; side: 'Buy' | 'Sell';
+  quantity: number; price: number; value: number; filedAt: string;
+}
+
+export interface ShortInterestPointDto { reportDate: string; shortInterest: number; percentOfFloat: number; daysToCover: number; }
+export interface ShortInterestDto {
+  symbol: string; reportDate: string; shortInterest: number; floatShares: number;
+  percentOfFloat: number; daysToCover: number; history: ShortInterestPointDto[];
+}
+
+export interface EconomicEventDto {
+  id: number; date: string; time: string; country: string; indicator: string;
+  importance: 'High' | 'Medium' | 'Low';
+  actual: number | null; forecast: number | null; previous: number | null; unit: string;
+}
+
+export interface OptionsFlowRowDto {
+  symbol: string; side: 'Call' | 'Put'; strike: number; expiry: string;
+  volume: number; openInterest: number; volumeOverOpenInterest: number;
+  premium: number; notionalValue: number;
+}
+export interface OptionsFlowDto { symbol: string; rows: OptionsFlowRowDto[]; asOf: string; }
+
+export interface PriceTickDto { symbol: string; price: number; change: number | null; changePercent: number | null; asOf: string; }

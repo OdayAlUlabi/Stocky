@@ -442,3 +442,76 @@ export function useUpdateSettings() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] })
   });
 }
+
+// M8 — Data Providers & Real-Time hooks
+import type {
+  OrderBookDto, ExtendedQuoteDto, FilingDto, InsiderTradeDto,
+  ShortInterestDto, EconomicEventDto, OptionsFlowDto
+} from './types';
+
+export function useOrderBook(symbol: string | undefined, depth = 10) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!symbol,
+    queryKey: ['orderbook', symbol, depth] as const,
+    refetchInterval: 2000,
+    queryFn: async () => request<OrderBookDto>(`/api/quotes/${symbol}/book`, { query: { depth }, token: await getToken() })
+  });
+}
+
+export function useExtendedQuote(symbol: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!symbol,
+    queryKey: ['extended-quote', symbol] as const,
+    refetchInterval: 15000,
+    queryFn: async () => request<ExtendedQuoteDto>(`/api/quotes/${symbol}/extended`, { token: await getToken() })
+  });
+}
+
+export function useFilings(symbols?: string[], limit = 25) {
+  const getToken = useApiToken();
+  const key = symbols && symbols.length ? symbols.slice().sort().join(',') : '';
+  return useQuery({
+    queryKey: ['filings', key, limit] as const,
+    queryFn: async () => request<FilingDto[]>('/api/filings', {
+      query: { symbols: symbols?.join(',') || undefined, limit },
+      token: await getToken()
+    })
+  });
+}
+
+export function useInsiderTrades(symbol: string | undefined, limit = 25) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!symbol,
+    queryKey: ['insider-trades', symbol, limit] as const,
+    queryFn: async () => request<InsiderTradeDto[]>('/api/insider-trades', { query: { symbol, limit }, token: await getToken() })
+  });
+}
+
+export function useShortInterest(symbol: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!symbol,
+    queryKey: ['short-interest', symbol] as const,
+    queryFn: async () => request<ShortInterestDto>(`/api/short-interest/${symbol}`, { token: await getToken() })
+  });
+}
+
+export function useEconomicCalendar(from?: string, to?: string) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['economic-calendar', from ?? '', to ?? ''] as const,
+    queryFn: async () => request<EconomicEventDto[]>('/api/calendar/economic', { query: { from, to }, token: await getToken() })
+  });
+}
+
+export function useOptionsFlow(symbol: string | undefined, limit = 25) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!symbol,
+    queryKey: ['options-flow', symbol, limit] as const,
+    queryFn: async () => request<OptionsFlowDto>('/api/options-flow', { query: { symbol, limit }, token: await getToken() })
+  });
+}

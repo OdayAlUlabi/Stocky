@@ -18,6 +18,7 @@ import { Alerts } from './alerts/Alerts';
 import { CapitalGains } from './capgains/CapitalGains';
 import { News } from './news/News';
 import { Earnings } from './earnings/Earnings';
+import { EconomicCalendar } from './calendar/EconomicCalendar';
 import { Settings } from './settings/Settings';
 import { Screener } from './screener/Screener';
 
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: 'alerts', element: <Alerts /> },
       { path: 'news', element: <News /> },
       { path: 'earnings', element: <Earnings /> },
+      { path: 'calendar/economic', element: <EconomicCalendar /> },
       { path: 'settings', element: <Settings /> }
     ]
   }

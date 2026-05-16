@@ -83,6 +83,15 @@ public sealed class QuoteRefresher(
         }
         await db.SaveChangesAsync(ct);
         await evaluator.EvaluateAsync(quotes, ct);
+
+        // M8 #1 — fan-out real-time ticks to SignalR subscribers.
+        var broadcaster = scope.ServiceProvider.GetService<PriceTickBroadcaster>();
+        if (broadcaster is not null)
+        {
+            try { await broadcaster.BroadcastAsync(quotes, ct); }
+            catch (Exception ex) { logger.LogDebug(ex, "PriceTick broadcast failed"); }
+        }
+
         logger.LogInformation("Refreshed {Count} quotes", quotes.Count);
     }
 

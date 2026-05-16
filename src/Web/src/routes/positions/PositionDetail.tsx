@@ -1,12 +1,24 @@
-import { Anchor, Badge, Card, Group, Loader, NumberFormatter, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { Anchor, Badge, Card, Group, Loader, NumberFormatter, SimpleGrid, Stack, Table, Tabs, Text, Title } from '@mantine/core';
 import { Link, useParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { usePositionDetail } from '../../api/hooks';
+import {
+  usePositionDetail, useOrderBook, useExtendedQuote, useFilings,
+  useInsiderTrades, useShortInterest, useOptionsFlow
+} from '../../api/hooks';
+import { usePriceTicks } from '../../api/priceStream';
 import { EmptyState } from '../../components/EmptyState';
 
 export function PositionDetail() {
   const { id, symbol } = useParams();
+  const sym = symbol?.toUpperCase();
   const { data, isLoading, error } = usePositionDetail(id, symbol);
+  usePriceTicks(sym ? [sym] : []);
+  const ext = useExtendedQuote(sym);
+  const book = useOrderBook(sym);
+  const filings = useFilings(sym ? [sym] : undefined, 15);
+  const insider = useInsiderTrades(sym, 15);
+  const shortInt = useShortInterest(sym);
+  const options = useOptionsFlow(sym, 15);
 
   if (isLoading) return <Loader />;
   if (error) return <EmptyState title="Could not load position" description={String(error)} />;
@@ -23,6 +35,11 @@ export function PositionDetail() {
             <Badge variant="light">{data.assetClass}</Badge>
             {data.sector && <Badge variant="light" color="grape">{data.sector}</Badge>}
             <Badge variant="outline">{data.currency}</Badge>
+            {ext.data && ext.data.session !== 'Regular' && (
+              <Badge color={ext.data.extendedChange >= 0 ? 'teal' : 'red'} variant="filled">
+                {ext.data.session}: {fmt(ext.data.extendedPrice)} ({ext.data.extendedChangePercent.toFixed(2)}%)
+              </Badge>
+            )}
           </Group>
         </div>
         <Anchor component={Link} to={`/portfolios/${id}`}>← Back to portfolio</Anchor>
@@ -97,6 +114,122 @@ export function PositionDetail() {
             </Table.Tbody>
           </Table>
         )}
+      </Card>
+      <Card withBorder>
+        <Tabs defaultValue="book">
+          <Tabs.List>
+            <Tabs.Tab value="book">Order book</Tabs.Tab>
+            <Tabs.Tab value="filings">Filings</Tabs.Tab>
+            <Tabs.Tab value="insider">Insider trades</Tabs.Tab>
+            <Tabs.Tab value="short">Short interest</Tabs.Tab>
+            <Tabs.Tab value="options">Options flow</Tabs.Tab>
+          </Tabs.List>
+
+          <Tabs.Panel value="book" pt="md">
+            {book.isLoading ? <Loader size="sm" /> : !book.data ? <Text c="dimmed">No data</Text> : (
+              <SimpleGrid cols={2}>
+                <Table>
+                  <Table.Thead><Table.Tr><Table.Th>Bid</Table.Th><Table.Th>Size</Table.Th></Table.Tr></Table.Thead>
+                  <Table.Tbody>
+                    {book.data.bids.map((l, i) => (
+                      <Table.Tr key={i}><Table.Td c="teal">{fmt(l.price)}</Table.Td><Table.Td>{l.size}</Table.Td></Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+                <Table>
+                  <Table.Thead><Table.Tr><Table.Th>Ask</Table.Th><Table.Th>Size</Table.Th></Table.Tr></Table.Thead>
+                  <Table.Tbody>
+                    {book.data.asks.map((l, i) => (
+                      <Table.Tr key={i}><Table.Td c="red">{fmt(l.price)}</Table.Td><Table.Td>{l.size}</Table.Td></Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </SimpleGrid>
+            )}
+          </Tabs.Panel>
+
+          <Tabs.Panel value="filings" pt="md">
+            {filings.isLoading ? <Loader size="sm" /> : !filings.data || filings.data.length === 0 ? <Text c="dimmed">No filings</Text> : (
+              <Table striped>
+                <Table.Thead><Table.Tr><Table.Th>Filed</Table.Th><Table.Th>Form</Table.Th><Table.Th>Title</Table.Th><Table.Th>Link</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>
+                  {filings.data.map(f => (
+                    <Table.Tr key={f.id}>
+                      <Table.Td>{f.filedAt}</Table.Td>
+                      <Table.Td><Badge variant="light">{f.form}</Badge></Table.Td>
+                      <Table.Td>{f.title}</Table.Td>
+                      <Table.Td><Anchor href={f.url} target="_blank" rel="noreferrer">EDGAR</Anchor></Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            )}
+          </Tabs.Panel>
+
+          <Tabs.Panel value="insider" pt="md">
+            {insider.isLoading ? <Loader size="sm" /> : !insider.data || insider.data.length === 0 ? <Text c="dimmed">No insider trades</Text> : (
+              <Table striped>
+                <Table.Thead><Table.Tr><Table.Th>Filed</Table.Th><Table.Th>Insider</Table.Th><Table.Th>Role</Table.Th><Table.Th>Side</Table.Th><Table.Th>Qty</Table.Th><Table.Th>Price</Table.Th><Table.Th>Value</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>
+                  {insider.data.map(t => (
+                    <Table.Tr key={t.id}>
+                      <Table.Td>{t.filedAt}</Table.Td>
+                      <Table.Td>{t.insider}</Table.Td>
+                      <Table.Td>{t.role}</Table.Td>
+                      <Table.Td><Badge color={t.side === 'Buy' ? 'teal' : 'red'} variant="light">{t.side}</Badge></Table.Td>
+                      <Table.Td>{t.quantity}</Table.Td>
+                      <Table.Td>{fmt(t.price)}</Table.Td>
+                      <Table.Td>{fmt(t.value)}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            )}
+          </Tabs.Panel>
+
+          <Tabs.Panel value="short" pt="md">
+            {shortInt.isLoading ? <Loader size="sm" /> : !shortInt.data ? <Text c="dimmed">No data</Text> : (
+              <Stack>
+                <SimpleGrid cols={{ base: 2, md: 4 }}>
+                  <Card withBorder><Text size="xs" c="dimmed">Report date</Text><Text fw={600}>{shortInt.data.reportDate}</Text></Card>
+                  <Card withBorder><Text size="xs" c="dimmed">% of float</Text><Text fw={600}>{shortInt.data.percentOfFloat.toFixed(2)}%</Text></Card>
+                  <Card withBorder><Text size="xs" c="dimmed">Days to cover</Text><Text fw={600}>{shortInt.data.daysToCover.toFixed(2)}</Text></Card>
+                  <Card withBorder><Text size="xs" c="dimmed">Short interest</Text><Text fw={600}>{shortInt.data.shortInterest.toLocaleString()}</Text></Card>
+                </SimpleGrid>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={shortInt.data.history.map(h => ({ date: h.reportDate, pct: h.percentOfFloat }))}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="pct" stroke="#fa5252" dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Stack>
+            )}
+          </Tabs.Panel>
+
+          <Tabs.Panel value="options" pt="md">
+            {options.isLoading ? <Loader size="sm" /> : !options.data || options.data.rows.length === 0 ? <Text c="dimmed">No data</Text> : (
+              <Table striped>
+                <Table.Thead><Table.Tr><Table.Th>Side</Table.Th><Table.Th>Strike</Table.Th><Table.Th>Expiry</Table.Th><Table.Th>Volume</Table.Th><Table.Th>OI</Table.Th><Table.Th>V/OI</Table.Th><Table.Th>Premium</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>
+                  {options.data.rows.map((r, i) => (
+                    <Table.Tr key={i}>
+                      <Table.Td><Badge color={r.side === 'Call' ? 'teal' : 'red'} variant="light">{r.side}</Badge></Table.Td>
+                      <Table.Td>{fmt(r.strike)}</Table.Td>
+                      <Table.Td>{r.expiry}</Table.Td>
+                      <Table.Td>{r.volume.toLocaleString()}</Table.Td>
+                      <Table.Td>{r.openInterest.toLocaleString()}</Table.Td>
+                      <Table.Td>{r.volumeOverOpenInterest >= 3 ? <Badge color="orange">{r.volumeOverOpenInterest.toFixed(2)}</Badge> : r.volumeOverOpenInterest.toFixed(2)}</Table.Td>
+                      <Table.Td>{fmt(r.premium)}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            )}
+          </Tabs.Panel>
+        </Tabs>
       </Card>
     </Stack>
   );
