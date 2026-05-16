@@ -27,6 +27,10 @@ public record CreateTransactionRequest(
     DateTimeOffset ExecutedAt,
     string? Notes);
 
+public record ImportTransactionsRequest(string Csv);
+public record ImportTransactionsRowError(int Row, string Message);
+public record ImportTransactionsResult(int Imported, int Skipped, IReadOnlyList<ImportTransactionsRowError> Errors);
+
 public record WatchlistDto(Guid Id, string Name, IReadOnlyList<WatchlistItemDto> Items);
 public record WatchlistItemDto(Guid Id, string Symbol, decimal? LatestPrice, decimal? ChangePercent);
 public record CreateWatchlistRequest(string Name);

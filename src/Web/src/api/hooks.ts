@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { useApiToken } from '../auth/useApiToken';
 import { request } from './client';
-import { config } from '../config';
 import type {
   AllocationDto,
   AlertDto,
@@ -121,18 +120,12 @@ export function useImportTransactions(portfolioId: string) {
   const qc = useQueryClient();
   const getToken = useApiToken();
   return useMutation({
-    mutationFn: async (file: File) => {
-      const form = new FormData();
-      form.append('file', file);
-      const token = await getToken();
-      const res = await fetch(`${config.apiBaseUrl}/api/portfolios/${portfolioId}/transactions/import`, {
+    mutationFn: async (csv: string) =>
+      request<ImportResultDto>(`/api/portfolios/${portfolioId}/transactions/import`, {
         method: 'POST',
-        body: form,
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return (await res.json()) as ImportResultDto;
-    },
+        body: { csv },
+        token: await getToken()
+      }),
     onSuccess: () => invalidatePortfolio(qc, portfolioId)
   });
 }

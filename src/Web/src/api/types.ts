@@ -323,8 +323,13 @@ export interface UserSettingsDto {
   weeklyDigest: boolean;
 }
 
+export interface ImportResultRowError {
+  row: number;
+  message: string;
+}
+
 export interface ImportResultDto {
   imported: number;
   skipped: number;
-  errors: string[];
+  errors: ImportResultRowError[];
 }

@@ -29,8 +29,9 @@ export function TransactionsBrowser() {
             if (!file || !effectiveId) return;
             setImportResult(null);
             try {
-              const r = await importMut.mutateAsync(file);
-              setImportResult(`Imported ${r.imported}, skipped ${r.skipped}.${r.errors.length ? ' First error: ' + r.errors[0] : ''}`);
+              const csv = await file.text();
+              const r = await importMut.mutateAsync(csv);
+              setImportResult(`Imported ${r.imported}, skipped ${r.skipped}.${r.errors.length ? ' First error: row ' + r.errors[0].row + ' - ' + r.errors[0].message : ''}`);
             } catch (e) {
               setImportResult(`Import failed: ${(e as Error).message}`);
             }

@@ -1,5 +1,5 @@
-import { ActionIcon, Anchor, Badge, Button, Card, Group, ScrollArea, Stack, Table, Tabs, Text, Title, Tooltip } from '@mantine/core';
-import { IconArrowLeft, IconDownload, IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Alert, Anchor, Badge, Button, Card, FileButton, Group, Modal, ScrollArea, Stack, Table, Tabs, Text, Textarea, Title, Tooltip } from '@mantine/core';
+import { IconArrowLeft, IconDownload, IconEdit, IconPlus, IconTrash, IconUpload } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router-dom';
 import { useState } from 'react';
 import { notifications } from '@mantine/notifications';
@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import {
   useDeleteTransaction,
   useHoldings,
+  useImportTransactions,
   usePortfolios,
   useTransactions
 } from '../../api/hooks';
@@ -35,9 +36,12 @@ export function PortfolioDetail() {
   const holdings = useHoldings(id);
   const transactions = useTransactions(id);
   const delTx = useDeleteTransaction(id);
+  const importTx = useImportTransactions(id);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<TransactionDto | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importCsv, setImportCsv] = useState('');
 
   const currency = portfolio?.baseCurrency ?? 'USD';
 
@@ -109,6 +113,7 @@ export function PortfolioDetail() {
           <Button variant="default" component={Link} to={`/portfolios/${id}/capital-flow`}>Capital flow</Button>
           <Button variant="default" component={Link} to={`/portfolios/${id}/analytics`}>Analytics</Button>
           <Button variant="default" leftSection={<IconDownload size={16} />} onClick={exportCsv} disabled={!holdings.data || holdings.data.length === 0}>Export CSV</Button>
+          <Button variant="default" leftSection={<IconUpload size={16} />} onClick={() => { setImportCsv(''); setImportOpen(true); }}>Import CSV</Button>
           <Button leftSection={<IconPlus size={16} />} onClick={openNew}>Add trade</Button>
         </Group>
       </Group>
@@ -241,6 +246,76 @@ export function PortfolioDetail() {
         editing={editing}
         defaultCurrency={currency}
       />
+
+      <Modal opened={importOpen} onClose={() => setImportOpen(false)} title="Import transactions from CSV" size="lg">
+        <Stack gap="sm">
+          <Text size="sm" c="dimmed">
+            Expected columns: <code>type,symbol,quantity,price,fee,currency,executedAt,notes</code>.
+            Header row optional. Supported types: Buy, Sell, Deposit, Withdrawal, Dividend, Fee, Split, SpinOff.
+          </Text>
+          <Group gap="xs">
+            <FileButton
+              accept="text/csv,.csv"
+              onChange={async (file) => {
+                if (!file) return;
+                const text = await file.text();
+                setImportCsv(text);
+              }}
+            >
+              {(props) => <Button {...props} variant="default" leftSection={<IconUpload size={14} />}>Load file…</Button>}
+            </FileButton>
+            <Anchor
+              size="sm"
+              onClick={() => setImportCsv('type,symbol,quantity,price,fee,currency,executedAt,notes\nDeposit,,1000,1,0,USD,2024-01-02,Initial funding\nBuy,AAPL,10,180.50,0,USD,2024-01-05,\nSell,AAPL,4,195.00,0,USD,2024-03-15,Partial trim')}
+            >
+              Insert sample
+            </Anchor>
+          </Group>
+          <Textarea
+            value={importCsv}
+            onChange={(e) => setImportCsv(e.currentTarget.value)}
+            placeholder="Paste CSV here or load a file…"
+            minRows={10}
+            autosize
+            maxRows={20}
+            styles={{ input: { fontFamily: 'monospace', fontSize: 12 } }}
+          />
+          {importTx.data && (
+            <Alert color={importTx.data.skipped > 0 ? 'yellow' : 'teal'}>
+              Imported {importTx.data.imported}, skipped {importTx.data.skipped}.
+              {importTx.data.errors.length > 0 && (
+                <ScrollArea.Autosize mah={160} mt="xs">
+                  <Stack gap={2}>
+                    {importTx.data.errors.map((e, i) => (
+                      <Text key={i} size="xs" c="red">Row {e.row}: {e.message}</Text>
+                    ))}
+                  </Stack>
+                </ScrollArea.Autosize>
+              )}
+            </Alert>
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setImportOpen(false)}>Close</Button>
+            <Button
+              loading={importTx.isPending}
+              disabled={!importCsv.trim()}
+              onClick={async () => {
+                try {
+                  const result = await importTx.mutateAsync(importCsv);
+                  notifications.show({
+                    message: `Imported ${result.imported} transaction${result.imported === 1 ? '' : 's'}` + (result.skipped > 0 ? `, ${result.skipped} skipped` : ''),
+                    color: result.skipped > 0 ? 'yellow' : 'teal'
+                  });
+                } catch (e) {
+                  notifications.show({ message: (e as Error).message, color: 'red' });
+                }
+              }}
+            >
+              Import
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
