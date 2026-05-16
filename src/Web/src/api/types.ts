@@ -473,3 +473,154 @@ export interface OptionsFlowRowDto {
 export interface OptionsFlowDto { symbol: string; rows: OptionsFlowRowDto[]; asOf: string; }
 
 export interface PriceTickDto { symbol: string; price: number; change: number | null; changePercent: number | null; asOf: string; }
+
+// ─────────────────────────────────────────────────────────────────────────
+// M9 — Advanced Analytics & Charts
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface OhlcBarDto {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface AnalystRatingDistributionDto {
+  strongBuy: number;
+  buy: number;
+  hold: number;
+  sell: number;
+  strongSell: number;
+}
+
+export interface AnalystRatingDto {
+  symbol: string;
+  consensusScore: number;
+  consensusLabel: string;
+  priceTargetLow: number;
+  priceTargetMean: number;
+  priceTargetHigh: number;
+  priceTargetMedian: number;
+  analystCount: number;
+  asOf: string;
+  distribution: AnalystRatingDistributionDto;
+}
+
+export interface RiskMetricsDto {
+  portfolioId: string;
+  from: string;
+  to: string;
+  sharpe: number;
+  sortino: number;
+  maxDrawdown: number;
+  maxDrawdownDate: string;
+  var95: number;
+  var99: number;
+  cvar95: number;
+  annualisedVolatility: number;
+  downsideVolatility: number;
+  beta: number;
+  alpha: number;
+  benchmarkSymbol: string;
+}
+
+export interface BacktestRequest {
+  portfolioId: string;
+  from: string;
+  to: string;
+  initialCash: number;
+  monthlyContribution: number;
+  frequency: 'Monthly' | 'Quarterly' | 'Yearly';
+  targets: { symbol: string; targetWeightPercent: number }[];
+}
+
+export interface BacktestPointDto {
+  date: string;
+  equity: number;
+  contributions: number;
+  benchmarkEquity: number;
+}
+
+export interface BacktestDto {
+  portfolioId: string;
+  benchmarkSymbol: string;
+  finalEquity: number;
+  totalContributions: number;
+  totalReturnPercent: number;
+  cagr: number;
+  maxDrawdown: number;
+  benchmarkFinalEquity: number;
+  benchmarkTotalReturnPercent: number;
+  benchmarkCagr: number;
+  series: BacktestPointDto[];
+}
+
+export interface EarningsSurprisePointDto {
+  date: string;
+  epsEstimate: number | null;
+  epsActual: number | null;
+  surprisePercent: number | null;
+}
+
+export interface BenchmarkComponentDto {
+  symbol: string;
+  weight: number;
+}
+
+export interface BenchmarkConfigDto {
+  symbol?: string | null;
+  blend?: BenchmarkComponentDto[] | null;
+}
+
+export interface BenchmarkPointDto {
+  date: string;
+  portfolioEquity: number;
+  benchmarkEquity: number;
+  outperformanceBps: number;
+}
+
+export interface BenchmarkComparisonDto {
+  portfolioId: string;
+  benchmarkLabel: string;
+  from: string;
+  to: string;
+  portfolioReturnPercent: number;
+  benchmarkReturnPercent: number;
+  outperformanceBps: number;
+  alpha: number;
+  beta: number;
+  series: BenchmarkPointDto[];
+}
+
+export interface GoalCreateDto {
+  portfolioId?: string | null;
+  name: string;
+  targetValue: number;
+  targetDate: string;
+  monthlyContribution: number;
+  expectedReturn: number;
+}
+
+export interface GoalProjectionPointDto {
+  date: string;
+  projectedValue: number;
+  targetTrajectory: number;
+}
+
+export interface GoalDto {
+  id: string;
+  portfolioId: string | null;
+  name: string;
+  targetValue: number;
+  targetDate: string;
+  monthlyContribution: number;
+  expectedReturn: number;
+  currentValue: number;
+  progressPercent: number;
+  projectedHitDate: string | null;
+  onTrack: boolean;
+  projectedFinalValue: number;
+  projection: GoalProjectionPointDto[];
+}

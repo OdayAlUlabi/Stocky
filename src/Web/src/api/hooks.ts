@@ -515,3 +515,146 @@ export function useOptionsFlow(symbol: string | undefined, limit = 25) {
     queryFn: async () => request<OptionsFlowDto>('/api/options-flow', { query: { symbol, limit }, token: await getToken() })
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// M9 — Advanced Analytics & Charts
+// ─────────────────────────────────────────────────────────────────────────
+import type {
+  OhlcBarDto, AnalystRatingDto, RiskMetricsDto, BacktestRequest, BacktestDto,
+  EarningsSurprisePointDto, BenchmarkComparisonDto, BenchmarkConfigDto,
+  GoalDto, GoalCreateDto
+} from './types';
+
+export function useBars(symbol: string | undefined, days = 180) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!symbol,
+    queryKey: ['bars', symbol, days] as const,
+    queryFn: async () => request<OhlcBarDto[]>(`/api/quotes/${symbol}/bars`, { query: { days }, token: await getToken() })
+  });
+}
+
+export function useAnalystRating(symbol: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!symbol,
+    queryKey: ['analyst-rating', symbol] as const,
+    queryFn: async () => request<AnalystRatingDto>(`/api/analyst-ratings/${symbol}`, { token: await getToken() })
+  });
+}
+
+export function useRiskMetrics(portfolioId: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!portfolioId,
+    queryKey: ['risk-metrics', portfolioId] as const,
+    queryFn: async () => request<RiskMetricsDto>(`/api/portfolios/${portfolioId}/risk`, { token: await getToken() })
+  });
+}
+
+export function useBenchmarkComparison(portfolioId: string | undefined, symbol?: string) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!portfolioId,
+    queryKey: ['benchmark', portfolioId, symbol ?? ''] as const,
+    queryFn: async () => request<BenchmarkComparisonDto>(`/api/portfolios/${portfolioId}/benchmark`, { query: { symbol }, token: await getToken() })
+  });
+}
+
+export function useSetPortfolioBenchmark() {
+  const getToken = useApiToken();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ portfolioId, symbol }: { portfolioId: string; symbol: string | null }) => {
+      await request(`/api/portfolios/${portfolioId}/benchmark/symbol`, {
+        method: 'PUT',
+        body: { symbol, blend: null } satisfies BenchmarkConfigDto,
+        token: await getToken()
+      });
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['benchmark', vars.portfolioId] });
+      qc.invalidateQueries({ queryKey: ['risk-metrics', vars.portfolioId] });
+      qc.invalidateQueries({ queryKey: ['portfolios'] });
+    }
+  });
+}
+
+export function useRunBacktest() {
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (req: BacktestRequest) =>
+      request<BacktestDto>(`/api/portfolios/${req.portfolioId}/backtest`, {
+        method: 'POST',
+        body: req,
+        token: await getToken()
+      })
+  });
+}
+
+export function useGoals() {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['goals'] as const,
+    queryFn: async () => request<GoalDto[]>('/api/goals', { token: await getToken() })
+  });
+}
+
+export function useGoal(id: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!id,
+    queryKey: ['goal', id] as const,
+    queryFn: async () => request<GoalDto>(`/api/goals/${id}`, { token: await getToken() })
+  });
+}
+
+export function useCreateGoal() {
+  const getToken = useApiToken();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: GoalCreateDto) =>
+      request<GoalDto>('/api/goals', { method: 'POST', body: dto, token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] })
+  });
+}
+
+export function useUpdateGoal() {
+  const getToken = useApiToken();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, dto }: { id: string; dto: GoalCreateDto }) =>
+      request<GoalDto>(`/api/goals/${id}`, { method: 'PUT', body: dto, token: await getToken() }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['goals'] });
+      qc.invalidateQueries({ queryKey: ['goal', vars.id] });
+    }
+  });
+}
+
+export function useDeleteGoal() {
+  const getToken = useApiToken();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      request<void>(`/api/goals/${id}`, { method: 'DELETE', token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] })
+  });
+}
+
+export function useEarningsSurprises(symbol: string | undefined, quarters = 8) {
+  const getToken = useApiToken();
+  return useQuery({
+    enabled: !!symbol,
+    queryKey: ['earnings-surprises', symbol, quarters] as const,
+    queryFn: async () => request<EarningsSurprisePointDto[]>(`/api/earnings/${symbol}/surprises`, { query: { quarters }, token: await getToken() })
+  });
+}
+
+export function useEarningsCalendar(params: { from?: string; to?: string; scope?: 'holdings' | 'watchlist' | 'all'; watchlistId?: string }) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['earnings-calendar', params.from ?? '', params.to ?? '', params.scope ?? 'holdings', params.watchlistId ?? ''] as const,
+    queryFn: async () => request<EarningsEventDto[]>('/api/calendar/earnings', { query: params, token: await getToken() })
+  });
+}

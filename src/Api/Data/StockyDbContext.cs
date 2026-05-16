@@ -21,6 +21,7 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
     public DbSet<EarningsEvent> EarningsEvents => Set<EarningsEvent>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<RebalanceTarget> RebalanceTargets => Set<RebalanceTarget>();
+    public DbSet<Goal> Goals => Set<Goal>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -54,6 +55,17 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.Property(x => x.Name).HasMaxLength(120).IsRequired();
             e.Property(x => x.BaseCurrency).HasMaxLength(8);
             e.Property(x => x.CostBasisMethod).HasConversion<string>().HasMaxLength(16);
+            e.Property(x => x.BenchmarkSymbol).HasMaxLength(16);
+        });
+
+        modelBuilder.Entity<Goal>(e =>
+        {
+            e.HasIndex(x => x.OwnerId);
+            e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.TargetValue).HasPrecision(18, 2);
+            e.Property(x => x.MonthlyContribution).HasPrecision(18, 2);
+            e.Property(x => x.ExpectedReturn).HasPrecision(9, 6);
         });
 
         modelBuilder.Entity<Holding>(e =>

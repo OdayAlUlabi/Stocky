@@ -368,3 +368,110 @@ public record OptionsFlowDto(string Symbol, IReadOnlyList<OptionsFlowRowDto> Row
 
 // #1 Real-time price tick (SignalR push payload)
 public record PriceTickDto(string Symbol, decimal Price, decimal? Change, decimal? ChangePercent, DateTimeOffset AsOf);
+
+// ─────────────────────────────────────────────────────────────────────────
+// M9 — Advanced Analytics & Charts
+// ─────────────────────────────────────────────────────────────────────────
+
+// #21 OHLCV bars for charting (TradingView Lightweight Charts)
+public record OhlcBarDto(DateOnly Date, decimal Open, decimal High, decimal Low, decimal Close, long Volume);
+
+// #22 Analyst ratings
+public record AnalystRatingDistributionDto(int StrongBuy, int Buy, int Hold, int Sell, int StrongSell);
+public record AnalystRatingDto(
+    string Symbol,
+    decimal ConsensusScore,
+    string ConsensusLabel,
+    decimal PriceTargetLow,
+    decimal PriceTargetMean,
+    decimal PriceTargetHigh,
+    decimal PriceTargetMedian,
+    int AnalystCount,
+    DateOnly AsOf,
+    AnalystRatingDistributionDto Distribution);
+
+// #23 Extended risk metrics
+public record RiskMetricsDto(
+    Guid PortfolioId,
+    DateOnly From,
+    DateOnly To,
+    decimal Sharpe,
+    decimal Sortino,
+    decimal MaxDrawdown,
+    DateOnly MaxDrawdownDate,
+    decimal Var95,
+    decimal Var99,
+    decimal Cvar95,
+    decimal AnnualisedVolatility,
+    decimal DownsideVolatility,
+    decimal Beta,
+    decimal Alpha,
+    string BenchmarkSymbol);
+
+// #24 Backtesting engine
+public record BacktestRequest(
+    Guid PortfolioId,
+    DateOnly From,
+    DateOnly To,
+    decimal InitialCash,
+    decimal MonthlyContribution,
+    string Frequency, // Monthly | Quarterly | Yearly
+    IReadOnlyList<RebalanceTargetDto> Targets);
+
+public record BacktestPointDto(DateOnly Date, decimal Equity, decimal Contributions, decimal BenchmarkEquity);
+public record BacktestDto(
+    Guid PortfolioId,
+    string BenchmarkSymbol,
+    decimal FinalEquity,
+    decimal TotalContributions,
+    decimal TotalReturnPercent,
+    decimal Cagr,
+    decimal MaxDrawdown,
+    decimal BenchmarkFinalEquity,
+    decimal BenchmarkTotalReturnPercent,
+    decimal BenchmarkCagr,
+    IReadOnlyList<BacktestPointDto> Series);
+
+// #95 Earnings calendar surprise history
+public record EarningsSurprisePointDto(DateOnly Date, decimal? EpsEstimate, decimal? EpsActual, decimal? SurprisePercent);
+
+// #103 Benchmark comparison
+public record BenchmarkComponentDto(string Symbol, decimal Weight);
+public record BenchmarkConfigDto(string? Symbol, IReadOnlyList<BenchmarkComponentDto>? Blend);
+public record BenchmarkPointDto(DateOnly Date, decimal PortfolioEquity, decimal BenchmarkEquity, decimal OutperformanceBps);
+public record BenchmarkComparisonDto(
+    Guid PortfolioId,
+    string BenchmarkLabel,
+    DateOnly From,
+    DateOnly To,
+    decimal PortfolioReturnPercent,
+    decimal BenchmarkReturnPercent,
+    decimal OutperformanceBps,
+    decimal Alpha,
+    decimal Beta,
+    IReadOnlyList<BenchmarkPointDto> Series);
+
+// #104 Goals & target NAV tracking
+public record GoalCreateDto(
+    Guid? PortfolioId,
+    string Name,
+    decimal TargetValue,
+    DateOnly TargetDate,
+    decimal MonthlyContribution,
+    decimal ExpectedReturn);
+
+public record GoalProjectionPointDto(DateOnly Date, decimal ProjectedValue, decimal TargetTrajectory);
+public record GoalDto(
+    Guid Id,
+    Guid? PortfolioId,
+    string Name,
+    decimal TargetValue,
+    DateOnly TargetDate,
+    decimal MonthlyContribution,
+    decimal ExpectedReturn,
+    decimal CurrentValue,
+    decimal ProgressPercent,
+    DateOnly? ProjectedHitDate,
+    bool OnTrack,
+    decimal ProjectedFinalValue,
+    IReadOnlyList<GoalProjectionPointDto> Projection);
