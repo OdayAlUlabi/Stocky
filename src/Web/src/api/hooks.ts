@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { useApiToken } from '../auth/useApiToken';
 import { request } from './client';
+import { config } from '../config';
 import type {
   AllocationDto,
   AlertDto,
@@ -705,5 +706,155 @@ export function useEarningsCalendar(params: { from?: string; to?: string; scope?
   return useQuery({
     queryKey: ['earnings-calendar', params.from ?? '', params.to ?? '', params.scope ?? 'holdings', params.watchlistId ?? ''] as const,
     queryFn: async () => request<EarningsEventDto[]>('/api/calendar/earnings', { query: params, token: await getToken() })
+  });
+}
+
+// ---------------- M11 Reporting & Sharing ----------------
+import type {
+  ShareTokenDto,
+  CreateShareTokenRequest,
+  SharedPortfolioDto,
+  ReportScheduleDto,
+  CreateReportScheduleRequest,
+  UpdateReportScheduleRequest,
+  ReportDeliveryDto
+} from './types';
+
+export function useShareTokens() {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['share-tokens'] as const,
+    queryFn: async () => request<ShareTokenDto[]>('/api/share-tokens', { token: await getToken() })
+  });
+}
+
+export function useCreateShareToken() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (body: CreateShareTokenRequest) =>
+      request<ShareTokenDto>('/api/share-tokens', { method: 'POST', body, token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['share-tokens'] })
+  });
+}
+
+export function useRevokeShareToken() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      request<void>(`/api/share-tokens/${id}/revoke`, { method: 'POST', token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['share-tokens'] })
+  });
+}
+
+export function useDeleteShareToken() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      request<void>(`/api/share-tokens/${id}`, { method: 'DELETE', token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['share-tokens'] })
+  });
+}
+
+export function usePublicShare(token: string | undefined) {
+  return useQuery({
+    queryKey: ['public-share', token] as const,
+    enabled: !!token,
+    queryFn: async () => request<SharedPortfolioDto>(`/api/public/share/${token}`)
+  });
+}
+
+export function useReportSchedules() {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['report-schedules'] as const,
+    queryFn: async () => request<ReportScheduleDto[]>('/api/report-schedules', { token: await getToken() })
+  });
+}
+
+export function useCreateReportSchedule() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (body: CreateReportScheduleRequest) =>
+      request<ReportScheduleDto>('/api/report-schedules', { method: 'POST', body, token: await getToken() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['report-schedules'] });
+    }
+  });
+}
+
+export function useUpdateReportSchedule() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async ({ id, body }: { id: string; body: UpdateReportScheduleRequest }) =>
+      request<ReportScheduleDto>(`/api/report-schedules/${id}`, { method: 'PATCH', body, token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['report-schedules'] })
+  });
+}
+
+export function useDeleteReportSchedule() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      request<void>(`/api/report-schedules/${id}`, { method: 'DELETE', token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['report-schedules'] })
+  });
+}
+
+export function useRunReportSchedule() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      request<ReportDeliveryDto>(`/api/report-schedules/${id}/run`, { method: 'POST', token: await getToken() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['report-deliveries'] });
+      qc.invalidateQueries({ queryKey: ['report-schedules'] });
+    }
+  });
+}
+
+export function useReportDeliveries(filter?: { portfolioId?: string; scheduleId?: string }) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['report-deliveries', filter?.portfolioId ?? '', filter?.scheduleId ?? ''] as const,
+    queryFn: async () => request<ReportDeliveryDto[]>('/api/report-deliveries', { query: filter, token: await getToken() })
+  });
+}
+
+export function useDownloadReportDelivery() {
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (d: ReportDeliveryDto) => {
+      const token = await getToken();
+      const headers = new Headers();
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+      const res = await fetch(`${config.apiBaseUrl}/api/report-deliveries/${d.id}/download`, { headers });
+      if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = d.fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  });
+}
+
+export function useGenerateOnDemandReport() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (params: { portfolioId: string; type: string; format: string }) =>
+      request<ReportDeliveryDto>('/api/report-deliveries/ondemand', { method: 'POST', query: params, token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['report-deliveries'] })
   });
 }

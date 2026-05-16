@@ -122,6 +122,12 @@ builder.Services.AddScoped<DriftAlertEvaluator>();
 builder.Services.AddScoped<InsiderAlertEvaluator>();
 builder.Services.AddHostedService<AlertSweepJob>();
 
+// M11 reporting & sharing
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ShareTokenService>();
+builder.Services.AddScoped<ReportRenderer>();
+builder.Services.AddHostedService<ReportScheduleJob>();
+
 var appInsightsConnection = builder.Configuration["ApplicationInsights:ConnectionString"]
     ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 if (!string.IsNullOrWhiteSpace(appInsightsConnection))
