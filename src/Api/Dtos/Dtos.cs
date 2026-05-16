@@ -239,3 +239,11 @@ public record PortfolioAnalyticsDto(
     IReadOnlyList<DrawdownPointDto> DrawdownSeries,
     IReadOnlyList<DailyReturnPointDto> DailyReturnSeries);
 
+// Symbol correlation matrix over a daily-bar window
+public record CorrelationDto(
+    Guid PortfolioId,
+    DateOnly From,
+    DateOnly To,
+    IReadOnlyList<string> Symbols,
+    IReadOnlyList<IReadOnlyList<decimal>> Matrix);
+
