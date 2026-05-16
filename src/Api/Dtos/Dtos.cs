@@ -542,3 +542,95 @@ public record GoalDto(
     bool OnTrack,
     decimal ProjectedFinalValue,
     IReadOnlyList<GoalProjectionPointDto> Projection);
+
+// ---------------- M11 Reporting & Sharing ----------------
+
+// #54 sharing
+public record ShareTokenDto(
+    Guid Id,
+    string Token,
+    Guid PortfolioId,
+    string? Label,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? RevokedAt,
+    int ViewCount,
+    DateTimeOffset? LastViewedAt,
+    bool IncludeTransactions,
+    bool IncludeCostBasis,
+    bool IsActive,
+    string ShareUrl);
+
+public record CreateShareTokenRequest(
+    Guid PortfolioId,
+    string? Label,
+    DateTimeOffset? ExpiresAt,
+    bool IncludeTransactions = false,
+    bool IncludeCostBasis = false);
+
+public record SharedHoldingRowDto(
+    string Symbol,
+    decimal Quantity,
+    decimal? LatestPrice,
+    decimal? MarketValue,
+    decimal? AverageCost,
+    decimal? UnrealizedPnL);
+
+public record SharedTransactionRowDto(
+    DateTimeOffset ExecutedAt,
+    string Type,
+    string? Symbol,
+    decimal Quantity,
+    decimal Price);
+
+public record SharedPortfolioDto(
+    string PortfolioName,
+    string BaseCurrency,
+    DateTimeOffset GeneratedAt,
+    decimal TotalMarketValue,
+    decimal? TotalUnrealizedPnL,
+    bool IncludesCostBasis,
+    bool IncludesTransactions,
+    IReadOnlyList<SharedHoldingRowDto> Holdings,
+    IReadOnlyList<SharedTransactionRowDto>? Transactions);
+
+// #55 scheduled exports
+public record ReportScheduleDto(
+    Guid Id,
+    Guid PortfolioId,
+    string Type,
+    string Format,
+    string Cadence,
+    string? Email,
+    bool Enabled,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset NextRunUtc,
+    DateTimeOffset? LastRunUtc);
+
+public record CreateReportScheduleRequest(
+    Guid PortfolioId,
+    string Type,
+    string Format,
+    string Cadence,
+    string? Email,
+    bool Enabled = true);
+
+public record UpdateReportScheduleRequest(
+    string? Type,
+    string? Format,
+    string? Cadence,
+    string? Email,
+    bool? Enabled);
+
+public record ReportDeliveryDto(
+    Guid Id,
+    Guid? ScheduleId,
+    Guid PortfolioId,
+    string Type,
+    string Format,
+    string FileName,
+    string ContentType,
+    int SizeBytes,
+    DateTimeOffset GeneratedAt,
+    string? Trigger,
+    string? Channel);

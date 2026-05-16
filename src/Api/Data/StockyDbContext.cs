@@ -24,6 +24,9 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<RebalanceTarget> RebalanceTargets => Set<RebalanceTarget>();
     public DbSet<Goal> Goals => Set<Goal>();
+    public DbSet<ShareToken> ShareTokens => Set<ShareToken>();
+    public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
+    public DbSet<ReportDelivery> ReportDeliveries => Set<ReportDelivery>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -216,6 +219,41 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.HasIndex(x => new { x.PortfolioId, x.Symbol }).IsUnique();
             e.Property(x => x.Symbol).HasMaxLength(16).IsRequired();
             e.Property(x => x.TargetWeightPercent).HasPrecision(7, 4);
+        });
+
+        modelBuilder.Entity<ShareToken>(e =>
+        {
+            e.HasIndex(x => x.Token).IsUnique();
+            e.HasIndex(x => x.OwnerId);
+            e.Property(x => x.Token).HasMaxLength(64).IsRequired();
+            e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Label).HasMaxLength(120);
+            e.HasOne(x => x.Portfolio).WithMany().HasForeignKey(x => x.PortfolioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReportSchedule>(e =>
+        {
+            e.HasIndex(x => new { x.OwnerId, x.Enabled, x.NextRunUtc });
+            e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Email).HasMaxLength(200);
+            e.Property(x => x.Type).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Format).HasConversion<string>().HasMaxLength(8);
+            e.Property(x => x.Cadence).HasConversion<string>().HasMaxLength(16);
+            e.HasOne(x => x.Portfolio).WithMany().HasForeignKey(x => x.PortfolioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReportDelivery>(e =>
+        {
+            e.HasIndex(x => new { x.OwnerId, x.GeneratedAt });
+            e.HasIndex(x => x.ScheduleId);
+            e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.FileName).HasMaxLength(160).IsRequired();
+            e.Property(x => x.ContentType).HasMaxLength(80).IsRequired();
+            e.Property(x => x.Type).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Format).HasConversion<string>().HasMaxLength(8);
+            e.Property(x => x.Trigger).HasMaxLength(16);
+            e.Property(x => x.Channel).HasMaxLength(16);
+            e.HasOne(x => x.Schedule).WithMany().HasForeignKey(x => x.ScheduleId).OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

@@ -24,9 +24,13 @@ import { EarningsCalendar } from './calendar/EarningsCalendar';
 import { Goals } from './goals/Goals';
 import { Settings } from './settings/Settings';
 import { Screener } from './screener/Screener';
+import { ReportSchedules } from './reports/ReportSchedules';
+import { ShareLinks } from './reports/ShareLinks';
+import { PublicPortfolioView } from './share/PublicPortfolioView';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/share/:token', element: <PublicPortfolioView /> },
   {
     path: '/',
     element: <RequireAuth><Shell /></RequireAuth>,
@@ -42,6 +46,8 @@ export const router = createBrowserRouter([
       { path: 'portfolios/:id/allocation', element: <Allocation /> },
       { path: 'portfolios/:id/reports', element: <Reports /> },
       { path: 'portfolios/:id/capital-gains', element: <CapitalGains /> },
+      { path: 'reports/schedules', element: <ReportSchedules /> },
+      { path: 'reports/share', element: <ShareLinks /> },
       { path: 'transactions', element: <TransactionsBrowser /> },
       { path: 'watchlist', element: <WatchlistView /> },
       { path: 'screener', element: <Screener /> },

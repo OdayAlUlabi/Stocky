@@ -688,3 +688,105 @@ export interface GoalDto {
   projectedFinalValue: number;
   projection: GoalProjectionPointDto[];
 }
+
+// ---------------- M11 Reporting & Sharing ----------------
+export interface ShareTokenDto {
+  id: string;
+  token: string;
+  portfolioId: string;
+  label: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  viewCount: number;
+  lastViewedAt: string | null;
+  includeTransactions: boolean;
+  includeCostBasis: boolean;
+  isActive: boolean;
+  shareUrl: string;
+}
+
+export interface CreateShareTokenRequest {
+  portfolioId: string;
+  label?: string | null;
+  expiresAt?: string | null;
+  includeTransactions?: boolean;
+  includeCostBasis?: boolean;
+}
+
+export interface SharedHoldingRowDto {
+  symbol: string;
+  quantity: number;
+  latestPrice: number | null;
+  marketValue: number | null;
+  averageCost: number | null;
+  unrealizedPnL: number | null;
+}
+
+export interface SharedTransactionRowDto {
+  executedAt: string;
+  type: string;
+  symbol: string | null;
+  quantity: number;
+  price: number;
+}
+
+export interface SharedPortfolioDto {
+  portfolioName: string;
+  baseCurrency: string;
+  generatedAt: string;
+  totalMarketValue: number;
+  totalUnrealizedPnL: number | null;
+  includesCostBasis: boolean;
+  includesTransactions: boolean;
+  holdings: SharedHoldingRowDto[];
+  transactions: SharedTransactionRowDto[] | null;
+}
+
+export type ReportTypeName = 'CapitalGains' | 'WashSales' | 'Dividends';
+export type ReportFormatName = 'Csv' | 'Pdf';
+export type ReportCadenceName = 'OnDemand' | 'Weekly' | 'Monthly' | 'Quarterly';
+
+export interface ReportScheduleDto {
+  id: string;
+  portfolioId: string;
+  type: ReportTypeName;
+  format: ReportFormatName;
+  cadence: ReportCadenceName;
+  email: string | null;
+  enabled: boolean;
+  createdAt: string;
+  nextRunUtc: string;
+  lastRunUtc: string | null;
+}
+
+export interface CreateReportScheduleRequest {
+  portfolioId: string;
+  type: ReportTypeName;
+  format: ReportFormatName;
+  cadence: ReportCadenceName;
+  email?: string | null;
+  enabled?: boolean;
+}
+
+export interface UpdateReportScheduleRequest {
+  type?: ReportTypeName;
+  format?: ReportFormatName;
+  cadence?: ReportCadenceName;
+  email?: string | null;
+  enabled?: boolean;
+}
+
+export interface ReportDeliveryDto {
+  id: string;
+  scheduleId: string | null;
+  portfolioId: string;
+  type: ReportTypeName;
+  format: ReportFormatName;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  generatedAt: string;
+  trigger: string | null;
+  channel: string | null;
+}
