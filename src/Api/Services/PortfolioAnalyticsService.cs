@@ -12,8 +12,10 @@ namespace Stocky.Api.Services;
 /// All math is done on the canonical history series so figures stay consistent with the
 /// equity curve and capital-flow views the user already sees.
 /// </summary>
-public sealed class PortfolioAnalyticsService(PortfolioHistoryService history)
+public sealed class PortfolioAnalyticsService(PortfolioHistoryService history, IMarketDataProvider market)
 {
+    private const string BenchmarkSymbol = "SPY";
+
     public async Task<PortfolioAnalyticsDto?> BuildAsync(Guid portfolioId, string ownerId, CancellationToken ct = default)
     {
         var hist = await history.BuildAsync(portfolioId, ownerId, ct);
@@ -25,6 +27,7 @@ public sealed class PortfolioAnalyticsService(PortfolioHistoryService history)
                 TotalReturnPercent: hist.TotalReturnPercent,
                 Twrr: 0, TwrrAnnualised: 0, Mwrr: 0,
                 Volatility: 0, Sharpe: 0,
+                Beta: 0, BenchmarkSymbol: BenchmarkSymbol,
                 MaxDrawdown: 0, MaxDrawdownDate: hist.To, PeakEquity: hist.TotalEquity,
                 BestDay: 0, BestDayDate: hist.To,
                 WorstDay: 0, WorstDayDate: hist.To,
@@ -98,6 +101,10 @@ public sealed class PortfolioAnalyticsService(PortfolioHistoryService history)
         var cashFlows = BuildCashFlows(hist);
         var mwrr = ComputeXirr(cashFlows);
 
+        // Beta vs SPY: covariance(portfolio_returns, spy_returns) / variance(spy_returns).
+        // Aligned on the dates where we have both a portfolio sub-period return and a SPY close.
+        var beta = await ComputeBetaAsync(dailyReturns, series[0].Date, series[^1].Date, ct);
+
         // Dividends
         var dividends = hist.Events.Where(e => e.Type == "Dividend").ToList();
         var totalDivs = dividends.Sum(d => d.Amount);
@@ -113,6 +120,8 @@ public sealed class PortfolioAnalyticsService(PortfolioHistoryService history)
             Mwrr: (decimal)Math.Round(mwrr * 100.0, 4),
             Volatility: (decimal)Math.Round(vol, 4),
             Sharpe: (decimal)Math.Round(sharpe, 4),
+            Beta: (decimal)Math.Round(beta, 4),
+            BenchmarkSymbol: BenchmarkSymbol,
             MaxDrawdown: Math.Round(maxDd, 4),
             MaxDrawdownDate: maxDdDate,
             PeakEquity: peak,
@@ -184,5 +193,60 @@ public sealed class PortfolioAnalyticsService(PortfolioHistoryService history)
         }
         if (double.IsNaN(r) || double.IsInfinity(r)) return 0;
         return r;
+    }
+
+    /// <summary>
+    /// Beta vs the benchmark (SPY by default). Uses Cov(portfolio, benchmark) / Var(benchmark)
+    /// on the date-aligned set of daily simple returns. Returns 0 when bars are unavailable
+    /// (e.g. stub provider, market closed window, or fewer than two overlapping points).
+    /// </summary>
+    private async Task<double> ComputeBetaAsync(
+        IReadOnlyList<DailyReturnPointDto> portfolioReturns,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken ct)
+    {
+        if (portfolioReturns.Count < 2) return 0;
+        IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>> bars;
+        try
+        {
+            bars = await market.GetDailyBarsAsync(new[] { BenchmarkSymbol }, from, to, ct);
+        }
+        catch
+        {
+            return 0;
+        }
+        if (!bars.TryGetValue(BenchmarkSymbol, out var spy) || spy.Count < 2) return 0;
+
+        // Compute SPY daily simple returns keyed by date.
+        var benchByDate = new Dictionary<DateOnly, double>(spy.Count);
+        var ordered = spy.OrderBy(b => b.Date).ToList();
+        for (int i = 1; i < ordered.Count; i++)
+        {
+            var prev = ordered[i - 1].Close;
+            if (prev <= 0) continue;
+            var r = (double)((ordered[i].Close - prev) / prev);
+            benchByDate[ordered[i].Date] = r;
+        }
+
+        // Pair portfolio and benchmark returns by date.
+        var pairs = new List<(double p, double b)>(portfolioReturns.Count);
+        foreach (var pt in portfolioReturns)
+        {
+            if (benchByDate.TryGetValue(pt.Date, out var br))
+                pairs.Add(((double)pt.ReturnPercent / 100.0, br));
+        }
+        if (pairs.Count < 2) return 0;
+
+        var pMean = pairs.Average(x => x.p);
+        var bMean = pairs.Average(x => x.b);
+        double cov = 0, bVar = 0;
+        foreach (var (p, b) in pairs)
+        {
+            cov += (p - pMean) * (b - bMean);
+            bVar += (b - bMean) * (b - bMean);
+        }
+        if (bVar <= 0) return 0;
+        return cov / bVar;
     }
 }

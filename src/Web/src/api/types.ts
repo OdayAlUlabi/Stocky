@@ -222,6 +222,8 @@ export interface PortfolioAnalyticsDto {
   mwrr: number;
   volatility: number;
   sharpe: number;
+  beta: number;
+  benchmarkSymbol: string;
   maxDrawdown: number;
   maxDrawdownDate: string;
   peakEquity: number;

@@ -247,6 +247,8 @@ public record PortfolioAnalyticsDto(
     decimal Mwrr,
     decimal Volatility,
     decimal Sharpe,
+    decimal Beta,
+    string BenchmarkSymbol,
     decimal MaxDrawdown,
     DateOnly MaxDrawdownDate,
     decimal PeakEquity,

@@ -59,6 +59,13 @@ export function Performance() {
                 </Text>
               </Card>
               <Card withBorder>
+                <Text size="xs" c="dimmed">Beta vs {analytics.benchmarkSymbol}</Text>
+                <Text fw={600}>{analytics.beta.toFixed(2)}</Text>
+                <Text size="xs" c="dimmed">
+                  {analytics.beta === 0 ? 'No benchmark data' : analytics.beta > 1 ? 'More volatile than market' : analytics.beta < 0 ? 'Inversely correlated' : 'Less volatile than market'}
+                </Text>
+              </Card>
+              <Card withBorder>
                 <Text size="xs" c="dimmed">Max drawdown</Text>
                 <Text fw={600} c="red">{analytics.maxDrawdown.toFixed(2)}%</Text>
                 <Text size="xs" c="dimmed">on {analytics.maxDrawdownDate}</Text>
