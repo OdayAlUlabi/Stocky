@@ -1008,3 +1008,31 @@ export function useDeleteAccount() {
       request<void>('/api/account?confirm=delete', { method: 'DELETE', token: await getToken() })
   });
 }
+// M14 #91 — API keys
+export function useApiKeys() {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['api-keys'] as const,
+    queryFn: async () => request<import('./types').ApiKeyDto[]>('/api/api-keys', { token: await getToken() })
+  });
+}
+
+export function useCreateApiKey() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (body: import('./types').CreateApiKeyRequest) =>
+      request<import('./types').CreatedApiKeyDto>('/api/api-keys', { method: 'POST', body, token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['api-keys'] })
+  });
+}
+
+export function useRevokeApiKey() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      request<void>(`/api/api-keys/${id}/revoke`, { method: 'POST', token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['api-keys'] })
+  });
+}

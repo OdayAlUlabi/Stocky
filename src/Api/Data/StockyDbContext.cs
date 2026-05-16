@@ -29,6 +29,7 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
     public DbSet<ReportDelivery> ReportDeliveries => Set<ReportDelivery>();
     public DbSet<PositionNote> PositionNotes => Set<PositionNote>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -280,6 +281,17 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.Property(x => x.ClientIp).HasMaxLength(64);
             e.Property(x => x.UserAgent).HasMaxLength(300);
             e.Property(x => x.Details).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<ApiKey>(e =>
+        {
+            e.HasIndex(x => x.OwnerId);
+            e.HasIndex(x => x.HashedKey).IsUnique();
+            e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(80);
+            e.Property(x => x.Prefix).HasMaxLength(16).IsRequired();
+            e.Property(x => x.HashedKey).HasMaxLength(128).IsRequired();
+            e.Property(x => x.Scopes).HasMaxLength(120);
         });
     }
 }

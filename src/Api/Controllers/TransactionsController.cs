@@ -11,7 +11,7 @@ namespace Stocky.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/portfolios/{portfolioId:guid}/transactions")]
-public class TransactionsController(StockyDbContext db, TaxLotService taxLots, PortfolioLedgerService ledger) : ControllerBase
+public class TransactionsController(StockyDbContext db, TaxLotService taxLots, PortfolioLedgerService ledger, PortfolioUpdatedBroadcaster portfolioStream) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TransactionDto>>> List(Guid portfolioId)
@@ -78,6 +78,7 @@ public class TransactionsController(StockyDbContext db, TaxLotService taxLots, P
         await RecomputeHoldingsAsync(portfolioId);
         await db.SaveChangesAsync();
         await taxLots.RecomputeAsync(portfolioId);
+        await portfolioStream.BroadcastAsync(portfolioId, "transaction-created");
 
         return CreatedAtAction(nameof(List), new { portfolioId },
             new TransactionDto(tx.Id, tx.Symbol, tx.Type.ToString(), tx.Quantity, tx.Price, tx.Fee, tx.Currency, tx.ExecutedAt, tx.Notes));
@@ -121,6 +122,7 @@ public class TransactionsController(StockyDbContext db, TaxLotService taxLots, P
         await RecomputeHoldingsAsync(portfolioId);
         await db.SaveChangesAsync();
         await taxLots.RecomputeAsync(portfolioId);
+        await portfolioStream.BroadcastAsync(portfolioId, "transaction-updated");
 
         return new TransactionDto(tx.Id, tx.Symbol, tx.Type.ToString(), tx.Quantity, tx.Price, tx.Fee, tx.Currency, tx.ExecutedAt, tx.Notes);
     }
@@ -140,6 +142,7 @@ public class TransactionsController(StockyDbContext db, TaxLotService taxLots, P
         await RecomputeHoldingsAsync(portfolioId);
         await db.SaveChangesAsync();
         await taxLots.RecomputeAsync(portfolioId);
+        await portfolioStream.BroadcastAsync(portfolioId, "transaction-deleted");
         return NoContent();
     }
 
@@ -291,6 +294,7 @@ public class TransactionsController(StockyDbContext db, TaxLotService taxLots, P
         await RecomputeHoldingsAsync(portfolioId);
         await db.SaveChangesAsync(ct);
         await taxLots.RecomputeAsync(portfolioId);
+        await portfolioStream.BroadcastAsync(portfolioId, "transactions-imported", ct);
 
         return Ok(new ImportTransactionsResult(imported, errors.Count, errors));
     }

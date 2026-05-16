@@ -32,6 +32,7 @@ import { PositionNotes } from './notes/PositionNotes';
 import { AuditLog } from './admin/AuditLog';
 import { ModelTemplates } from './templates/ModelTemplates';
 import { AccountSettings } from './account/AccountSettings';
+import { ApiKeys } from './account/ApiKeys';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -68,6 +69,7 @@ export const router = createBrowserRouter([
       { path: 'templates', element: <ModelTemplates /> },
       { path: 'admin/audit', element: <AuditLog /> },
       { path: 'account', element: <AccountSettings /> },
+      { path: 'account/api-keys', element: <ApiKeys /> },
       { path: 'settings', element: <Settings /> }
     ]
   }

@@ -688,3 +688,18 @@ public record GdprExportDto(
     object PositionNotes,
     object Goals,
     object UserSettings);
+
+// M14 #91 — API key DTOs
+public record ApiKeyDto(
+    Guid Id,
+    string Name,
+    string Prefix,
+    string Scopes,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? RevokedAt,
+    DateTimeOffset? LastUsedAt,
+    bool IsActive);
+
+public record CreateApiKeyRequest(string Name, string? Scopes, DateTimeOffset? ExpiresAt);
+public record CreatedApiKeyDto(ApiKeyDto Key, string Plaintext);

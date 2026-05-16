@@ -862,3 +862,24 @@ export interface ApplyTemplateRequest {
   baseCurrency?: string;
   initialCashDeposit?: number | null;
 }
+// M14 #91 — API keys
+export interface ApiKeyDto {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+  isActive: boolean;
+}
+export interface CreateApiKeyRequest {
+  name: string;
+  scopes?: string;
+  expiresAt?: string | null;
+}
+export interface CreatedApiKeyDto {
+  key: ApiKeyDto;
+  plaintext: string;
+}
