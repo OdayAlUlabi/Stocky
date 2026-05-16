@@ -1,0 +1,212 @@
+import { ActionIcon, Anchor, Button, Card, Group, ScrollArea, Stack, Table, Tabs, Text, Title, Tooltip } from '@mantine/core';
+import { IconArrowLeft, IconDownload, IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
+import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { notifications } from '@mantine/notifications';
+import dayjs from 'dayjs';
+import {
+  useDeleteTransaction,
+  useHoldings,
+  usePortfolios,
+  useTransactions
+} from '../../api/hooks';
+import { EmptyState } from '../../components/EmptyState';
+import { TradeDrawer } from './TradeDrawer';
+import type { TransactionDto } from '../../api/types';
+
+export function PortfolioDetail() {
+  const { id = '' } = useParams<{ id: string }>();
+  const portfolios = usePortfolios();
+  const portfolio = portfolios.data?.find((p) => p.id === id);
+  const holdings = useHoldings(id);
+  const transactions = useTransactions(id);
+  const delTx = useDeleteTransaction(id);
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState<TransactionDto | null>(null);
+
+  const currency = portfolio?.baseCurrency ?? 'USD';
+
+  const openNew = () => { setEditing(null); setDrawerOpen(true); };
+  const openEdit = (tx: TransactionDto) => { setEditing(tx); setDrawerOpen(true); };
+
+  const remove = async (tx: TransactionDto) => {
+    if (!confirm(`Delete ${tx.type} ${tx.symbol ?? ''}?`)) return;
+    try {
+      await delTx.mutateAsync(tx.id);
+      notifications.show({ message: 'Transaction deleted', color: 'teal' });
+    } catch (e) {
+      notifications.show({ message: (e as Error).message, color: 'red' });
+    }
+  };
+
+  const fmt = (n: number | null | undefined) =>
+    n == null ? '—' : new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
+
+  const totalValue = (holdings.data ?? []).reduce(
+    (s, h) => s + (h.marketValue ?? h.quantity * h.averageCost),
+    0
+  );
+
+  const exportCsv = () => {
+    const rows = holdings.data ?? [];
+    if (rows.length === 0) return;
+    const header = ['Symbol', 'Quantity', 'AvgCost', 'LastPrice', 'MarketValue', 'CostBasis', 'UnrealizedPnL', 'WeightPct'];
+    const lines = [header.join(',')];
+    rows.forEach((h) => {
+      const cost = h.quantity * h.averageCost;
+      const value = h.marketValue ?? cost;
+      const pnl = value - cost;
+      const weight = totalValue > 0 ? (value / totalValue) * 100 : 0;
+      lines.push([
+        h.symbol,
+        h.quantity,
+        h.averageCost,
+        h.latestPrice ?? '',
+        value,
+        cost,
+        pnl,
+        weight.toFixed(2)
+      ].join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(portfolio?.name ?? 'portfolio').replace(/\s+/g, '_')}_positions.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <Stack gap="lg">
+      <Group justify="space-between" wrap="wrap">
+        <Group>
+          <ActionIcon component={Link} to="/portfolios" variant="subtle" aria-label="Back">
+            <IconArrowLeft size={18} />
+          </ActionIcon>
+          <Stack gap={0}>
+            <Title order={2}>{portfolio?.name ?? 'Portfolio'}</Title>
+            <Text c="dimmed" size="sm">Base currency {currency}</Text>
+          </Stack>
+        </Group>
+        <Group gap="xs">
+          <Button variant="default" leftSection={<IconDownload size={16} />} onClick={exportCsv} disabled={!holdings.data || holdings.data.length === 0}>Export CSV</Button>
+          <Button leftSection={<IconPlus size={16} />} onClick={openNew}>Add trade</Button>
+        </Group>
+      </Group>
+
+      <Tabs defaultValue="positions">
+        <Tabs.List>
+          <Tabs.Tab value="positions">Positions</Tabs.Tab>
+          <Tabs.Tab value="transactions">Transactions</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="positions" pt="md">
+          {holdings.isLoading ? (
+            <Text c="dimmed">Loading...</Text>
+          ) : !holdings.data || holdings.data.length === 0 ? (
+            <EmptyState title="No positions" description="Log a Buy trade to open your first position." actionLabel="Add trade" onAction={openNew} />
+          ) : (
+            <Card withBorder radius="md" padding="0">
+              <ScrollArea>
+                <Table striped highlightOnHover>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Symbol</Table.Th>
+                      <Table.Th ta="right">Quantity</Table.Th>
+                      <Table.Th ta="right">Avg cost</Table.Th>
+                      <Table.Th ta="right">Cost basis</Table.Th>
+                      <Table.Th ta="right">Last</Table.Th>
+                      <Table.Th ta="right">Market value</Table.Th>
+                      <Table.Th ta="right">Weight %</Table.Th>
+                      <Table.Th ta="right">Unrealized</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {holdings.data.map((h) => {
+                      const cost = h.quantity * h.averageCost;
+                      const value = h.marketValue ?? null;
+                      const pnl = value == null ? null : value - cost;
+                      const weight = value != null && totalValue > 0 ? (value / totalValue) * 100 : null;
+                      return (
+                        <Table.Tr key={h.id}>
+                          <Table.Td>
+                            <Anchor component={Link} to={`/portfolios/${id}/positions/${encodeURIComponent(h.symbol)}`} fw={500}>
+                              {h.symbol}
+                            </Anchor>
+                          </Table.Td>
+                          <Table.Td ta="right">{h.quantity}</Table.Td>
+                          <Table.Td ta="right">{fmt(h.averageCost)}</Table.Td>
+                          <Table.Td ta="right">{fmt(cost)}</Table.Td>
+                          <Table.Td ta="right">{fmt(h.latestPrice)}</Table.Td>
+                          <Table.Td ta="right">{fmt(value)}</Table.Td>
+                          <Table.Td ta="right">{weight == null ? '—' : `${weight.toFixed(2)}%`}</Table.Td>
+                          <Table.Td ta="right" c={pnl == null ? undefined : pnl >= 0 ? 'teal' : 'red'}>{fmt(pnl)}</Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            </Card>
+          )}
+        </Tabs.Panel>
+
+        <Tabs.Panel value="transactions" pt="md">
+          {transactions.isLoading ? (
+            <Text c="dimmed">Loading...</Text>
+          ) : !transactions.data || transactions.data.length === 0 ? (
+            <EmptyState title="No transactions" description="Add a trade to start building history." actionLabel="Add trade" onAction={openNew} />
+          ) : (
+            <Card withBorder radius="md" padding="0">
+              <ScrollArea>
+                <Table striped highlightOnHover>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Date</Table.Th>
+                      <Table.Th>Type</Table.Th>
+                      <Table.Th>Symbol</Table.Th>
+                      <Table.Th ta="right">Qty</Table.Th>
+                      <Table.Th ta="right">Price</Table.Th>
+                      <Table.Th ta="right">Fee</Table.Th>
+                      <Table.Th ta="right">Total</Table.Th>
+                      <Table.Th ta="right" />
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {transactions.data.map((t) => (
+                      <Table.Tr key={t.id}>
+                        <Table.Td>{dayjs(t.executedAt).format('MMM D, YYYY')}</Table.Td>
+                        <Table.Td>{t.type}</Table.Td>
+                        <Table.Td>{t.symbol ?? '—'}</Table.Td>
+                        <Table.Td ta="right">{t.quantity}</Table.Td>
+                        <Table.Td ta="right">{fmt(t.price)}</Table.Td>
+                        <Table.Td ta="right">{fmt(t.fee)}</Table.Td>
+                        <Table.Td ta="right">{fmt(t.quantity * t.price + t.fee)}</Table.Td>
+                        <Table.Td ta="right">
+                          <Group gap={4} justify="flex-end" wrap="nowrap">
+                            <Tooltip label="Edit"><ActionIcon variant="subtle" onClick={() => openEdit(t)}><IconEdit size={16} /></ActionIcon></Tooltip>
+                            <Tooltip label="Delete"><ActionIcon variant="subtle" color="red" onClick={() => remove(t)}><IconTrash size={16} /></ActionIcon></Tooltip>
+                          </Group>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            </Card>
+          )}
+        </Tabs.Panel>
+      </Tabs>
+
+      <TradeDrawer
+        portfolioId={id}
+        opened={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        editing={editing}
+        defaultCurrency={currency}
+      />
+    </Stack>
+  );
+}

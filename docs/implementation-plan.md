@@ -1,97 +1,98 @@
 # Stocky — Implementation Plan
 
-This plan turns the Portfolio Management feature spec into shippable milestones.
-Stack: **.NET 10 Web API · React (Vite + TS) · Azure SQL · Microsoft Entra ID · Azure App Service** (deployed via `azd`).
+Turns the two product docs into shippable milestones.
 
-> The actual feature spec (`Portfolio_Management_Feature_Spec.docx`) was provided as an attachment but could not be parsed directly. The feature breakdown below covers a standard portfolio-management feature set; update each section once the spec is dropped into `docs/`.
+- **Feature spec**: `docs/Portfolio_Management_Feature_Spec.docx` — 79 features across 7 modules (17 MVP must-haves).
+- **UI spec**: `docs/Portfolio_UI_Screen_Spec.docx` — 16 screens (SCR-000 … SCR-040) with wireframes & state diagrams.
+- **Stack**: .NET 10 Web API · React 19 (Vite + TS) · EF Core 10 · Azure SQL · Microsoft Entra ID · Azure App Service (Linux B1) · `azd`.
+
+## MVP scope (this implementation pass)
+
+| Screen | Spec | Scope this pass |
+|---|---|---|
+| SCR-000 | Global app shell | Sidebar + topbar + protected layout. Market ticker static placeholder. |
+| SCR-001 | Login / Register / 2FA | Entra ID redirect (Entra handles 2FA via policy). |
+| SCR-002 | Dashboard | KPIs + value chart + sector pie + top movers from real holdings. News/events deferred. |
+| SCR-003 | Positions list | Full table with cost basis & weight; CSV export. |
+| SCR-004 | Add/Edit Trade drawer | BUY / SELL / DIVIDEND with validation. CSV import deferred. |
+| SCR-006 | Watchlist | Multiple lists; add/remove symbols; latest cached quote. |
+
+Deferred: SCR-005, SCR-007, SCR-008, SCR-009, SCR-010, SCR-020, SCR-021, SCR-030, SCR-031, SCR-040.
 
 ## Milestones
 
 | # | Milestone | Outcome |
 |---|---|---|
-| M0 | Repo + scaffolding | Solution builds, web dev server runs, `azd up` provisions empty infra. ✅ done |
-| M1 | Identity + Portfolio CRUD | Sign-in via Entra ID; user can create / rename / delete portfolios. |
-| M2 | Transactions + Holdings | User records buy/sell; holdings auto-derived; running avg cost. |
-| M3 | Watchlists | User curates symbols, see latest cached quote per item. |
-| M4 | Quotes & Performance | Background quote refresher; portfolio P&L; basic charts. |
-| M5 | Hardening | Migrations, audit logging, App Insights dashboards, error pages. |
-| M6 | Optional | Import from CSV (broker statements); dividends; tax-lot accounting. |
+| M0 | Repo + scaffolding | `azd up` provisions empty infra. ✅ done |
+| M1 | Identity + Portfolio CRUD | Entra sign-in; create/rename/delete portfolios. |
+| M2 | Transactions + Holdings | Buy/Sell/Dividend with validation; auto-derived holdings. |
+| M3 | Watchlists | Multiple lists; add/remove. |
+| M4 | Web UI shell + 5 MVP screens | Login → Dashboard → Portfolios → Positions → Add Trade → Watchlist. |
+| M5 | Market data + observability | Quote refresher, OpenTelemetry, dashboards. |
+| M6 | High-priority screens | Position detail, reports, alerts. |
+| M7 | Stretch | Screener, charts, analytics, rebalancing, CSV import, mobile. |
 
-## Feature breakdown (per-feature tasks)
+---
 
-### F1 — Authentication (M1)
-- [ ] Register two Entra apps: `stocky-api` (exposes scope `api://stocky/access`) and `stocky-spa` (SPA platform with redirect `https://<web-host>/`).
-- [ ] Grant the SPA delegated permission on the API scope.
-- [ ] In `appsettings`: set `AzureAd:TenantId`, `AzureAd:ClientId` (API), `AzureAd:Audience = api://<api-client-id>`.
-- [ ] In `src/Web`: add `@azure/msal-browser` + `@azure/msal-react`; configure `MsalProvider`.
-- [ ] Add `LoginButton` / `useAccount` hook; attach Bearer to axios via interceptor.
+## Backend tasks
 
-### F2 — Portfolio CRUD (M1)
-- [x] `Portfolio` entity + `StockyDbContext`.
-- [x] `PortfoliosController` — GET list/by-id, POST, PUT, DELETE, GET performance.
-- [ ] React routes: `/portfolios`, `/portfolios/:id`.
-- [ ] List + create dialog (Mantine/MUI/AntD — pick one).
-- [ ] EF migration `Init` + `await db.Database.MigrateAsync()` already wired in `Program.cs`.
+### API gaps closed this pass
+- [x] Portfolios CRUD + per-portfolio performance.
+- [x] Holdings list.
+- [x] Watchlists CRUD.
+- [x] Quotes read-only.
+- [x] **Transactions**: add `PUT` and `DELETE` so SCR-004 edit/delete flows work.
+- [x] **Transactions**: validate `Quantity > 0`, `Price >= 0`, `Fee >= 0`, no future `ExecutedAt`, `SELL` qty ≤ current holding qty.
+- [x] **Dashboard aggregate**: `GET /api/dashboard?portfolioId=` returning KPIs, allocations, top movers, value history.
+- [x] **Securities search**: `GET /api/securities/search?q=` backed by `Instruments` table + small static seed; swap for Finnhub later.
 
-### F3 — Transactions + Holdings (M2)
-- [x] `Transaction`, `Holding` entities; transaction-driven holding recomputation in `TransactionsController.Create`.
-- [ ] UI: transactions table, "Add transaction" dialog (Buy/Sell/Dividend/Deposit/Withdrawal/Split).
-- [ ] Validation rules:
-    - Sell qty ≤ current holding qty.
-    - Negative numbers blocked; price ≥ 0.
-- [ ] Server-side guard: re-check ownership + concurrency token on `Holding`.
+### Backend tasks (later milestones)
+- [ ] `QuoteRefresher` `BackgroundService` — Finnhub / FMP, secret from Key Vault.
+- [ ] `IDistributedCache` in front of provider calls.
+- [ ] `Alert` entity + alert engine (SCR-020).
+- [ ] Tax lots (SCR-005 + SCR-021 cap-gains).
+- [ ] Daily snapshot job → `portfolio_snapshots` (replaces synthesized SCR-002 history).
+- [ ] OpenTelemetry + Azure Monitor exporter, custom dimensions `OwnerId` (hashed), `PortfolioId`, `Symbol`.
+- [ ] `IDesignTimeDbContextFactory<StockyDbContext>`.
 
-### F4 — Watchlists (M3)
-- [x] `Watchlist`, `WatchlistItem` entities + `WatchlistsController`.
-- [ ] UI: per-user watchlists with add/remove symbol; show latest cached quote.
+---
 
-### F5 — Quotes + Market Data (M4)
-- [x] `PriceQuote` entity + `QuotesController` (read-only over cached quotes).
-- [ ] **QuoteRefresher** `BackgroundService` in API:
-    - Pull distinct symbols from `Holdings ∪ WatchlistItems` every N minutes.
-    - Call external market-data API (Alpha Vantage / Finnhub) using key from Key Vault.
-    - Insert new `PriceQuote` rows; trim history > 30 days.
-- [ ] Add `IDistributedCache` (Redis or in-memory) in front of provider calls for rate-limit protection.
+## Web tasks
 
-### F6 — Portfolio Performance (M4)
-- [x] `GET /api/portfolios/{id}/performance` computes market value, cost basis, unrealized P&L.
-- [ ] Add timeseries endpoint `GET /api/portfolios/{id}/history?range=30d` once `PriceQuote` history exists.
-- [ ] Recharts/ECharts chart in SPA.
+### Dependencies added this pass
+- `react-router-dom` — routing.
+- `@azure/msal-browser` + `@azure/msal-react` — Entra ID.
+- `@mantine/core` + `@mantine/hooks` + `@mantine/notifications` + `@mantine/dates` + `@tabler/icons-react` — UI kit.
+- `@tanstack/react-query` — data fetching.
+- `recharts` — charts.
+- `dayjs` — dates.
 
-### F7 — Observability (M5)
-- [x] Application Insights provisioned and connection string injected via App Settings.
-- [ ] Add OpenTelemetry + the Azure Monitor exporter (`Azure.Monitor.OpenTelemetry.AspNetCore`).
-- [ ] Custom dimensions: `OwnerId` (hashed), `PortfolioId`, `Symbol`.
-- [ ] App Insights workbook: API latency, 4xx/5xx, SQL DTU.
+### Architecture
+- `src/auth/` — MSAL config + `useApiToken()` + `RequireAuth` guard.
+- `src/api/` — typed fetch client with bearer interceptor; one file per resource.
+- `src/routes/` — one folder per SCR (`shell/`, `login/`, `dashboard/`, `portfolios/`, `watchlist/`).
+- `src/components/` — shared design-system pieces (`MetricCard`, `EmptyState`, `TickerSearch`).
+- Routes:
+  - `/login` → SCR-001
+  - `/` (protected, wrapped by AppShell):
+    - `/` → SCR-002 Dashboard
+    - `/portfolios` → list
+    - `/portfolios/:id` → SCR-003 positions (drawer = SCR-004)
+    - `/watchlist` → SCR-006
 
-### F8 — CI/CD (M5)
-- [ ] GitHub Actions workflow:
-    - `dotnet test` + `npm run build`.
-    - `azd provision` + `azd deploy` on push to `main` using federated credentials.
-- [ ] Pull-request preview: `azd up` to ephemeral env when label `preview` is applied.
+---
 
-### F9 — Migrations & Seed (M5)
-- [ ] Add an `IDesignTimeDbContextFactory<StockyDbContext>` so `dotnet ef migrations add` works against SQL.
-- [ ] Initial migration: `dotnet ef migrations add Init` (already covered at startup via `MigrateAsync`).
-- [ ] Optional: seed a "Sample Portfolio" for new users on first sign-in.
+## Azure resources (already provisioned)
 
-### F10 — Optional / Stretch (M6)
-- [ ] CSV import (Fidelity/Schwab/Robinhood) → background queue (Azure Container Apps Job or Functions).
-- [ ] Dividend reinvestment tracking.
-- [ ] FIFO/LIFO tax-lot mode.
-- [ ] Multi-currency FX conversion using a daily-snapshot table.
-
-## Azure resources provisioned by `infra/main.bicep`
-
-| Resource | Purpose | SKU (default) |
+| Resource | Purpose | SKU |
 | --- | --- | --- |
-| App Service Plan | Shared compute for Web + API | Linux B1 |
-| App Service `stocky-{env}-api` | Hosts the .NET 10 API | DOTNETCORE 10.0 |
-| App Service `stocky-{env}-web` | Hosts the React SPA via `pm2 serve --spa` | NODE 22 LTS |
-| Azure SQL Server + DB `stocky` | Relational store | GP_S_Gen5_1 (Serverless) |
-| User-Assigned Managed Identity | API → SQL/Key Vault auth | — |
-| Key Vault | Stores market-data API keys etc. | Standard, RBAC mode |
-| Application Insights + Log Analytics | Telemetry/logs | PerGB2018 |
+| App Service Plan | Linux compute Web + API | B1 |
+| App Service `stocky-{env}-api` | .NET 10 API | DOTNETCORE 10.0 |
+| App Service `stocky-{env}-web` | React SPA via `pm2 serve --spa` | NODE 22 LTS |
+| Azure SQL Server + DB | Relational store | GP_S_Gen5_1 (Serverless) |
+| User-Assigned MI | API → SQL/Key Vault auth | — |
+| Key Vault | Secrets | Standard, RBAC |
+| App Insights + Log Analytics | Telemetry/logs | PerGB2018 |
 
 ## Post-provision manual steps
 
@@ -102,8 +103,19 @@ Stack: **.NET 10 Web API · React (Vite + TS) · Azure SQL · Microsoft Entra ID
    ALTER ROLE db_datawriter ADD MEMBER [stocky-<env>-api-id-<token>];
    ALTER ROLE db_ddladmin   ADD MEMBER [stocky-<env>-api-id-<token>];
    ```
-   Connect via SSMS / `sqlcmd` using your Entra account (set as SQL Entra admin during provisioning).
-2. **Store market-data API key** in Key Vault, then add an App Setting on the API:
-   `MarketData__ApiKey = @Microsoft.KeyVault(VaultName=...;SecretName=MarketDataApiKey)`
-3. **Update Entra app registrations** with the deployed Web hostname (redirect URI + CORS).
-4. **First azd deploy** publishes both services; verify `/health` returns `200`.
+2. Register `stocky-api` + `stocky-spa` Entra apps; grant SPA delegated permission on API scope.
+3. Set `AzureAd:*` on API and `VITE_ENTRA_*` on Web.
+4. Store market-data API key in Key Vault → `MarketData__ApiKey = @Microsoft.KeyVault(...)`.
+5. First `azd deploy` — verify `/health` returns 200.
+
+## Post-MVP backlog (from full spec)
+
+- **Portfolio**: broker sync (Plaid/Alpaca), CSV/OFX import, multi-currency FX, crypto exchange sync, options Greeks, dividend automation, corporate actions, tax-lot methods.
+- **Analytics**: screener, TradingView Lightweight Charts, analyst ratings, earnings calendar, correlation matrix, risk metrics, backtesting.
+- **Data**: real-time quotes, Level 2, news, SEC filings, insider trades, short interest, economic calendar, options flow.
+- **Trading**: live order execution, advanced order types, paper trading, automated trading, rebalancing, margin.
+- **Reporting**: TWRR/MWRR, capital gains with wash-sale, dividend report, advisor sharing.
+- **Alerts**: price / technical / earnings / news / drift / insider, multi-channel delivery, history.
+- **Admin**: mobile, public REST API, WebSocket streaming, RBAC, dark mode, i18n.
+
+Free data providers identified in the spec (integration order): **Finnhub** → **FMP** → **Polygon.io** → **Alpaca** → **CoinGecko** → **SEC EDGAR** → **ExchangeRate-API** → **FRED**.

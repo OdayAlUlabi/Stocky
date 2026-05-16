@@ -7,7 +7,9 @@ public enum TransactionType
     Dividend,
     Deposit,
     Withdrawal,
-    Split
+    Split,
+    SpinOff,
+    Fee
 }
 
 public class Transaction

@@ -4,23 +4,29 @@ using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
 using Stocky.Api.Domain;
 using Stocky.Api.Dtos;
+using Stocky.Api.Services;
 
 namespace Stocky.Api.Controllers;
 
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class PortfoliosController(StockyDbContext db) : ControllerBase
+public class PortfoliosController(StockyDbContext db, PortfolioLedgerService ledger) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IEnumerable<PortfolioDto>>> List()
     {
         var ownerId = User.GetOwnerId();
-        var items = await db.Portfolios
+        var portfolios = await db.Portfolios
             .Where(p => p.OwnerId == ownerId)
             .OrderBy(p => p.CreatedAt)
-            .Select(p => new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt))
             .ToListAsync();
+        var items = new List<PortfolioDto>(portfolios.Count);
+        foreach (var p in portfolios)
+        {
+            var cash = await ledger.GetCashBalanceAsync(p.Id);
+            items.Add(new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, cash));
+        }
         return Ok(items);
     }
 
@@ -30,7 +36,8 @@ public class PortfoliosController(StockyDbContext db) : ControllerBase
         var ownerId = User.GetOwnerId();
         var p = await db.Portfolios.FirstOrDefaultAsync(x => x.Id == id && x.OwnerId == ownerId);
         if (p is null) return NotFound();
-        return new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt);
+        var cash = await ledger.GetCashBalanceAsync(p.Id);
+        return new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, cash);
     }
 
     [HttpPost]
@@ -57,7 +64,8 @@ public class PortfoliosController(StockyDbContext db) : ControllerBase
         p.Name = request.Name;
         p.BaseCurrency = request.BaseCurrency;
         await db.SaveChangesAsync();
-        return new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt);
+        var cash = await ledger.GetCashBalanceAsync(p.Id);
+        return new PortfolioDto(p.Id, p.Name, p.BaseCurrency, p.CreatedAt, cash);
     }
 
     [HttpDelete("{id:guid}")]
@@ -100,7 +108,9 @@ public class PortfoliosController(StockyDbContext db) : ControllerBase
         }
         var pnl = marketValue - costBasis;
         var pnlPct = costBasis == 0 ? 0 : Math.Round(pnl / costBasis * 100m, 4);
+        var cash = await ledger.GetCashBalanceAsync(p.Id);
+        var totalEquity = marketValue + cash;
 
-        return new PortfolioPerformanceDto(p.Id, marketValue, costBasis, pnl, pnlPct, p.BaseCurrency, DateTimeOffset.UtcNow);
+        return new PortfolioPerformanceDto(p.Id, marketValue, costBasis, pnl, pnlPct, p.BaseCurrency, DateTimeOffset.UtcNow, cash, totalEquity);
     }
 }

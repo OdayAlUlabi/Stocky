@@ -30,3 +30,9 @@ Thumbs.db
 
 # ---- Logs ----
 *.log
+
+# ---- Personal brokerage data (do not commit) ----
+ab-invest-*.csv
+docs/Portfolio_Management_Feature_Spec.docx
+docs/Portfolio_UI_Screen_Spec.docx
+
