@@ -1,0 +1,32 @@
+# ---- .NET ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+*.userprefs
+[Dd]ebug/
+[Rr]elease/
+TestResults/
+.vscode/*.log
+
+# ---- Node ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.*
+!.env.example
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Azure / azd ----
+.azure/
+*.azd-env
+
+# ---- Logs ----
+*.log

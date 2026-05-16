@@ -1,0 +1,23 @@
+# Azure Developer CLI configuration
+# https://aka.ms/azd
+name: stocky
+metadata:
+  template: stocky@1.0.0
+services:
+  api:
+    project: ./src/Api
+    language: dotnet
+    host: appservice
+  web:
+    project: ./src/Web
+    language: ts
+    host: appservice
+    dist: dist
+hooks:
+  postprovision:
+    posix:
+      shell: sh
+      run: echo "Provisioned. Now run 'azd deploy'."
+    windows:
+      shell: pwsh
+      run: Write-Host "Provisioned. Now run 'azd deploy'."
