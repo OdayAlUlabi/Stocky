@@ -236,6 +236,14 @@ export interface PortfolioAnalyticsDto {
   dailyReturnSeries: DailyReturnPointDto[];
 }
 
+export interface CorrelationDto {
+  portfolioId: string;
+  from: string;
+  to: string;
+  symbols: string[];
+  matrix: number[][];
+}
+
 export interface AllocationDto {
   byAsset: AllocationSliceDto[];
   bySector: AllocationSliceDto[];
