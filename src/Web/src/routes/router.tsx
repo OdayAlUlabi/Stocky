@@ -6,6 +6,7 @@ import { Dashboard } from './dashboard/Dashboard';
 import { PortfolioList } from './portfolios/PortfolioList';
 import { PortfolioDetail } from './portfolios/PortfolioDetail';
 import { PortfolioHistory } from './portfolios/PortfolioHistory';
+import { CapitalFlow } from './portfolios/CapitalFlow';
 import { WatchlistView } from './watchlist/Watchlist';
 import { PositionDetail } from './positions/PositionDetail';
 import { TransactionsBrowser } from './transactions/TransactionsBrowser';
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
       { path: 'portfolios/:id/positions/:symbol', element: <PositionDetail /> },
       { path: 'portfolios/:id/performance', element: <Performance /> },
       { path: 'portfolios/:id/history', element: <PortfolioHistory /> },
+      { path: 'portfolios/:id/capital-flow', element: <CapitalFlow /> },
       { path: 'portfolios/:id/allocation', element: <Allocation /> },
       { path: 'portfolios/:id/reports', element: <Reports /> },
       { path: 'portfolios/:id/capital-gains', element: <CapitalGains /> },
