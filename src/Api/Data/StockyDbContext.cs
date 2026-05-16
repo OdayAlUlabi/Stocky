@@ -14,6 +14,8 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
     public DbSet<WatchlistItem> WatchlistItems => Set<WatchlistItem>();
     public DbSet<PriceQuote> PriceQuotes => Set<PriceQuote>();
     public DbSet<Alert> Alerts => Set<Alert>();
+    public DbSet<AlertEvent> AlertEvents => Set<AlertEvent>();
+    public DbSet<InsiderTrade> InsiderTrades => Set<InsiderTrade>();
     public DbSet<TaxLot> TaxLots => Set<TaxLot>();
     public DbSet<RealizedGain> RealizedGains => Set<RealizedGain>();
     public DbSet<PortfolioSnapshot> PortfolioSnapshots => Set<PortfolioSnapshot>();
@@ -120,6 +122,34 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.Property(x => x.Threshold).HasPrecision(18, 8);
             e.Property(x => x.TriggeredValue).HasPrecision(18, 8);
             e.Property(x => x.Note).HasMaxLength(200);
+            e.Property(x => x.Channels).HasMaxLength(120);
+            e.Property(x => x.WebhookUrl).HasMaxLength(500);
+            e.Property(x => x.KeywordFilter).HasMaxLength(120);
+            e.Property(x => x.MinSentiment).HasPrecision(5, 4);
+        });
+
+        modelBuilder.Entity<AlertEvent>(e =>
+        {
+            e.HasIndex(x => new { x.OwnerId, x.TriggeredAt });
+            e.HasIndex(x => x.AlertId);
+            e.Property(x => x.OwnerId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Symbol).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Message).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Channels).HasMaxLength(120);
+            e.Property(x => x.Context).HasMaxLength(300);
+            e.Property(x => x.TriggeredValue).HasPrecision(18, 8);
+            e.HasOne(x => x.Alert).WithMany().HasForeignKey(x => x.AlertId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<InsiderTrade>(e =>
+        {
+            e.HasIndex(x => new { x.Symbol, x.FiledAt });
+            e.Property(x => x.Symbol).HasMaxLength(16).IsRequired();
+            e.Property(x => x.InsiderName).HasMaxLength(160).IsRequired();
+            e.Property(x => x.Relation).HasMaxLength(40);
+            e.Property(x => x.TransactionType).HasMaxLength(8).IsRequired();
+            e.Property(x => x.Shares).HasPrecision(18, 4);
+            e.Property(x => x.Price).HasPrecision(18, 4);
         });
 
         modelBuilder.Entity<TaxLot>(e =>

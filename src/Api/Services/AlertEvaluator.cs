@@ -6,11 +6,15 @@ using Stocky.Api.Dtos;
 namespace Stocky.Api.Services;
 
 /// <summary>
-/// Walks active alerts and trips any whose threshold has been crossed by the
-/// latest quote. Idempotent: a triggered alert is moved to Triggered and
-/// won't re-fire until the user re-arms it.
+/// Price-tick evaluator. Walks active Price-type alerts and dispatches any
+/// whose threshold is crossed by the latest quote. Idempotent: a triggered
+/// alert is moved to Triggered and won't re-fire until the user re-arms it.
+/// Snoozed alerts are skipped entirely.
 /// </summary>
-public sealed class AlertEvaluator(StockyDbContext db, ILogger<AlertEvaluator> logger)
+public sealed class AlertEvaluator(
+    StockyDbContext db,
+    AlertDispatcher dispatcher,
+    ILogger<AlertEvaluator> logger)
 {
     public async Task EvaluateAsync(IReadOnlyCollection<QuoteDto> quotes, CancellationToken ct = default)
     {
@@ -19,12 +23,15 @@ public sealed class AlertEvaluator(StockyDbContext db, ILogger<AlertEvaluator> l
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         var symbolList = quoteBySymbol.Keys.ToList();
+        var now = DateTimeOffset.UtcNow;
         var alerts = await db.Alerts
-            .Where(a => a.Status == AlertStatus.Active && symbolList.Contains(a.Symbol))
+            .Where(a => a.Status == AlertStatus.Active
+                        && a.Type == AlertType.Price
+                        && symbolList.Contains(a.Symbol)
+                        && (a.SnoozedUntil == null || a.SnoozedUntil <= now))
             .ToListAsync(ct);
         if (alerts.Count == 0) return;
 
-        var now = DateTimeOffset.UtcNow;
         var triggered = 0;
         foreach (var alert in alerts)
         {
@@ -44,15 +51,18 @@ public sealed class AlertEvaluator(StockyDbContext db, ILogger<AlertEvaluator> l
                 _ => false
             };
             if (!fire) continue;
-            alert.Status = AlertStatus.Triggered;
-            alert.TriggeredAt = now;
-            alert.TriggeredValue = value;
+            var msg = alert.Condition switch
+            {
+                AlertCondition.PriceAbove => $"{alert.Symbol} crossed ≥ {alert.Threshold} (now {value:0.##})",
+                AlertCondition.PriceBelow => $"{alert.Symbol} crossed ≤ {alert.Threshold} (now {value:0.##})",
+                AlertCondition.DayChangePercentAbove => $"{alert.Symbol} day change {value:0.##}% ≥ {alert.Threshold}%",
+                AlertCondition.DayChangePercentBelow => $"{alert.Symbol} day change {value:0.##}% ≤ {alert.Threshold}%",
+                _ => $"{alert.Symbol} alert fired"
+            };
+            await dispatcher.TripAsync(alert, value, msg, $"quote:{q.AsOf:O}", ct);
             triggered++;
         }
         if (triggered > 0)
-        {
-            await db.SaveChangesAsync(ct);
-            logger.LogInformation("Triggered {Count} alerts", triggered);
-        }
+            logger.LogInformation("Triggered {Count} price alerts", triggered);
     }
 }
