@@ -1,4 +1,4 @@
-import { AppShell, Burger, Group, NavLink, ScrollArea, Title, Avatar, Menu, UnstyledButton, Text } from '@mantine/core';
+import { ActionIcon, AppShell, Burger, Group, NavLink, ScrollArea, Title, Avatar, Menu, UnstyledButton, Text, useMantineColorScheme, useComputedColorScheme, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconChartPie,
@@ -12,7 +12,9 @@ import {
   IconChartLine,
   IconChartDonut,
   IconSettings,
-  IconCash
+  IconCash,
+  IconSun,
+  IconMoon
 } from '@tabler/icons-react';
 import { NavLink as RouterNavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { useMsal, useIsAuthenticated } from '@azure/msal-react';
@@ -52,6 +54,9 @@ export function Shell() {
   const params = useParams();
   const account = accounts[0];
   const { data: portfolios } = usePortfolios();
+  const { setColorScheme } = useMantineColorScheme();
+  const computedScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
+  const isDark = computedScheme === 'dark';
 
   // Try to pick the active portfolio id either from the route or the first one.
   const activePortfolioId = params.id ?? portfolios?.[0]?.id;
@@ -72,6 +77,17 @@ export function Shell() {
             <Menu.Target>
               <UnstyledButton>
                 <Group gap="xs">
+                  <Tooltip label={isDark ? 'Switch to light' : 'Switch to dark'} withArrow>
+                    <ActionIcon
+                      component="div"
+                      variant="default"
+                      size="lg"
+                      onClick={(e) => { e.stopPropagation(); setColorScheme(isDark ? 'light' : 'dark'); }}
+                      aria-label="Toggle color scheme"
+                    >
+                      {isDark ? <IconSun size={16} /> : <IconMoon size={16} />}
+                    </ActionIcon>
+                  </Tooltip>
                   <Avatar radius="xl" size="sm" color="blue">
                     {(account?.name ?? account?.username ?? 'U').slice(0, 1).toUpperCase()}
                   </Avatar>

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
-import { MantineProvider, createTheme } from '@mantine/core';
+import { MantineProvider, createTheme, localStorageColorSchemeManager } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { MsalProvider } from '@azure/msal-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -18,6 +18,8 @@ const theme = createTheme({
   fontFamily: 'Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
 });
 
+const colorSchemeManager = localStorageColorSchemeManager({ key: 'stocky-color-scheme' });
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 }
@@ -30,7 +32,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MsalProvider instance={msalInstance}>
       <QueryClientProvider client={queryClient}>
-        <MantineProvider theme={theme} defaultColorScheme="auto">
+        <MantineProvider theme={theme} defaultColorScheme="auto" colorSchemeManager={colorSchemeManager}>
           <Notifications position="top-right" />
           <RouterProvider router={router} />
         </MantineProvider>
