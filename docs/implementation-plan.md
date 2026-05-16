@@ -47,13 +47,13 @@ Deferred: SCR-005, SCR-007, SCR-008, SCR-009, SCR-010, SCR-020, SCR-021, SCR-030
 - [x] **Securities search**: `GET /api/securities/search?q=` backed by `Instruments` table + small static seed; swap for Finnhub later.
 
 ### Backend tasks (later milestones)
-- [ ] `QuoteRefresher` `BackgroundService` — Finnhub / FMP, secret from Key Vault.
-- [ ] `IDistributedCache` in front of provider calls.
-- [ ] `Alert` entity + alert engine (SCR-020).
-- [ ] Tax lots (SCR-005 + SCR-021 cap-gains).
-- [ ] Daily snapshot job → `portfolio_snapshots` (replaces synthesized SCR-002 history).
-- [ ] OpenTelemetry + Azure Monitor exporter, custom dimensions `OwnerId` (hashed), `PortfolioId`, `Symbol`.
-- [ ] `IDesignTimeDbContextFactory<StockyDbContext>`.
+- [x] `QuoteRefresher` `BackgroundService` — Alpaca v2 snapshots (Finnhub/FMP swap remains a config-only change), secret from Key Vault.
+- [x] `IDistributedCache` in front of provider calls (Redis when `Cache:RedisConnectionString`, in-memory distributed cache otherwise; news + bars now share L2 across instances).
+- [x] `Alert` entity + alert engine (SCR-020).
+- [x] Tax lots (SCR-005 + SCR-021 cap-gains).
+- [x] Daily snapshot job → `portfolio_snapshots` (replaces synthesized SCR-002 history).
+- [x] OpenTelemetry + Azure Monitor exporter, custom dimensions `stocky.owner_hash`, `stocky.portfolio_id`, `stocky.symbol` (set by `TelemetryEnricherMiddleware`).
+- [x] `IDesignTimeDbContextFactory<StockyDbContext>`.
 
 ---
 

@@ -39,6 +39,25 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 builder.Services.AddMemoryCache();
 
+// Distributed cache: prefer Redis when Cache:RedisConnectionString is set,
+// otherwise fall back to the in-memory distributed cache so single-instance
+// dev still benefits from the same code path.
+var redisConn = builder.Configuration["Cache:RedisConnectionString"]
+    ?? builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrWhiteSpace(redisConn))
+{
+    builder.Services.AddStackExchangeRedisCache(o =>
+    {
+        o.Configuration = redisConn;
+        o.InstanceName = "stocky:";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+builder.Services.AddSingleton<IProviderCache, ProviderCache>();
+
 // Market data: prefer Alpaca when API credentials are configured, otherwise
 // fall back to the deterministic stub so dev still works without secrets.
 // Configure with:
@@ -105,6 +124,10 @@ else
 }
 
 app.UseCors(CorsPolicy);
+
+// Tag traces with stocky.owner_hash / stocky.portfolio_id / stocky.symbol so
+// App Insights customDimensions can be filtered per user/portfolio/symbol.
+app.UseMiddleware<TelemetryEnricherMiddleware>();
 
 // Dev-only auth bypass: when Entra isn't configured, inject a synthetic user so the UI is browsable.
 var entraClientId = builder.Configuration["AzureAd:ClientId"];

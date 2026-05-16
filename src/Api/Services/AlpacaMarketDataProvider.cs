@@ -16,6 +16,7 @@ namespace Stocky.Api.Services;
 public sealed class AlpacaMarketDataProvider(
     HttpClient http,
     IMemoryCache cache,
+    IProviderCache distributedCache,
     StubMarketDataProvider fallback,
     ILogger<AlpacaMarketDataProvider> log) : IMarketDataProvider
 {
@@ -76,10 +77,8 @@ public sealed class AlpacaMarketDataProvider(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var cacheKey = $"news:{(symList is null ? "*" : string.Join(',', symList.OrderBy(s => s)))}:{limit}";
-        if (cache.TryGetValue(cacheKey, out IReadOnlyList<NewsItemDto>? cached) && cached is not null)
-        {
-            return cached;
-        }
+        var hit = await distributedCache.GetAsync<List<NewsItemDto>>(cacheKey, ct);
+        if (hit is not null) return hit;
 
         try
         {
@@ -121,9 +120,8 @@ public sealed class AlpacaMarketDataProvider(
                 .OrderByDescending(i => i.PublishedAt)
                 .Take(limit)
                 .ToList();
-            IReadOnlyList<NewsItemDto> ro = result;
-            cache.Set(cacheKey, ro, TimeSpan.FromMinutes(5));
-            return ro;
+            await distributedCache.SetAsync(cacheKey, result, TimeSpan.FromMinutes(5), ct);
+            return result;
         }
         catch (Exception ex)
         {
@@ -138,17 +136,21 @@ public sealed class AlpacaMarketDataProvider(
     public async Task<IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>>> GetDailyBarsAsync(
         IReadOnlyCollection<string> symbols, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
-        var result = new Dictionary<string, IReadOnlyList<DailyBarDto>>(StringComparer.OrdinalIgnoreCase);
-        if (symbols.Count == 0 || from > to) return result;
+        if (symbols.Count == 0 || from > to)
+        {
+            return new Dictionary<string, IReadOnlyList<DailyBarDto>>(StringComparer.OrdinalIgnoreCase);
+        }
 
         var symList = symbols.Select(s => s.ToUpperInvariant()).Distinct().ToList();
         var cacheKey = $"bars:{from:yyyyMMdd}:{to:yyyyMMdd}:{string.Join(',', symList.OrderBy(s => s))}";
-        if (cache.TryGetValue(cacheKey, out IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>>? cached) && cached is not null)
+        var hit = await distributedCache.GetAsync<Dictionary<string, List<DailyBarDto>>>(cacheKey, ct);
+        if (hit is not null)
         {
-            return cached;
+            return hit.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<DailyBarDto>)kv.Value, StringComparer.OrdinalIgnoreCase);
         }
 
-        foreach (var s in symList) result[s] = Array.Empty<DailyBarDto>();
+        var result = new Dictionary<string, List<DailyBarDto>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in symList) result[s] = new List<DailyBarDto>();
 
         try
         {
@@ -164,10 +166,13 @@ public sealed class AlpacaMarketDataProvider(
                 {
                     foreach (var (sym, bars) in resp.Bars)
                     {
-                        var existing = result.TryGetValue(sym, out var prev) ? prev.ToList() : new List<DailyBarDto>();
+                        if (!result.TryGetValue(sym, out var existing))
+                        {
+                            existing = new List<DailyBarDto>();
+                            result[sym] = existing;
+                        }
                         foreach (var b in bars)
                             existing.Add(new DailyBarDto(DateOnly.FromDateTime(b.Timestamp.UtcDateTime), b.Close));
-                        result[sym] = existing;
                     }
                 }
                 pageToken = resp?.NextPageToken;
@@ -178,9 +183,8 @@ public sealed class AlpacaMarketDataProvider(
             log.LogWarning(ex, "Alpaca bars fetch failed for {Count} symbols {From}..{To}", symList.Count, from, to);
         }
 
-        IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>> readonlyResult = result;
-        cache.Set(cacheKey, readonlyResult, TimeSpan.FromHours(6));
-        return readonlyResult;
+        await distributedCache.SetAsync(cacheKey, result, TimeSpan.FromHours(6), ct);
+        return result.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<DailyBarDto>)kv.Value, StringComparer.OrdinalIgnoreCase);
     }
 
     private static QuoteDto? TryBuildQuote(string symbol, AlpacaSnapshot snap)
