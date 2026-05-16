@@ -13,6 +13,7 @@ import {
   IconChartDonut,
   IconSettings,
   IconCash,
+  IconSearch,
   IconSun,
   IconMoon
 } from '@tabler/icons-react';
@@ -33,6 +34,7 @@ const topItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: IconChartPie, end: true },
   { to: '/portfolios', label: 'Portfolios', icon: IconBriefcase },
   { to: '/watchlist', label: 'Watchlist', icon: IconStar },
+  { to: '/screener', label: 'Screener', icon: IconSearch },
   { to: '/alerts', label: 'Alerts', icon: IconBell },
   { to: '/news', label: 'News', icon: IconNews },
   { to: '/earnings', label: 'Earnings', icon: IconCalendarTime },

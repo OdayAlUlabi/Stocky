@@ -51,6 +51,23 @@ public record PortfolioPerformanceDto(
 
 public record InstrumentDto(string Symbol, string Name, string Exchange, string Currency, string AssetClass);
 
+// Stock screener: returns instrument + metadata + latest price for matches.
+public record ScreenerRowDto(
+    string Symbol,
+    string Name,
+    string AssetClass,
+    string? Sector,
+    string? Industry,
+    string? Country,
+    decimal? MarketCap,
+    decimal? Beta,
+    decimal? DividendYield,
+    decimal? LatestPrice);
+
+public record ScreenerResultDto(
+    int Total,
+    IReadOnlyList<ScreenerRowDto> Rows);
+
 public record AllocationSliceDto(string Label, decimal Value, decimal Percent);
 
 public record MoverDto(string Symbol, decimal MarketValue, decimal DayChangePercent);

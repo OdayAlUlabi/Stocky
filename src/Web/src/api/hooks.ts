@@ -28,7 +28,10 @@ import type {
   WatchlistDto,
   WashSaleReportDto,
   RebalanceReportDto,
-  RebalanceTargetDto
+  RebalanceTargetDto,
+  ScreenerFacetsDto,
+  ScreenerQuery,
+  ScreenerResultDto
 } from './types';
 
 type Opts<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -340,6 +343,27 @@ export function useSaveRebalanceTargets(portfolioId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['portfolios', portfolioId, 'rebalance'] });
     }
+  });
+}
+
+export function useScreenerFacets() {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['screener', 'facets'] as const,
+    queryFn: async () => request<ScreenerFacetsDto>('/api/securities/screener/facets', { token: await getToken() }),
+    staleTime: 5 * 60 * 1000
+  });
+}
+
+export function useScreener(query: ScreenerQuery, enabled = true) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['screener', query] as const,
+    enabled,
+    queryFn: async () => request<ScreenerResultDto>('/api/securities/screener', {
+      query: query as Record<string, string | number | undefined>,
+      token: await getToken()
+    })
   });
 }
 

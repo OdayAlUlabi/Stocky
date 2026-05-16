@@ -306,6 +306,43 @@ export interface RebalanceReportDto {
   suggestions: RebalanceSuggestionDto[];
 }
 
+export interface ScreenerRowDto {
+  symbol: string;
+  name: string;
+  assetClass: string;
+  sector: string | null;
+  industry: string | null;
+  country: string | null;
+  marketCap: number | null;
+  beta: number | null;
+  dividendYield: number | null;
+  latestPrice: number | null;
+}
+
+export interface ScreenerResultDto {
+  total: number;
+  rows: ScreenerRowDto[];
+}
+
+export interface ScreenerFacetsDto {
+  assetClasses: string[];
+  sectors: string[];
+  countries: string[];
+}
+
+export interface ScreenerQuery {
+  q?: string;
+  assetClass?: string;
+  sector?: string;
+  country?: string;
+  minMarketCap?: number;
+  maxMarketCap?: number;
+  minDividendYield?: number;
+  maxBeta?: number;
+  sort?: 'marketcap-desc' | 'marketcap-asc' | 'divyield-desc' | 'beta-asc' | 'symbol';
+  limit?: number;
+}
+
 export type AlertCondition = 'PriceAbove' | 'PriceBelow' | 'DayChangePercentAbove' | 'DayChangePercentBelow';
 export type AlertStatus = 'Active' | 'Triggered' | 'Disabled';
 

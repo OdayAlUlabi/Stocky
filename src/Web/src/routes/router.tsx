@@ -19,6 +19,7 @@ import { CapitalGains } from './capgains/CapitalGains';
 import { News } from './news/News';
 import { Earnings } from './earnings/Earnings';
 import { Settings } from './settings/Settings';
+import { Screener } from './screener/Screener';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
       { path: 'portfolios/:id/capital-gains', element: <CapitalGains /> },
       { path: 'transactions', element: <TransactionsBrowser /> },
       { path: 'watchlist', element: <WatchlistView /> },
+      { path: 'screener', element: <Screener /> },
       { path: 'alerts', element: <Alerts /> },
       { path: 'news', element: <News /> },
       { path: 'earnings', element: <Earnings /> },
