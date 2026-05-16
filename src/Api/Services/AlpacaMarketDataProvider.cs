@@ -68,10 +68,69 @@ public sealed class AlpacaMarketDataProvider(
         return result;
     }
 
-    public Task<IReadOnlyList<NewsItemDto>> GetNewsAsync(IReadOnlyCollection<string>? symbols, int limit, CancellationToken ct = default)
-        // News and earnings stay on the stub for now; Alpaca news is a separate
-        // endpoint and earnings are not in the market data product.
-        => fallback.GetNewsAsync(symbols, limit, ct);
+    public async Task<IReadOnlyList<NewsItemDto>> GetNewsAsync(IReadOnlyCollection<string>? symbols, int limit, CancellationToken ct = default)
+    {
+        // Alpaca News API v1beta1: https://data.alpaca.markets/v1beta1/news?symbols=...&limit=...&sort=desc
+        var symList = symbols?.Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var cacheKey = $"news:{(symList is null ? "*" : string.Join(',', symList.OrderBy(s => s)))}:{limit}";
+        if (cache.TryGetValue(cacheKey, out IReadOnlyList<NewsItemDto>? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        try
+        {
+            var qs = $"v1beta1/news?limit={Math.Clamp(limit, 1, 50)}&sort=desc&include_content=false";
+            if (symList is not null && symList.Count > 0)
+            {
+                qs += $"&symbols={Uri.EscapeDataString(string.Join(',', symList))}";
+            }
+            var resp = await http.GetFromJsonAsync<AlpacaNewsResponse>(qs, ct);
+            var items = new List<NewsItemDto>();
+            if (resp?.News is not null)
+            {
+                foreach (var n in resp.News)
+                {
+                    // Emit one row per symbol the article tags so the per-symbol filter
+                    // in the News page works without duplicating the article record on the
+                    // database side. If the article has no symbols, emit a single un-tagged row.
+                    var tagged = (n.Symbols is { Count: > 0 } ? n.Symbols : new List<string> { string.Empty })
+                        .Where(s => symList is null || symList.Contains(s, StringComparer.OrdinalIgnoreCase) || s == string.Empty)
+                        .DefaultIfEmpty(string.Empty);
+                    foreach (var sym in tagged)
+                    {
+                        items.Add(new NewsItemDto(
+                            Id: n.Id,
+                            Headline: n.Headline ?? "(no headline)",
+                            Summary: n.Summary,
+                            Source: string.IsNullOrWhiteSpace(n.Source) ? "alpaca" : n.Source!,
+                            Url: n.Url,
+                            Symbol: string.IsNullOrWhiteSpace(sym) ? null : sym,
+                            PublishedAt: n.CreatedAt ?? DateTimeOffset.UtcNow,
+                            Category: "market"));
+                    }
+                }
+            }
+            // Dedup (Id, Symbol) and cap at limit.
+            var result = items
+                .GroupBy(i => (i.Id, i.Symbol))
+                .Select(g => g.First())
+                .OrderByDescending(i => i.PublishedAt)
+                .Take(limit)
+                .ToList();
+            IReadOnlyList<NewsItemDto> ro = result;
+            cache.Set(cacheKey, ro, TimeSpan.FromMinutes(5));
+            return ro;
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Alpaca news fetch failed; falling back to stub.");
+            return await fallback.GetNewsAsync(symbols, limit, ct);
+        }
+    }
 
     public Task<IReadOnlyList<EarningsEventDto>> GetEarningsAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
         => fallback.GetEarningsAsync(from, to, ct);
@@ -159,6 +218,23 @@ public sealed class AlpacaMarketDataProvider(
     private sealed class AlpacaBarsResponse
     {
         [JsonPropertyName("bars")] public Dictionary<string, List<AlpacaBar>>? Bars { get; set; }
+        [JsonPropertyName("next_page_token")] public string? NextPageToken { get; set; }
+    }
+
+    private sealed class AlpacaNewsItem
+    {
+        [JsonPropertyName("id")] public long Id { get; set; }
+        [JsonPropertyName("headline")] public string? Headline { get; set; }
+        [JsonPropertyName("summary")] public string? Summary { get; set; }
+        [JsonPropertyName("source")] public string? Source { get; set; }
+        [JsonPropertyName("url")] public string? Url { get; set; }
+        [JsonPropertyName("symbols")] public List<string>? Symbols { get; set; }
+        [JsonPropertyName("created_at")] public DateTimeOffset? CreatedAt { get; set; }
+    }
+
+    private sealed class AlpacaNewsResponse
+    {
+        [JsonPropertyName("news")] public List<AlpacaNewsItem>? News { get; set; }
         [JsonPropertyName("next_page_token")] public string? NextPageToken { get; set; }
     }
 }
