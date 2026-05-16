@@ -39,19 +39,26 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 builder.Services.AddMemoryCache();
 
-// Market data: prefer Finnhub when an API key is configured, otherwise fall
-// back to the deterministic stub so dev still works without secrets.
-var finnhubKey = builder.Configuration["MarketData:Finnhub:ApiKey"];
+// Market data: prefer Alpaca when API credentials are configured, otherwise
+// fall back to the deterministic stub so dev still works without secrets.
+// Configure with:
+//   MarketData:Alpaca:ApiKeyId      (APCA-API-KEY-ID)
+//   MarketData:Alpaca:ApiSecret     (APCA-API-SECRET-KEY)
+//   MarketData:Alpaca:BaseUrl       (optional, default https://data.alpaca.markets/)
+var alpacaKeyId = builder.Configuration["MarketData:Alpaca:ApiKeyId"];
+var alpacaSecret = builder.Configuration["MarketData:Alpaca:ApiSecret"];
 builder.Services.AddSingleton<StubMarketDataProvider>();
-if (!string.IsNullOrWhiteSpace(finnhubKey))
+if (!string.IsNullOrWhiteSpace(alpacaKeyId) && !string.IsNullOrWhiteSpace(alpacaSecret))
 {
-    builder.Services.AddHttpClient<FinnhubMarketDataProvider>(client =>
+    var alpacaBase = builder.Configuration["MarketData:Alpaca:BaseUrl"] ?? "https://data.alpaca.markets/";
+    builder.Services.AddHttpClient<AlpacaMarketDataProvider>(client =>
     {
-        client.BaseAddress = new Uri("https://finnhub.io/api/v1/");
-        client.DefaultRequestHeaders.Add("X-Finnhub-Token", finnhubKey);
+        client.BaseAddress = new Uri(alpacaBase);
+        client.DefaultRequestHeaders.Add("APCA-API-KEY-ID", alpacaKeyId);
+        client.DefaultRequestHeaders.Add("APCA-API-SECRET-KEY", alpacaSecret);
         client.Timeout = TimeSpan.FromSeconds(10);
     });
-    builder.Services.AddScoped<IMarketDataProvider>(sp => sp.GetRequiredService<FinnhubMarketDataProvider>());
+    builder.Services.AddScoped<IMarketDataProvider>(sp => sp.GetRequiredService<AlpacaMarketDataProvider>());
 }
 else
 {

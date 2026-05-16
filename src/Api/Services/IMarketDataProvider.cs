@@ -5,7 +5,7 @@ namespace Stocky.Api.Services;
 /// <summary>
 /// Pluggable market data provider. The default StubMarketDataProvider returns
 /// deterministic synthetic quotes so the app is functional without an API key;
-/// a Finnhub/FMP implementation can drop in by switching the DI registration.
+/// AlpacaMarketDataProvider is auto-selected when Alpaca credentials are set.
 /// </summary>
 public interface IMarketDataProvider
 {
