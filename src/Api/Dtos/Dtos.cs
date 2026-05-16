@@ -208,3 +208,30 @@ public record PortfolioHistoryDto(
     decimal TotalReturnPercent,
     IReadOnlyList<PortfolioHistoryPointDto> Series,
     IReadOnlyList<PortfolioHistoryEventDto> Events);
+
+public record DrawdownPointDto(DateOnly Date, decimal DrawdownPercent);
+public record DailyReturnPointDto(DateOnly Date, decimal ReturnPercent);
+public record PortfolioAnalyticsDto(
+    Guid PortfolioId,
+    string Currency,
+    DateOnly From,
+    DateOnly To,
+    decimal TotalReturnPercent,
+    decimal Twrr,
+    decimal TwrrAnnualised,
+    decimal Mwrr,
+    decimal Volatility,
+    decimal Sharpe,
+    decimal MaxDrawdown,
+    DateOnly MaxDrawdownDate,
+    decimal PeakEquity,
+    decimal BestDay,
+    DateOnly BestDayDate,
+    decimal WorstDay,
+    DateOnly WorstDayDate,
+    decimal TotalDividends,
+    decimal TtmDividends,
+    decimal DividendYield,
+    IReadOnlyList<DrawdownPointDto> DrawdownSeries,
+    IReadOnlyList<DailyReturnPointDto> DailyReturnSeries);
+

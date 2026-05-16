@@ -201,6 +201,41 @@ export interface PortfolioHistoryDto {
   events: PortfolioHistoryEventDto[];
 }
 
+export interface DrawdownPointDto {
+  date: string;
+  drawdownPercent: number;
+}
+
+export interface DailyReturnPointDto {
+  date: string;
+  returnPercent: number;
+}
+
+export interface PortfolioAnalyticsDto {
+  portfolioId: string;
+  currency: string;
+  from: string;
+  to: string;
+  totalReturnPercent: number;
+  twrr: number;
+  twrrAnnualised: number;
+  mwrr: number;
+  volatility: number;
+  sharpe: number;
+  maxDrawdown: number;
+  maxDrawdownDate: string;
+  peakEquity: number;
+  bestDay: number;
+  bestDayDate: string;
+  worstDay: number;
+  worstDayDate: string;
+  totalDividends: number;
+  ttmDividends: number;
+  dividendYield: number;
+  drawdownSeries: DrawdownPointDto[];
+  dailyReturnSeries: DailyReturnPointDto[];
+}
+
 export interface AllocationDto {
   byAsset: AllocationSliceDto[];
   bySector: AllocationSliceDto[];

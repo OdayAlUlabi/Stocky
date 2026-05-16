@@ -107,6 +107,7 @@ export function PortfolioDetail() {
         <Group gap="xs">
           <Button variant="default" component={Link} to={`/portfolios/${id}/history`}>History</Button>
           <Button variant="default" component={Link} to={`/portfolios/${id}/capital-flow`}>Capital flow</Button>
+          <Button variant="default" component={Link} to={`/portfolios/${id}/analytics`}>Analytics</Button>
           <Button variant="default" leftSection={<IconDownload size={16} />} onClick={exportCsv} disabled={!holdings.data || holdings.data.length === 0}>Export CSV</Button>
           <Button leftSection={<IconPlus size={16} />} onClick={openNew}>Add trade</Button>
         </Group>

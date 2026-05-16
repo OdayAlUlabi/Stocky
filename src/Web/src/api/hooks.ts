@@ -18,6 +18,7 @@ import type {
   PerformanceDto,
   PortfolioDto,
   PortfolioHistoryDto,
+  PortfolioAnalyticsDto,
   PositionDetailDto,
   QuoteDto,
   ReportSummaryDto,
@@ -242,6 +243,15 @@ export function usePortfolioHistory(portfolioId: string | undefined) {
     queryKey: ['portfolios', portfolioId, 'history'] as const,
     enabled: Boolean(portfolioId),
     queryFn: async () => request<PortfolioHistoryDto>(`/api/portfolios/${portfolioId}/history`, { token: await getToken() })
+  });
+}
+
+export function usePortfolioAnalytics(portfolioId: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['portfolios', portfolioId, 'analytics'] as const,
+    enabled: Boolean(portfolioId),
+    queryFn: async () => request<PortfolioAnalyticsDto>(`/api/portfolios/${portfolioId}/analytics`, { token: await getToken() })
   });
 }
 
