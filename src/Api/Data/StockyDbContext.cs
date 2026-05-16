@@ -20,6 +20,7 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
     public DbSet<NewsItem> NewsItems => Set<NewsItem>();
     public DbSet<EarningsEvent> EarningsEvents => Set<EarningsEvent>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
+    public DbSet<RebalanceTarget> RebalanceTargets => Set<RebalanceTarget>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -165,6 +166,13 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.Property(x => x.DisplayCurrency).HasMaxLength(8);
             e.Property(x => x.Theme).HasMaxLength(8);
             e.Property(x => x.Locale).HasMaxLength(16);
+        });
+
+        modelBuilder.Entity<RebalanceTarget>(e =>
+        {
+            e.HasIndex(x => new { x.PortfolioId, x.Symbol }).IsUnique();
+            e.Property(x => x.Symbol).HasMaxLength(16).IsRequired();
+            e.Property(x => x.TargetWeightPercent).HasPrecision(7, 4);
         });
     }
 }

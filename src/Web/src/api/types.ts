@@ -280,6 +280,29 @@ export interface AllocationDto {
   currency: string;
 }
 
+export interface RebalanceTargetDto {
+  symbol: string;
+  targetWeightPercent: number;
+}
+
+export interface RebalanceSuggestionDto {
+  symbol: string;
+  currentValue: number;
+  currentWeightPercent: number;
+  targetWeightPercent: number;
+  driftPercent: number;
+  tradeValue: number;
+  action: 'Buy' | 'Sell' | 'Hold';
+}
+
+export interface RebalanceReportDto {
+  portfolioId: string;
+  currency: string;
+  totalValue: number;
+  targetWeightSumPercent: number;
+  suggestions: RebalanceSuggestionDto[];
+}
+
 export type AlertCondition = 'PriceAbove' | 'PriceBelow' | 'DayChangePercentAbove' | 'DayChangePercentBelow';
 export type AlertStatus = 'Active' | 'Triggered' | 'Disabled';
 

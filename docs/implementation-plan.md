@@ -113,7 +113,7 @@ Deferred: SCR-005, SCR-007, SCR-008, SCR-009, SCR-010, SCR-020, SCR-021, SCR-030
 - **Portfolio**: broker sync (Plaid/Alpaca), CSV/OFX import, multi-currency FX, crypto exchange sync, options Greeks, dividend automation, corporate actions, tax-lot methods.
 - **Analytics**: screener, TradingView Lightweight Charts, analyst ratings, earnings calendar, correlation matrix, risk metrics, backtesting.
 - **Data**: real-time quotes, Level 2, news, SEC filings, insider trades, short interest, economic calendar, options flow.
-- **Trading**: live order execution, advanced order types, paper trading, automated trading, rebalancing, margin.
+- **Trading**: live order execution, advanced order types, paper trading, automated trading, rebalancing ✅ (`RebalanceService` + `/rebalance` + target editor UI), margin.
 - **Reporting**: TWRR/MWRR ✅ (chain-linked daily TWRR + XIRR MWRR in `PerformanceController`), capital gains with wash-sale ✅ (`WashSaleService` + `/wash-sales` endpoint + UI), dividend report ✅, advisor sharing.
 - **Alerts**: price / technical / earnings / news / drift / insider, multi-channel delivery, history.
 - **Admin**: mobile, public REST API, WebSocket streaming, RBAC, dark mode, i18n.

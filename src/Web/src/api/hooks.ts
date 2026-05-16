@@ -26,7 +26,9 @@ import type {
   UpdateAlertRequest,
   UserSettingsDto,
   WatchlistDto,
-  WashSaleReportDto
+  WashSaleReportDto,
+  RebalanceReportDto,
+  RebalanceTargetDto
 } from './types';
 
 type Opts<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -292,6 +294,38 @@ export function useWashSales(portfolioId: string | undefined, year?: number) {
     queryKey: ['portfolios', portfolioId, 'wash-sales', year ?? 'current'] as const,
     enabled: Boolean(portfolioId),
     queryFn: async () => request<WashSaleReportDto>(`/api/portfolios/${portfolioId}/wash-sales`, { query: { year }, token: await getToken() })
+  });
+}
+
+export function useRebalance(portfolioId: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['portfolios', portfolioId, 'rebalance'] as const,
+    enabled: Boolean(portfolioId),
+    queryFn: async () => request<RebalanceReportDto>(`/api/portfolios/${portfolioId}/rebalance`, { token: await getToken() })
+  });
+}
+
+export function useRebalanceTargets(portfolioId: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['portfolios', portfolioId, 'rebalance', 'targets'] as const,
+    enabled: Boolean(portfolioId),
+    queryFn: async () => request<RebalanceTargetDto[]>(`/api/portfolios/${portfolioId}/rebalance/targets`, { token: await getToken() })
+  });
+}
+
+export function useSaveRebalanceTargets(portfolioId: string) {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (targets: RebalanceTargetDto[]) =>
+      request<RebalanceTargetDto[]>(`/api/portfolios/${portfolioId}/rebalance/targets`, {
+        method: 'PUT', body: targets, token: await getToken()
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['portfolios', portfolioId, 'rebalance'] });
+    }
   });
 }
 

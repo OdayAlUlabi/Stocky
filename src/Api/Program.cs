@@ -89,6 +89,7 @@ builder.Services.AddScoped<PortfolioLedgerService>();
 builder.Services.AddScoped<PortfolioHistoryService>();
 builder.Services.AddScoped<PortfolioAnalyticsService>();
 builder.Services.AddScoped<WashSaleService>();
+builder.Services.AddScoped<RebalanceService>();
 builder.Services.AddHostedService<QuoteRefresher>();
 builder.Services.AddHostedService<SnapshotJob>();
 

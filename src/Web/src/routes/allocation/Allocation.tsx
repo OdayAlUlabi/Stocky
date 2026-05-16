@@ -4,6 +4,7 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recha
 import { useAllocation } from '../../api/hooks';
 import type { AllocationSliceDto } from '../../api/types';
 import { EmptyState } from '../../components/EmptyState';
+import { RebalancePanel } from '../../components/RebalancePanel';
 
 const palette = ['#228be6', '#82c91e', '#fab005', '#fd7e14', '#e64980', '#15aabf', '#7950f2', '#40c057', '#f06595', '#868e96'];
 
@@ -40,6 +41,7 @@ export function Allocation() {
         <Slice title="By currency" items={data.byCurrency} />
         <Slice title="By symbol" items={data.bySymbol} />
       </SimpleGrid>
+      {id && <RebalancePanel portfolioId={id} currency={data.currency} />}
     </Stack>
   );
 }

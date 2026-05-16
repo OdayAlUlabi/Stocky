@@ -270,3 +270,22 @@ public record CorrelationDto(
     IReadOnlyList<string> Symbols,
     IReadOnlyList<IReadOnlyList<decimal>> Matrix);
 
+// Rebalance: per-symbol target weights and drift suggestions.
+public record RebalanceTargetDto(string Symbol, decimal TargetWeightPercent);
+
+public record RebalanceSuggestionDto(
+    string Symbol,
+    decimal CurrentValue,
+    decimal CurrentWeightPercent,
+    decimal TargetWeightPercent,
+    decimal DriftPercent,
+    decimal TradeValue, // positive = buy, negative = sell
+    string Action);     // "Buy" | "Sell" | "Hold"
+
+public record RebalanceReportDto(
+    Guid PortfolioId,
+    string Currency,
+    decimal TotalValue,
+    decimal TargetWeightSumPercent,
+    IReadOnlyList<RebalanceSuggestionDto> Suggestions);
+
