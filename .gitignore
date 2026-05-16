@@ -28,6 +28,12 @@ Thumbs.db
 .azure/
 *.azd-env
 
+# ---- Secrets (never commit) ----
+.secrets/
+*.pem
+*.pfx
+*.key
+
 # ---- Logs ----
 *.log
 
