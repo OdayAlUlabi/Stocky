@@ -14,6 +14,10 @@ import {
   IconSettings,
   IconCash,
   IconSearch,
+  IconNotes,
+  IconHistory,
+  IconLayoutGrid,
+  IconUserCog,
   IconSun,
   IconMoon
 } from '@tabler/icons-react';
@@ -41,8 +45,13 @@ const topItems: NavItem[] = [
   { to: '/calendar/economic', label: 'Econ calendar', icon: IconCalendarTime },
   { to: '/calendar/earnings', label: 'Earnings calendar', icon: IconCalendarTime },
   { to: '/goals', label: 'Goals', icon: IconCash },
+  { to: '/cash', label: 'Cash', icon: IconCash },
+  { to: '/notes', label: 'Notes', icon: IconNotes },
+  { to: '/templates', label: 'Templates', icon: IconLayoutGrid },
   { to: '/reports/schedules', label: 'Scheduled reports', icon: IconReportAnalytics },
   { to: '/reports/share', label: 'Share links', icon: IconReportAnalytics },
+  { to: '/admin/audit', label: 'Audit log', icon: IconHistory },
+  { to: '/account', label: 'Account', icon: IconUserCog },
   { to: '/settings', label: 'Settings', icon: IconSettings }
 ];
 

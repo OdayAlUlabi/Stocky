@@ -790,3 +790,75 @@ export interface ReportDeliveryDto {
   trigger: string | null;
   channel: string | null;
 }
+
+// ---------------- M14 Platform & Admin ----------------
+export interface CashTransactionDto {
+  id: string;
+  portfolioId: string;
+  type: string;
+  amount: number;
+  currency: string;
+  executedAt: string;
+  notes: string | null;
+}
+export interface CreateCashTransactionRequest {
+  portfolioId: string;
+  type: string;
+  amount: number;
+  currency: string;
+  executedAt?: string;
+  notes?: string | null;
+}
+export interface CashBalanceDto {
+  portfolioId: string;
+  currency: string;
+  balance: number;
+  count: number;
+}
+export interface PositionNoteDto {
+  id: string;
+  portfolioId: string | null;
+  symbol: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CreatePositionNoteRequest {
+  symbol: string;
+  body: string;
+  portfolioId?: string | null;
+}
+export interface UpdatePositionNoteRequest {
+  body: string;
+}
+export interface AuditEntryDto {
+  id: string;
+  timestamp: string;
+  action: string;
+  resource: string;
+  resourceId: string | null;
+  method: string | null;
+  path: string | null;
+  statusCode: number | null;
+  clientIp: string | null;
+  details: string | null;
+}
+export interface ModelTemplateAllocationDto {
+  symbol: string;
+  name: string;
+  assetClass: string;
+  weightPercent: number;
+}
+export interface ModelPortfolioTemplateDto {
+  slug: string;
+  name: string;
+  description: string;
+  risk: string;
+  allocations: ModelTemplateAllocationDto[];
+}
+export interface ApplyTemplateRequest {
+  slug: string;
+  portfolioName: string;
+  baseCurrency?: string;
+  initialCashDeposit?: number | null;
+}

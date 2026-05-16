@@ -32,7 +32,16 @@ import type {
   RebalanceTargetDto,
   ScreenerFacetsDto,
   ScreenerQuery,
-  ScreenerResultDto
+  ScreenerResultDto,
+  CashTransactionDto,
+  CreateCashTransactionRequest,
+  CashBalanceDto,
+  PositionNoteDto,
+  CreatePositionNoteRequest,
+  UpdatePositionNoteRequest,
+  AuditEntryDto,
+  ModelPortfolioTemplateDto,
+  ApplyTemplateRequest
 } from './types';
 
 type Opts<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -856,5 +865,146 @@ export function useGenerateOnDemandReport() {
     mutationFn: async (params: { portfolioId: string; type: string; format: string }) =>
       request<ReportDeliveryDto>('/api/report-deliveries/ondemand', { method: 'POST', query: params, token: await getToken() }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['report-deliveries'] })
+  });
+}
+
+// ---------------- M14 Platform & Admin ----------------
+export function useCashTransactions(portfolioId: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['cash-transactions', portfolioId] as const,
+    enabled: !!portfolioId,
+    queryFn: async () =>
+      request<CashTransactionDto[]>(`/api/cash/transactions?portfolioId=${portfolioId}`, { token: await getToken() })
+  });
+}
+
+export function useCashBalances(portfolioId: string | undefined) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['cash-balances', portfolioId] as const,
+    enabled: !!portfolioId,
+    queryFn: async () =>
+      request<CashBalanceDto[]>(`/api/cash/balances?portfolioId=${portfolioId}`, { token: await getToken() })
+  });
+}
+
+export function useCreateCashTransaction() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (body: CreateCashTransactionRequest) =>
+      request<CashTransactionDto>('/api/cash/transactions', { method: 'POST', body, token: await getToken() }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['cash-transactions', vars.portfolioId] });
+      qc.invalidateQueries({ queryKey: ['cash-balances', vars.portfolioId] });
+    }
+  });
+}
+
+export function useDeleteCashTransaction(portfolioId: string | undefined) {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      request<void>(`/api/cash/transactions/${id}`, { method: 'DELETE', token: await getToken() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cash-transactions', portfolioId] });
+      qc.invalidateQueries({ queryKey: ['cash-balances', portfolioId] });
+    }
+  });
+}
+
+export function usePositionNotes(params: { symbol?: string; portfolioId?: string } = {}) {
+  const getToken = useApiToken();
+  const qs = new URLSearchParams();
+  if (params.symbol) qs.set('symbol', params.symbol);
+  if (params.portfolioId) qs.set('portfolioId', params.portfolioId);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return useQuery({
+    queryKey: ['position-notes', params.symbol ?? null, params.portfolioId ?? null] as const,
+    queryFn: async () => request<PositionNoteDto[]>(`/api/position-notes${suffix}`, { token: await getToken() })
+  });
+}
+
+export function useCreatePositionNote() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (body: CreatePositionNoteRequest) =>
+      request<PositionNoteDto>('/api/position-notes', { method: 'POST', body, token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['position-notes'] })
+  });
+}
+
+export function useUpdatePositionNote() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (vars: { id: string; body: UpdatePositionNoteRequest }) =>
+      request<PositionNoteDto>(`/api/position-notes/${vars.id}`, { method: 'PATCH', body: vars.body, token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['position-notes'] })
+  });
+}
+
+export function useDeletePositionNote() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      request<void>(`/api/position-notes/${id}`, { method: 'DELETE', token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['position-notes'] })
+  });
+}
+
+export function useAuditLog(params: { take?: number; resource?: string } = {}) {
+  const getToken = useApiToken();
+  const qs = new URLSearchParams();
+  if (params.take) qs.set('take', String(params.take));
+  if (params.resource) qs.set('resource', params.resource);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return useQuery({
+    queryKey: ['audit-log', params.take ?? 200, params.resource ?? null] as const,
+    queryFn: async () => request<AuditEntryDto[]>(`/api/audit${suffix}`, { token: await getToken() })
+  });
+}
+
+export function useModelTemplates() {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['model-templates'] as const,
+    queryFn: async () => request<ModelPortfolioTemplateDto[]>('/api/model-templates', { token: await getToken() })
+  });
+}
+
+export function useApplyModelTemplate() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (body: ApplyTemplateRequest) =>
+      request<PortfolioDto>('/api/model-templates/apply', { method: 'POST', body, token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['portfolios'] })
+  });
+}
+
+export function useExportAccount() {
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${config.apiBaseUrl}/api/account/export`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      return res.json();
+    }
+  });
+}
+
+export function useDeleteAccount() {
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async () =>
+      request<void>('/api/account?confirm=delete', { method: 'DELETE', token: await getToken() })
   });
 }
