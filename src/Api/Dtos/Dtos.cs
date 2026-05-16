@@ -165,10 +165,77 @@ public record AlertDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? TriggeredAt,
     decimal? TriggeredValue,
-    string? Note);
+    string? Note,
+    // M10 additions
+    string Type = "Price",
+    int? IndicatorPeriod = null,
+    string? KeywordFilter = null,
+    decimal? MinSentiment = null,
+    int? DaysBeforeEarnings = null,
+    Guid? PortfolioId = null,
+    string Channels = "Inbox",
+    string? WebhookUrl = null,
+    DateTimeOffset? SnoozedUntil = null);
 
-public record CreateAlertRequest(string Symbol, string Condition, decimal Threshold, string? Note);
-public record UpdateAlertRequest(decimal Threshold, string Status, string? Note);
+public record CreateAlertRequest(
+    string Symbol,
+    string Condition,
+    decimal Threshold,
+    string? Note,
+    string? Type = null,
+    int? IndicatorPeriod = null,
+    string? KeywordFilter = null,
+    decimal? MinSentiment = null,
+    int? DaysBeforeEarnings = null,
+    Guid? PortfolioId = null,
+    string? Channels = null,
+    string? WebhookUrl = null);
+
+public record UpdateAlertRequest(
+    decimal Threshold,
+    string Status,
+    string? Note,
+    string? Channels = null,
+    string? WebhookUrl = null,
+    int? IndicatorPeriod = null,
+    string? KeywordFilter = null,
+    decimal? MinSentiment = null,
+    int? DaysBeforeEarnings = null);
+
+// M10 #53 Alert history
+public record AlertEventDto(
+    Guid Id,
+    Guid AlertId,
+    string Symbol,
+    string Type,
+    string Condition,
+    DateTimeOffset TriggeredAt,
+    decimal? TriggeredValue,
+    string Message,
+    string Channels,
+    string? Context);
+
+public record SnoozeAlertRequest(DateTimeOffset UntilUtc);
+
+// M10 #51 insider trades (alert side — separate from M8 InsiderTradeDto from data feed)
+public record InsiderEventDto(
+    Guid Id,
+    string Symbol,
+    string InsiderName,
+    string Relation,
+    string TransactionType,
+    decimal Shares,
+    decimal Price,
+    DateTimeOffset FiledAt);
+
+public record InsiderClusterDto(
+    string Symbol,
+    int BuyCount,
+    int SellCount,
+    decimal NetShares,
+    DateTimeOffset WindowStart,
+    DateTimeOffset WindowEnd,
+    IReadOnlyList<InsiderEventDto> Trades);
 
 // SCR-021 Capital gains
 public record RealizedGainDto(

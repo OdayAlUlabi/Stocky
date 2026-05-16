@@ -343,12 +343,18 @@ export interface ScreenerQuery {
   limit?: number;
 }
 
-export type AlertCondition = 'PriceAbove' | 'PriceBelow' | 'DayChangePercentAbove' | 'DayChangePercentBelow';
+export type AlertCondition =
+  | 'PriceAbove' | 'PriceBelow' | 'DayChangePercentAbove' | 'DayChangePercentBelow'
+  | 'SmaCrossAbove' | 'SmaCrossBelow' | 'RsiAbove' | 'RsiBelow'
+  | 'EarningsWithinDays' | 'NewsKeyword' | 'DriftAbovePercent'
+  | 'InsiderClusterBuy' | 'InsiderClusterSell';
 export type AlertStatus = 'Active' | 'Triggered' | 'Disabled';
+export type AlertType = 'Price' | 'Technical' | 'Earnings' | 'News' | 'Drift' | 'Insider';
 
 export interface AlertDto {
   id: string;
   symbol: string;
+  type: AlertType;
   condition: AlertCondition;
   threshold: number;
   status: AlertStatus;
@@ -356,6 +362,14 @@ export interface AlertDto {
   triggeredAt: string | null;
   triggeredValue: number | null;
   note: string | null;
+  indicatorPeriod: number | null;
+  keywordFilter: string | null;
+  minSentiment: number | null;
+  daysBeforeEarnings: number | null;
+  portfolioId: string | null;
+  channels: string;
+  webhookUrl: string | null;
+  snoozedUntil: string | null;
 }
 
 export interface CreateAlertRequest {
@@ -363,12 +377,62 @@ export interface CreateAlertRequest {
   condition: AlertCondition;
   threshold: number;
   note: string | null;
+  type?: AlertType;
+  indicatorPeriod?: number | null;
+  keywordFilter?: string | null;
+  minSentiment?: number | null;
+  daysBeforeEarnings?: number | null;
+  portfolioId?: string | null;
+  channels?: string;
+  webhookUrl?: string | null;
 }
 
 export interface UpdateAlertRequest {
   threshold: number;
   status: AlertStatus;
   note: string | null;
+  channels?: string;
+  webhookUrl?: string | null;
+  indicatorPeriod?: number | null;
+  keywordFilter?: string | null;
+  minSentiment?: number | null;
+  daysBeforeEarnings?: number | null;
+}
+
+export interface AlertEventDto {
+  id: string;
+  alertId: string;
+  symbol: string;
+  type: AlertType;
+  condition: AlertCondition;
+  triggeredAt: string;
+  triggeredValue: number | null;
+  message: string;
+  channels: string;
+  context: string | null;
+}
+
+export interface SnoozeAlertRequest { untilUtc: string; }
+
+export interface InsiderEventDto {
+  id: string;
+  symbol: string;
+  insiderName: string;
+  relation: string;
+  transactionType: string;
+  shares: number;
+  price: number;
+  filedAt: string;
+}
+
+export interface InsiderClusterDto {
+  symbol: string;
+  buyCount: number;
+  sellCount: number;
+  netShares: number;
+  windowStart: string;
+  windowEnd: string;
+  trades: InsiderEventDto[];
 }
 
 export interface RealizedGainDto {

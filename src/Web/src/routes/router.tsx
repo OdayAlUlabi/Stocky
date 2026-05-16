@@ -15,6 +15,7 @@ import { Reports } from './reports/Reports';
 import { Performance } from './performance/Performance';
 import { Allocation } from './allocation/Allocation';
 import { Alerts } from './alerts/Alerts';
+import { AlertHistory } from './alerts/AlertHistory';
 import { CapitalGains } from './capgains/CapitalGains';
 import { News } from './news/News';
 import { Earnings } from './earnings/Earnings';
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: 'watchlist', element: <WatchlistView /> },
       { path: 'screener', element: <Screener /> },
       { path: 'alerts', element: <Alerts /> },
+      { path: 'alerts/history', element: <AlertHistory /> },
       { path: 'news', element: <News /> },
       { path: 'earnings', element: <Earnings /> },
       { path: 'calendar/economic', element: <EconomicCalendar /> },

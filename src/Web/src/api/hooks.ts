@@ -405,6 +405,55 @@ export function useDeleteAlert() {
   });
 }
 
+// M10 — Advanced Alerts
+import type { AlertEventDto, SnoozeAlertRequest, InsiderEventDto, InsiderClusterDto } from './types';
+
+export function useAlertHistory(take = 200) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['alerts', 'history', take] as const,
+    queryFn: async () => request<AlertEventDto[]>('/api/alerts/history', { query: { take }, token: await getToken() })
+  });
+}
+
+export function useSnoozeAlert() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async ({ id, body }: { id: string; body: SnoozeAlertRequest }) =>
+      request<AlertDto>(`/api/alerts/${id}/snooze`, { method: 'POST', body, token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] })
+  });
+}
+
+export function useReactivateAlert() {
+  const qc = useQueryClient();
+  const getToken = useApiToken();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      request<AlertDto>(`/api/alerts/${id}/reactivate`, { method: 'POST', token: await getToken() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] })
+  });
+}
+
+export function useInsiderEvents(symbol: string, days = 30) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['insider-events', symbol, days] as const,
+    enabled: !!symbol,
+    queryFn: async () => request<InsiderEventDto[]>(`/api/insider-events/${encodeURIComponent(symbol)}`, { query: { days }, token: await getToken() })
+  });
+}
+
+export function useInsiderCluster(symbol: string, days = 30) {
+  const getToken = useApiToken();
+  return useQuery({
+    queryKey: ['insider-events', 'cluster', symbol, days] as const,
+    enabled: !!symbol,
+    queryFn: async () => request<InsiderClusterDto>(`/api/insider-events/${encodeURIComponent(symbol)}/cluster`, { query: { days }, token: await getToken() })
+  });
+}
+
 export function useNews(symbols?: string[], limit = 20) {
   const getToken = useApiToken();
   const key = symbols && symbols.length ? symbols.slice().sort().join(',') : '';

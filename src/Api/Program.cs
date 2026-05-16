@@ -106,6 +106,22 @@ builder.Services.AddScoped<BacktestService>();
 builder.Services.AddScoped<GoalsService>();
 builder.Services.AddSingleton<EarningsSurpriseService>();
 
+// M10 — Advanced Alerts
+builder.Services.AddSingleton<TechnicalIndicatorService>();
+builder.Services.AddScoped<IInsiderTradeProvider, StubInsiderTradeProvider>();
+builder.Services.AddScoped<IAlertChannel, InboxChannel>();
+builder.Services.AddScoped<IAlertChannel, EmailChannel>();
+builder.Services.AddScoped<IAlertChannel, PushChannel>();
+builder.Services.AddScoped<IAlertChannel, WebhookChannel>();
+builder.Services.AddHttpClient("stocky-webhook", c => c.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddScoped<AlertDispatcher>();
+builder.Services.AddScoped<TechnicalAlertEvaluator>();
+builder.Services.AddScoped<EarningsAlertEvaluator>();
+builder.Services.AddScoped<NewsAlertEvaluator>();
+builder.Services.AddScoped<DriftAlertEvaluator>();
+builder.Services.AddScoped<InsiderAlertEvaluator>();
+builder.Services.AddHostedService<AlertSweepJob>();
+
 var appInsightsConnection = builder.Configuration["ApplicationInsights:ConnectionString"]
     ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 if (!string.IsNullOrWhiteSpace(appInsightsConnection))
