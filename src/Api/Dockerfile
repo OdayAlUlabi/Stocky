@@ -9,14 +9,12 @@ COPY src/Api/ src/Api/
 RUN dotnet publish src/Api/Stocky.Api.csproj \
     -c Release \
     -o /app/publish \
-    --no-restore \
     /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
-# Run as non-root.
-RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app \
-    && chown -R app:app /app
+    # Run as non-root (user 'app' already exists in the aspnet base image).
+RUN chown -R app:app /app
 USER app
 ENV ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_FORWARDEDHEADERS_ENABLED=true \

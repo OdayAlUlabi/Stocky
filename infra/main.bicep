@@ -206,6 +206,18 @@ module env 'modules/containerEnv.bicep' = {
   }
 }
 
+// Private DNS zone for the internal ACA env so App Gateway (and anything
+// else in the VNet) can resolve {app}.internal.{defaultDomain}.
+module acaDns 'modules/acaInternalDns.bicep' = {
+  name: 'acaDns'
+  params: {
+    defaultDomain: env.outputs.envDefaultDomain
+    staticIp: env.outputs.envStaticIp
+    vnetId: net.outputs.vnetId
+    tags: tags
+  }
+}
+
 module apps 'modules/containerApps.bicep' = {
   name: 'apps'
   params: {

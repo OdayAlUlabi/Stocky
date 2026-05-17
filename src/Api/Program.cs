@@ -33,8 +33,26 @@ if (migrateOnly)
     var db = scope.ServiceProvider.GetRequiredService<StockyDbContext>();
     if (db.Database.IsRelational())
     {
-        await db.Database.MigrateAsync();
-        Console.WriteLine("Migrations applied.");
+        // Retry loop: IMDS / managed identity token service in ACA can return
+        // transient 500s during container warm-up. Retry with backoff.
+        var maxAttempts = 10;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await db.Database.MigrateAsync();
+                Console.WriteLine("Migrations applied.");
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                Console.WriteLine($"Migration attempt {attempt}/{maxAttempts} failed: {ex.Message}");
+                Console.WriteLine($"Retrying in {attempt * 10} seconds...");
+                await Task.Delay(TimeSpan.FromSeconds(attempt * 10));
+                // Reset connection state for next attempt
+                await db.Database.CloseConnectionAsync();
+            }
+        }
     }
     else
     {

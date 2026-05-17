@@ -2,6 +2,8 @@
 # Served by nginx on 8080 (ACA ingress targetPort matches).
 
 FROM node:22-alpine AS build
+ARG VITE_API_BASE_URL=""
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 WORKDIR /src
 COPY src/Web/package.json src/Web/package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi

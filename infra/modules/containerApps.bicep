@@ -51,8 +51,8 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
     managedEnvironmentId: envId
     configuration: {
       ingress: {
-        external: false
-        targetPort: 8080
+        external: true
+        targetPort: isBootstrap ? 80 : 8080
         transport: 'auto'
         allowInsecure: false
       }
@@ -129,8 +129,8 @@ resource web 'Microsoft.App/containerApps@2024-10-02-preview' = {
     managedEnvironmentId: envId
     configuration: {
       ingress: {
-        external: false
-        targetPort: 8080
+        external: true
+        targetPort: isBootstrap ? 80 : 8080
         transport: 'auto'
         allowInsecure: false
       }
