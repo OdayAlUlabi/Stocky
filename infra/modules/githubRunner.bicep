@@ -45,6 +45,11 @@ param githubAppPrivateKeySecretName string = 'github-app-private-key'
 @description('Runner image (default: ephemeral runner image to be pushed to ACR).')
 param runnerImage string = '${acrLoginServer}/stocky-gh-runner:latest'
 
+@description('When true, swaps the runner image for a public MCR sample so first-provision succeeds before the real runner image has been pushed to ACR. Set to false once the runner image has been built and pushed.')
+param bootstrapRunnerImage bool = true
+
+var effectiveRunnerImage = bootstrapRunnerImage ? 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest' : runnerImage
+
 @description('Runner labels appended to "self-hosted, linux". Jobs target these via runs-on.')
 param runnerLabels string = 'stocky'
 
@@ -108,7 +113,7 @@ resource runner 'Microsoft.App/jobs@2024-10-02-preview' = {
           identity: runnerIdentityId
         }
       ]
-      registries: [
+      registries: bootstrapRunnerImage ? [] : [
         {
           server: acrLoginServer
           identity: runnerIdentityId
@@ -119,7 +124,7 @@ resource runner 'Microsoft.App/jobs@2024-10-02-preview' = {
       containers: [
         {
           name: 'runner'
-          image: runnerImage
+          image: effectiveRunnerImage
           resources: { cpu: json('1.0'), memory: '2Gi' }
           env: [
             // Public knobs consumed by common runner images (myoung34/github-runner

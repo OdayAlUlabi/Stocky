@@ -28,8 +28,14 @@ param publicHostname string
 @description('Image tag (sha) — placeholder allowed so CI updates it later.')
 param imageTag string = 'placeholder'
 
-var apiImage = '${acrLoginServer}/stocky-api:${imageTag}'
-var webImage = '${acrLoginServer}/stocky-web:${imageTag}'
+// When the image tag is still the placeholder (i.e. before first `azd deploy`
+// has pushed real images to the private ACR), use a public MCR sample image
+// so the container apps can be created successfully. `azd deploy` will swap
+// in the real ACR image on the next revision.
+var isBootstrap = imageTag == 'placeholder'
+var bootstrapImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+var apiImage = isBootstrap ? bootstrapImage : '${acrLoginServer}/stocky-api:${imageTag}'
+var webImage = isBootstrap ? bootstrapImage : '${acrLoginServer}/stocky-web:${imageTag}'
 
 resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
   name: 'ca-${prefix}-api'
@@ -50,7 +56,7 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
         transport: 'auto'
         allowInsecure: false
       }
-      registries: [
+      registries: isBootstrap ? [] : [
         {
           server: acrLoginServer
           identity: apiIdentityId
@@ -76,8 +82,11 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'AZURE_CLIENT_ID', value: apiIdentityClientId }
             { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDbName};Authentication=Active Directory Managed Identity;User Id=${apiIdentityClientId};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
             { name: 'AllowedOrigins__0', value: 'https://${publicHostname}' }
+            // PORT is read by the bootstrap helloworld image; the real ASP.NET
+            // image ignores it (it honours ASPNETCORE_URLS instead).
+            { name: 'PORT', value: '8080' }
           ]
-          probes: [
+          probes: isBootstrap ? [] : [
             {
               type: 'Liveness'
               httpGet: { path: '/health', port: 8080 }
@@ -125,7 +134,7 @@ resource web 'Microsoft.App/containerApps@2024-10-02-preview' = {
         transport: 'auto'
         allowInsecure: false
       }
-      registries: [
+      registries: isBootstrap ? [] : [
         {
           server: acrLoginServer
           identity: apiIdentityId
@@ -138,6 +147,9 @@ resource web 'Microsoft.App/containerApps@2024-10-02-preview' = {
           name: 'web'
           image: webImage
           resources: { cpu: json('0.25'), memory: '0.5Gi' }
+          env: [
+            { name: 'PORT', value: '8080' }
+          ]
         }
       ]
       scale: {

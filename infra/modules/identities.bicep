@@ -41,6 +41,9 @@ resource runnerId 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' 
 }
 
 // Federated credentials: trust GitHub Actions OIDC issuer.
+// @batchSize(1) serializes FIC creation — Azure's UAMI service rejects
+// concurrent FIC writes for the same managed identity (ConcurrentFederatedIdentityCredentialsWritesForSingleManagedIdentity).
+@batchSize(1)
 resource fic 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = [for (subject, i) in githubSubjects: {
   parent: cicdId
   name: 'gh-${i}'

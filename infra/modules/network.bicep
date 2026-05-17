@@ -39,6 +39,19 @@ resource routeTable 'Microsoft.Network/routeTables@2024-01-01' = if (forceTunnel
   }
 }
 
+resource nsgAca 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
+  name: 'nsg-${prefix}-aca'
+  location: location
+  tags: tags
+  // ACA managed environments manage their own subnet-level traffic; the NSG
+  // exists only to satisfy the org policy that mandates an NSG on every subnet.
+  // Default rules (allow VNet/AzureLoadBalancer inbound, allow all outbound)
+  // are sufficient; no custom rules are added so ACA can function unimpeded.
+  properties: {
+    securityRules: []
+  }
+}
+
 resource nsgPe 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
   name: 'nsg-${prefix}-pe'
   location: location
@@ -124,6 +137,15 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
           addressPrefix: acaSubnetCidr
           // ACA workload profile envs require delegation to
           // Microsoft.App/environments via the infrastructure subnet.
+          delegations: [
+            {
+              name: 'aca-delegation'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
+          networkSecurityGroup: { id: nsgAca.id }
           privateEndpointNetworkPolicies: 'Disabled'
           routeTable: forceTunnel ? { id: routeTable.id } : null
         }

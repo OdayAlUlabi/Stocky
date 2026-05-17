@@ -20,6 +20,10 @@ param sqlDbName string
 @description('Image tag (sha).')
 param imageTag string = 'placeholder'
 
+var isBootstrap = imageTag == 'placeholder'
+var bootstrapImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+var migratorImage = isBootstrap ? bootstrapImage : '${acrLoginServer}/stocky-api:${imageTag}'
+
 resource migrator 'Microsoft.App/jobs@2024-10-02-preview' = {
   name: 'caj-${prefix}-migrator'
   location: location
@@ -37,7 +41,7 @@ resource migrator 'Microsoft.App/jobs@2024-10-02-preview' = {
       replicaTimeout: 1800
       replicaRetryLimit: 0
       manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
-      registries: [
+      registries: isBootstrap ? [] : [
         {
           server: acrLoginServer
           identity: migratorIdentityId
@@ -48,11 +52,12 @@ resource migrator 'Microsoft.App/jobs@2024-10-02-preview' = {
       containers: [
         {
           name: 'migrator'
-          image: '${acrLoginServer}/stocky-api:${imageTag}'
+          image: migratorImage
           // The migrator runs the same API image with a flag so Program.cs
-          // applies migrations and exits.
-          command: [ 'dotnet', 'Stocky.Api.dll' ]
-          args: [ '--migrate-only' ]
+          // applies migrations and exits. During bootstrap the helloworld
+          // image is used; command/args are omitted so its default entrypoint runs.
+          command: isBootstrap ? null : [ 'dotnet', 'Stocky.Api.dll' ]
+          args: isBootstrap ? null : [ '--migrate-only' ]
           resources: { cpu: json('0.5'), memory: '1Gi' }
           env: [
             { name: 'AZURE_CLIENT_ID', value: migratorIdentityClientId }

@@ -14,7 +14,7 @@ param migratorPrincipalId string
 @description('Self-hosted GitHub runner identity principal id.')
 param runnerPrincipalId string
 
-var roleKvSecretsUser   = '4633458b-17de-9d6c-5a8c-3c1d8c2d4adb' // Key Vault Secrets User
+var roleKvSecretsUser   = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
 var roleAcrPull         = '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
 var roleAcrPush         = '8311e382-0749-4cb8-b61a-304f252e45ec' // AcrPush
 var roleContribAcaApps  = 'b24988ac-6180-42a0-ab88-20f7382dd24c' // Contributor (resource-group scope for CI to update apps; tighten later via custom role)
