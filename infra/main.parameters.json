@@ -18,6 +18,8 @@
     "githubAppId": { "value": "${GITHUB_APP_ID=}" },
     "githubInstallationId": { "value": "${GITHUB_INSTALLATION_ID=}" },
     "githubAppPrivateKeySecretName": { "value": "${GITHUB_APP_KEY_SECRET=github-app-private-key}" },
-    "githubRunnerLabels": { "value": "${GITHUB_RUNNER_LABELS=stocky}" }
+    "githubRunnerPatSecretName": { "value": "${GITHUB_RUNNER_PAT_SECRET=}" },
+    "githubRunnerLabels": { "value": "${GITHUB_RUNNER_LABELS=stocky}" },
+    "tlsCertSecretUri": { "value": "${TLS_CERT_SECRET_URI=}" }
   }
 }

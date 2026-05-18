@@ -42,6 +42,11 @@ jobs:
       - name: ACR login (managed identity)
         run: az acr login --name "$ACR_NAME"
 
+      - name: Build + push runner image
+        run: |
+          docker build -f src/runner/Dockerfile -t "$ACR_LOGIN_SERVER/stocky-gh-runner:latest" .
+          docker push "$ACR_LOGIN_SERVER/stocky-gh-runner:latest"
+
       - name: Build + push api image
         run: |
           docker build -f src/Api/Dockerfile -t "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" .
@@ -75,9 +80,20 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
             --args='--migrate-only'
+          # Pre-fetch a SQL Bearer token using the CI identity (OIDC-authenticated CICD UAMI).
+          # Injected into the migrator container via PRE_FETCHED_SQL_TOKEN so it skips the
+          # ACA IMDS proxy entirely (proxy is unreliable for the migrator UAMI).
+          #
+          # One-time prerequisite — run as SQL Entra admin:
+          #   CREATE USER [id-stocky-prod-cicd] FROM EXTERNAL PROVIDER;
+          #   ALTER ROLE db_owner ADD MEMBER [id-stocky-prod-cicd];
+          SQL_TOKEN=$(az account get-access-token \
+            --resource https://database.windows.net/ \
+            --query accessToken -o tsv)
           EXEC_NAME=$(az containerapp job start \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
+            --env-vars "PRE_FETCHED_SQL_TOKEN=$SQL_TOKEN" \
             --query name -o tsv)
           echo "Started job execution: $EXEC_NAME"
           # Poll for completion (max ~30 min).

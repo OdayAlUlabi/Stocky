@@ -32,40 +32,59 @@ if (migrateOnly)
 {
     if (!string.IsNullOrWhiteSpace(connectionString))
     {
-        // Pre-fetch the MI token once via Azure.Identity with its own retry loop.
-        // SqlClient's ActiveDirectoryManagedIdentity auth calls IMDS on every new
-        // SqlConnection; when EnableRetryOnFailure() retries due to error 40613
-        // (SQL Serverless auto-resume), this triggers dozens of rapid IMDS calls
-        // that throttle the ACA IMDS proxy (HTTP 500). Passing AccessToken directly
-        // on the SqlConnection bypasses per-connection IMDS entirely.
-        var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
-        TokenCredential credential = string.IsNullOrEmpty(clientId)
-            ? new DefaultAzureCredential()
-            : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(clientId));
-
         string? accessToken = null;
-        for (var i = 1; i <= 20; i++)
-        {
-            try
-            {
-                var t = await credential.GetTokenAsync(
-                    new TokenRequestContext(["https://database.windows.net/.default"]),
-                    CancellationToken.None);
-                accessToken = t.Token;
-                Console.WriteLine($"MI token acquired (expires {t.ExpiresOn:u}).");
-                break;
-            }
-            catch (Exception ex) when (i < 20)
-            {
-                Console.WriteLine($"IMDS attempt {i}/20 failed: {ex.Message}. Retrying in 10s...");
-                await Task.Delay(10_000);
-            }
-        }
 
-        if (accessToken == null)
+        // Fast path: use a SQL Bearer token pre-fetched by the CI runner and
+        // injected via az containerapp job start --env-vars PRE_FETCHED_SQL_TOKEN=...
+        // This bypasses the ACA IMDS proxy entirely (the proxy is unreliable for
+        // the migrator UAMI on some compute nodes).
+        // Obtain the token on the CI side with:
+        //   az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv
+        // The CICD identity (OIDC) must be a SQL db_owner — run once as admin:
+        //   CREATE USER [id-stocky-prod-cicd] FROM EXTERNAL PROVIDER;
+        //   ALTER ROLE db_owner ADD MEMBER [id-stocky-prod-cicd];
+        var preFetchedToken = Environment.GetEnvironmentVariable("PRE_FETCHED_SQL_TOKEN");
+        if (!string.IsNullOrWhiteSpace(preFetchedToken))
         {
-            Console.Error.WriteLine("Could not acquire MI token after 20 attempts. Aborting.");
-            Environment.Exit(1);
+            accessToken = preFetchedToken;
+            Console.WriteLine("SQL token: using PRE_FETCHED_SQL_TOKEN (IMDS skipped).");
+        }
+        else
+        {
+            // Slow path: acquire the token from the ACA IMDS proxy.
+            // SqlClient's ActiveDirectoryManagedIdentity auth calls IMDS on every new
+            // SqlConnection; when EnableRetryOnFailure() retries due to error 40613
+            // (SQL Serverless auto-resume), this triggers dozens of rapid IMDS calls
+            // that throttle the ACA IMDS proxy (HTTP 500). Passing AccessToken directly
+            // on the SqlConnection bypasses per-connection IMDS entirely.
+            var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
+            TokenCredential credential = string.IsNullOrEmpty(clientId)
+                ? new DefaultAzureCredential()
+                : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(clientId));
+
+            for (var i = 1; i <= 20; i++)
+            {
+                try
+                {
+                    var t = await credential.GetTokenAsync(
+                        new TokenRequestContext(["https://database.windows.net/.default"]),
+                        CancellationToken.None);
+                    accessToken = t.Token;
+                    Console.WriteLine($"MI token acquired (expires {t.ExpiresOn:u}).");
+                    break;
+                }
+                catch (Exception ex) when (i < 20)
+                {
+                    Console.WriteLine($"IMDS attempt {i}/20 failed: {ex.Message}. Retrying in 10s...");
+                    await Task.Delay(10_000);
+                }
+            }
+
+            if (accessToken == null)
+            {
+                Console.Error.WriteLine("Could not acquire MI token after 20 attempts. Aborting.");
+                Environment.Exit(1);
+            }
         }
 
         // SqlConnection.AccessToken and Authentication= are mutually exclusive;

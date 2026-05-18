@@ -8,9 +8,11 @@
 //
 // Auth model:
 //   - To AZURE  : User-assigned managed identity (AcrPull on ACR, KV Secrets User on KV).
-//   - To GITHUB : GitHub App installation token, computed by KEDA from the App id +
-//                 installation id + PEM private key. The PEM is stored in Key Vault
-//                 and surfaced to the job container via a Container Apps secret-ref.
+//   - To GITHUB : GitHub App installation token (when githubAppId is set), or
+//                 Personal Access Token (when githubAppId is empty, PAT mode).
+//                 The credential is stored in Key Vault and surfaced via a secret-ref.
+//                 GitHub App mode:  KV secret = githubAppPrivateKeySecretName (PEM key)
+//                 PAT mode:         KV secret = "github-runner-pat" (classic PAT)
 @description('Resource name prefix.')
 param prefix string
 @description('Azure region.')
@@ -33,11 +35,11 @@ param githubOwner string
 @description('GitHub repository name (leave empty to register at org scope).')
 param githubRepo string = ''
 
-@description('GitHub App id used to obtain installation tokens.')
-param githubAppId string
+@description('GitHub App id used to obtain installation tokens. Leave empty to use PAT mode.')
+param githubAppId string = ''
 
-@description('GitHub App installation id for the target org/repo.')
-param githubInstallationId string
+@description('GitHub App installation id for the target org/repo. Leave empty to use PAT mode.')
+param githubInstallationId string = ''
 
 @description('Key Vault secret name that holds the GitHub App PEM private key.')
 param githubAppPrivateKeySecretName string = 'github-app-private-key'
@@ -49,6 +51,11 @@ param runnerImage string = '${acrLoginServer}/stocky-gh-runner:latest'
 param bootstrapRunnerImage bool = true
 
 var effectiveRunnerImage = bootstrapRunnerImage ? 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest' : runnerImage
+
+// Auth mode: GitHub App when both App credentials are provided; PAT otherwise.
+var useAppAuth = !empty(githubAppId) && !empty(githubInstallationId)
+// KV secret name for the active credential.
+var credSecretName = useAppAuth ? githubAppPrivateKeySecretName : 'github-runner-pat'
 
 @description('Runner labels appended to "self-hosted, linux". Jobs target these via runs-on.')
 param runnerLabels string = 'stocky'
@@ -86,7 +93,7 @@ resource runner 'Microsoft.App/jobs@2024-10-02-preview' = {
             {
               name: 'github-runner'
               type: 'github-runner'
-              metadata: {
+              metadata: useAppAuth ? {
                 owner: githubOwner
                 runnerScope: empty(githubRepo) ? 'org' : 'repo'
                 repos: empty(githubRepo) ? '' : githubRepo
@@ -94,22 +101,28 @@ resource runner 'Microsoft.App/jobs@2024-10-02-preview' = {
                 applicationID: githubAppId
                 installationID: githubInstallationId
                 targetWorkflowQueueLength: '1'
+              } : {
+                owner: githubOwner
+                runnerScope: empty(githubRepo) ? 'org' : 'repo'
+                repos: empty(githubRepo) ? '' : githubRepo
+                labels: runnerLabels
+                targetWorkflowQueueLength: '1'
               }
               auth: [
                 {
-                  secretRef: 'github-app-private-key'
-                  triggerParameter: 'appKey'
+                  secretRef: credSecretName
+                  triggerParameter: useAppAuth ? 'appKey' : 'personalAccessToken'
                 }
               ]
             }
           ]
         }
       }
-      // PEM private key arrives at the job replica via this KV-backed secret.
+      // KV-backed secret for the active auth credential.
       secrets: [
         {
-          name: 'github-app-private-key'
-          keyVaultUrl: '${keyVaultUri}secrets/${githubAppPrivateKeySecretName}'
+          name: credSecretName
+          keyVaultUrl: '${keyVaultUri}secrets/${credSecretName}'
           identity: runnerIdentityId
         }
       ]
@@ -126,13 +139,23 @@ resource runner 'Microsoft.App/jobs@2024-10-02-preview' = {
           name: 'runner'
           image: effectiveRunnerImage
           resources: { cpu: json('1.0'), memory: '2Gi' }
-          env: [
-            // Public knobs consumed by common runner images (myoung34/github-runner
-            // semantics; safe no-ops on other images that read different vars).
-            { name: 'ACCESS_TOKEN_SECRET_REF', value: 'github-app-private-key' }
+          env: useAppAuth ? [
+            // GitHub App mode env vars (myoung34/github-runner semantics).
+            { name: 'ACCESS_TOKEN_SECRET_REF', value: credSecretName }
             { name: 'APP_ID', value: githubAppId }
             { name: 'APP_INSTALLATION_ID', value: githubInstallationId }
-            { name: 'APP_PRIVATE_KEY', secretRef: 'github-app-private-key' }
+            { name: 'APP_PRIVATE_KEY', secretRef: credSecretName }
+            { name: 'REPO_OWNER', value: githubOwner }
+            { name: 'REPO_NAME', value: githubRepo }
+            { name: 'RUNNER_SCOPE', value: empty(githubRepo) ? 'org' : 'repo' }
+            { name: 'ORG_NAME', value: githubOwner }
+            { name: 'LABELS', value: runnerLabels }
+            { name: 'EPHEMERAL', value: 'true' }
+            { name: 'DISABLE_AUTO_UPDATE', value: 'true' }
+            { name: 'AZURE_CLIENT_ID', value: runnerIdentityClientId }
+          ] : [
+            // PAT mode env vars — ACCESS_TOKEN is the GitHub PAT from KV.
+            { name: 'ACCESS_TOKEN', secretRef: credSecretName }
             { name: 'REPO_OWNER', value: githubOwner }
             { name: 'REPO_NAME', value: githubRepo }
             { name: 'RUNNER_SCOPE', value: empty(githubRepo) ? 'org' : 'repo' }

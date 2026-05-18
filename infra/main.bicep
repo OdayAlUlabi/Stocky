@@ -72,6 +72,9 @@ param githubInstallationId string = ''
 @description('Key Vault secret name that holds the GitHub App PEM private key. Populated out-of-band before first runner execution.')
 param githubAppPrivateKeySecretName string = 'github-app-private-key'
 
+@description('Key Vault secret name for a GitHub PAT (classic, repo+workflow scopes). Set to "github-runner-pat" to enable PAT-based runner registration when App credentials are not available.')
+param githubRunnerPatSecretName string = ''
+
 @description('Self-hosted runner labels (comma-separated) appended to "self-hosted, linux".')
 param githubRunnerLabels string = 'stocky'
 
@@ -80,10 +83,19 @@ param githubRunnerLabels string = 'stocky'
 @maxValue(50)
 param githubRunnerMaxReplicas int = 5
 
+@description('Image tag to deploy. Use "placeholder" (default) for first-time infrastructure bootstrap. Set to a real ACR tag (e.g. "latest") to deploy app images and configure ACR pull credentials.')
+param imageTag string = 'placeholder'
+
+@description('Key Vault secret URI of the App Gateway TLS certificate. When set, enables HTTPS (443) listener and HTTP→HTTPS redirect. Format: https://kv-xxx.vault.azure.net/secrets/cert-name — use the create-tls-cert.ps1 script to generate one.')
+param tlsCertSecretUri string = ''
+
 var resourceToken = uniqueString(subscription().id, resourceGroup().id, environmentName)
 var prefix = 'stocky-${environmentName}'
 var alzConnected = !empty(hubVnetResourceId)
-var canDeployRunner = deployGitHubRunner && !empty(githubAppId) && !empty(githubInstallationId)
+// Deploy runner when GitHub App credentials are set (App mode) or when a
+// PAT KV secret name is configured (PAT mode — set GITHUB_RUNNER_PAT_SECRET=github-runner-pat).
+var hasRunnerCreds = !empty(githubAppId) && !empty(githubInstallationId) || !empty(githubRunnerPatSecretName)
+var canDeployRunner = deployGitHubRunner && hasRunnerCreds
 
 // ---------- Observability ----------
 module obs 'modules/observability.bicep' = {
@@ -190,6 +202,7 @@ module rbac 'modules/rbac.bicep' = {
     cicdPrincipalId: ids.outputs.cicdIdPrincipalId
     migratorPrincipalId: ids.outputs.migratorIdPrincipalId
     runnerPrincipalId: ids.outputs.runnerIdPrincipalId
+    agwPrincipalId: ids.outputs.agwIdPrincipalId
   }
 }
 
@@ -213,7 +226,6 @@ module acaDns 'modules/acaInternalDns.bicep' = {
   params: {
     defaultDomain: env.outputs.envDefaultDomain
     staticIp: env.outputs.envStaticIp
-    vnetId: net.outputs.vnetId
     tags: tags
   }
 }
@@ -234,6 +246,7 @@ module apps 'modules/containerApps.bicep' = {
     entraApiClientId: entraApiClientId
     appiConnectionString: obs.outputs.appiConnectionString
     publicHostname: 'placeholder.local' // CI updates AllowedOrigins to the AppGw FQDN after first deploy
+    imageTag: imageTag
   }
   dependsOn: [ rbac ]
 }
@@ -250,6 +263,7 @@ module jobs 'modules/containerJobs.bicep' = {
     migratorIdentityClientId: ids.outputs.migratorIdClientId
     sqlServerFqdn: sql.outputs.serverFqdn
     sqlDbName: sql.outputs.dbName
+    imageTag: imageTag
   }
   dependsOn: [ rbac ]
 }
@@ -287,6 +301,8 @@ module appgw 'modules/appGateway.bicep' = {
     subnetId: net.outputs.appGwSubnetId
     apiBackendFqdn: apps.outputs.apiFqdn
     webBackendFqdn: apps.outputs.webFqdn
+    agwIdentityId: ids.outputs.agwIdId
+    tlsCertSecretUri: tlsCertSecretUri
   }
 }
 
@@ -297,6 +313,7 @@ output GH_RUNNER_LABELS string = canDeployRunner ? runner!.outputs.runnerLabelsO
 output AZURE_LOCATION string = location
 output AZURE_RESOURCE_GROUP string = resourceGroup().name
 output PUBLIC_IP string = appgw.outputs.appGwPublicIp
+output PUBLIC_FQDN string = appgw.outputs.appGwFqdn
 output API_INTERNAL_FQDN string = apps.outputs.apiFqdn
 output WEB_INTERNAL_FQDN string = apps.outputs.webFqdn
 output API_IDENTITY_CLIENT_ID string = ids.outputs.apiIdClientId
