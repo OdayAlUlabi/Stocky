@@ -19,7 +19,7 @@ env:
   API_APP_NAME:          ${{ vars.API_APP_NAME }}
   WEB_APP_NAME:          ${{ vars.WEB_APP_NAME }}
   MIGRATOR_JOB_NAME:     ${{ vars.MIGRATOR_JOB_NAME }}
-  PUBLIC_IP:             ${{ vars.PUBLIC_IP }}
+  PUBLIC_FQDN:           ${{ vars.PUBLIC_FQDN }}
   IMAGE_TAG:             ${{ github.sha }}
   # Override to '["self-hosted","linux","stocky"]' (JSON array as a single string)
   # via repo Variable RUNS_ON_DEPLOY once the in-VNet runner is online. Defaults
@@ -87,7 +87,7 @@ jobs:
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
-            --set-env-vars "AllowedOrigins__0=https://${PUBLIC_IP}"
+            --set-env-vars "AllowedOrigins__0=https://${PUBLIC_FQDN}"
 
       - name: Update web container app
         run: |
@@ -99,7 +99,7 @@ jobs:
       - name: Smoke test /health
         run: |
           for i in $(seq 1 12); do
-            CODE=$(curl -ks -o /dev/null -w "%{http_code}" "http://${PUBLIC_IP}/health" || true)
+            CODE=$(curl -kLs -o /dev/null -w "%{http_code}" "https://${PUBLIC_FQDN}/health" || true)
             echo "health: $CODE"
             [ "$CODE" = "200" ] && exit 0
             sleep 10
