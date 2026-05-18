@@ -287,6 +287,7 @@ module runner 'modules/githubRunner.bicep' = if (canDeployRunner) {
     githubAppPrivateKeySecretName: githubAppPrivateKeySecretName
     runnerLabels: githubRunnerLabels
     maxReplicas: githubRunnerMaxReplicas
+    bootstrapRunnerImage: false
   }
   dependsOn: [ rbac ]
 }
