@@ -6,7 +6,7 @@
 # Auth mode: PAT  (ACCESS_TOKEN env var → KV secret-ref "github-runner-pat")
 # Registration scope: repo  (REPO_OWNER + REPO_NAME → OdayAlUlabi/Stocky)
 # See infra/modules/githubRunner.bicep for the KEDA event-scaler wiring.
-FROM myoung34/github-runner:ubuntu-22.04
+FROM myoung34/github-runner:ubuntu-jammy
 
 USER root
 
