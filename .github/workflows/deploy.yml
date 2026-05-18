@@ -93,6 +93,7 @@ jobs:
           EXEC_NAME=$(az containerapp job start \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
             --env-vars "PRE_FETCHED_SQL_TOKEN=$SQL_TOKEN" \
             --query name -o tsv)
           echo "Started job execution: $EXEC_NAME"
