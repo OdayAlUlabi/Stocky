@@ -39,8 +39,8 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: ACR login (managed identity)
-        run: az acr login --name "$ACR_NAME"
+      - name: ACR login (admin credentials)
+        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login "$ACR_LOGIN_SERVER" -u "$ACR_NAME" --password-stdin
 
       - name: Build + push runner image
         run: |

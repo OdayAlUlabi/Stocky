@@ -21,11 +21,17 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' = {
   tags: tags
   sku: { name: 'Premium' }
   properties: {
-    adminUserEnabled: false
-    publicNetworkAccess: 'Disabled'
+    // TODO: flip adminUserEnabled=false and publicNetworkAccess=Disabled once the
+    // self-hosted ACA runner is operational (it reaches ACR via private endpoint).
+    // Until then, GitHub-hosted CI runners need public access + admin auth to push images.
+    adminUserEnabled: true
+    publicNetworkAccess: 'Enabled'
     anonymousPullEnabled: false
     zoneRedundancy: 'Disabled'
     networkRuleBypassOptions: 'AzureServices'
+    networkRuleSet: {
+      defaultAction: 'Allow'
+    }
     policies: {
       retentionPolicy: { status: 'enabled', days: 30 }
       trustPolicy: { type: 'Notary', status: 'disabled' }

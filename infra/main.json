@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "8949830300177402851"
+      "templateHash": "7900827506250470593"
     }
   },
   "parameters": {
@@ -1426,7 +1426,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "14465360181899293457"
+              "templateHash": "586182072246102675"
             }
           },
           "parameters": {
@@ -1478,11 +1478,14 @@
                 "name": "Premium"
               },
               "properties": {
-                "adminUserEnabled": false,
-                "publicNetworkAccess": "Disabled",
+                "adminUserEnabled": true,
+                "publicNetworkAccess": "Enabled",
                 "anonymousPullEnabled": false,
                 "zoneRedundancy": "Disabled",
                 "networkRuleBypassOptions": "AzureServices",
+                "networkRuleSet": {
+                  "defaultAction": "Allow"
+                },
                 "policies": {
                   "retentionPolicy": {
                     "status": "enabled",
