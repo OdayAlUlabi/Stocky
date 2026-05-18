@@ -71,30 +71,28 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --server "$ACR_LOGIN_SERVER" \
             --identity "$MIGRATOR_MI"
-          # Update the job template: new image + ensure --migrate-only args are set
-          # (bootstrap provisioning leaves command/args null; we must set them here).
-          # Note: --args=VALUE (= form) is required because --migrate-only starts with --
-          # and argparse would misinterpret it as a CLI flag without the = assignment.
-          az containerapp job update \
-            --name "$MIGRATOR_JOB_NAME" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
-            --args='--migrate-only'
-          # Pre-fetch a SQL Bearer token using the CI identity (OIDC-authenticated CICD UAMI).
-          # Injected into the migrator container via PRE_FETCHED_SQL_TOKEN so it skips the
-          # ACA IMDS proxy entirely (proxy is unreliable for the migrator UAMI).
+          # Update the job template: new image, args, SQL token secret + env var.
+          # --set-env-vars MERGES with existing vars (AZURE_CLIENT_ID, ConnectionStrings__Sql, ...).
+          # Do NOT use `az containerapp job start --env-vars` — that replaces the entire env block.
           #
+          # SQL token: pre-fetched from the CI OIDC identity so the migrator container
+          # skips the ACA IMDS proxy (unreliable for this UAMI).
           # One-time prerequisite — run as SQL Entra admin:
           #   CREATE USER [id-stocky-prod-cicd] FROM EXTERNAL PROVIDER;
           #   ALTER ROLE db_owner ADD MEMBER [id-stocky-prod-cicd];
           SQL_TOKEN=$(az account get-access-token \
             --resource https://database.windows.net/ \
             --query accessToken -o tsv)
-          EXEC_NAME=$(az containerapp job start \
+          az containerapp job update \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
-            --env-vars "PRE_FETCHED_SQL_TOKEN=$SQL_TOKEN" \
+            --args='--migrate-only' \
+            --secrets "pre-fetched-sql-token=$SQL_TOKEN" \
+            --set-env-vars "PRE_FETCHED_SQL_TOKEN=secretref:pre-fetched-sql-token"
+          EXEC_NAME=$(az containerapp job start \
+            --name "$MIGRATOR_JOB_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
             --query name -o tsv)
           echo "Started job execution: $EXEC_NAME"
           # Poll for completion (max ~30 min).
