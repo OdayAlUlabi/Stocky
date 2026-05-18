@@ -1,7 +1,9 @@
+using Azure.Core;
+using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Identity.Web;
 using Stocky.Api.Data;
 using Stocky.Api.Services;
 
@@ -28,60 +30,89 @@ builder.Services.AddDbContext<StockyDbContext>(options =>
 
 if (migrateOnly)
 {
-    using var migrateApp = builder.Build();
-    using var scope = migrateApp.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<StockyDbContext>();
-    if (db.Database.IsRelational())
+    if (!string.IsNullOrWhiteSpace(connectionString))
     {
-        // Retry loop: IMDS / managed identity token service in ACA can return
-        // transient 500s during container warm-up. Retry with backoff.
-        var maxAttempts = 10;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        // Pre-fetch the MI token once via Azure.Identity with its own retry loop.
+        // SqlClient's ActiveDirectoryManagedIdentity auth calls IMDS on every new
+        // SqlConnection; when EnableRetryOnFailure() retries due to error 40613
+        // (SQL Serverless auto-resume), this triggers dozens of rapid IMDS calls
+        // that throttle the ACA IMDS proxy (HTTP 500). Passing AccessToken directly
+        // on the SqlConnection bypasses per-connection IMDS entirely.
+        var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
+        TokenCredential credential = string.IsNullOrEmpty(clientId)
+            ? new DefaultAzureCredential()
+            : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(clientId));
+
+        string? accessToken = null;
+        for (var i = 1; i <= 20; i++)
         {
             try
             {
-                await db.Database.MigrateAsync();
-                Console.WriteLine("Migrations applied.");
+                var t = await credential.GetTokenAsync(
+                    new TokenRequestContext(["https://database.windows.net/.default"]),
+                    CancellationToken.None);
+                accessToken = t.Token;
+                Console.WriteLine($"MI token acquired (expires {t.ExpiresOn:u}).");
                 break;
             }
-            catch (Exception ex) when (attempt < maxAttempts)
+            catch (Exception ex) when (i < 20)
             {
-                Console.WriteLine($"Migration attempt {attempt}/{maxAttempts} failed: {ex.Message}");
-                Console.WriteLine($"Retrying in {attempt * 10} seconds...");
-                await Task.Delay(TimeSpan.FromSeconds(attempt * 10));
-                // Reset connection state for next attempt
-                await db.Database.CloseConnectionAsync();
+                Console.WriteLine($"IMDS attempt {i}/20 failed: {ex.Message}. Retrying in 10s...");
+                await Task.Delay(10_000);
             }
         }
+
+        if (accessToken == null)
+        {
+            Console.Error.WriteLine("Could not acquire MI token after 20 attempts. Aborting.");
+            Environment.Exit(1);
+        }
+
+        // SqlConnection.AccessToken and Authentication= are mutually exclusive;
+        // strip auth keywords from the connection string before setting the token.
+        var csb = new SqlConnectionStringBuilder(connectionString);
+        csb.Authentication = SqlAuthenticationMethod.NotSpecified;
+        csb.Remove("User ID");
+        using var sqlConn = new SqlConnection(csb.ConnectionString) { AccessToken = accessToken };
+
+        var dbOptions = new DbContextOptionsBuilder<StockyDbContext>()
+            .UseSqlServer(sqlConn, sql => sql.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null))
+            .Options;
+        await using var db = new StockyDbContext(dbOptions);
+        await db.Database.MigrateAsync();
+        Console.WriteLine("Migrations applied.");
     }
     else
     {
-        Console.WriteLine("Skipping migrations: non-relational provider.");
+        Console.WriteLine("Skipping migrations: no SQL connection string configured.");
     }
     return;
 }
 
-var entraClientIdAtStartup = builder.Configuration["AzureAd:ClientId"];
-
-// Production hardening: refuse to start outside Development without a configured
-// Entra audience. Prevents accidental deploys where the dev-bypass middleware
-// would otherwise inject a synthetic authenticated principal.
-if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(entraClientIdAtStartup))
-{
-    throw new InvalidOperationException(
-        "AzureAd:ClientId must be configured outside the Development environment. " +
-        "Refusing to start with anonymous-by-default authentication.");
-}
+var googleClientId = builder.Configuration["Google:ClientId"];
 
 var authBuilder = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
-if (!string.IsNullOrWhiteSpace(entraClientIdAtStartup))
+if (!string.IsNullOrWhiteSpace(googleClientId))
 {
-    authBuilder.AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
+    authBuilder.AddJwtBearer(options =>
+    {
+        options.Authority = "https://accounts.google.com";
+        options.Audience = googleClientId;
+        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuers = ["accounts.google.com", "https://accounts.google.com"],
+            ValidateAudience = true,
+            ValidAudience = googleClientId
+        };
+    });
 }
 else
 {
-    // Register a no-op JwtBearer handler so UseAuthentication() can resolve
-    // the default scheme even when Entra isn't configured (dev / tests).
+    // No-op bearer so UseAuthentication() can resolve the default scheme in dev.
     authBuilder.AddJwtBearer(_ => { });
 }
 // M14 #91 — API-key bearer scheme (sk_*) for /v1/public endpoints
@@ -283,10 +314,9 @@ app.UseMiddleware<TelemetryEnricherMiddleware>();
 // even when Entra is not configured.
 app.UseAuthentication();
 
-// Dev-only auth bypass: when Entra isn't configured AND the request didn't already
+// Dev-only auth bypass: when Google OAuth isn't configured AND the request didn't already
 // authenticate via an API key, inject a synthetic user so the UI is browsable.
-var entraClientId = builder.Configuration["AzureAd:ClientId"];
-if (app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(entraClientId))
+if (app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(googleClientId))
 {
     app.Use(async (ctx, next) =>
     {
@@ -312,7 +342,18 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<StockyDbContext>();
     if (db.Database.IsRelational())
     {
-        await db.Database.MigrateAsync();
+        try
+        {
+            await db.Database.MigrateAsync();
+        }
+        catch (Exception ex)
+        {
+            var startupLogger = scope.ServiceProvider
+                .GetRequiredService<ILogger<StockyDbContext>>();
+            startupLogger.LogWarning(ex,
+                "Startup migration check failed — proceeding without migration. " +
+                "Ensure the migrator job has run before serving traffic.");
+        }
     }
 }
 
