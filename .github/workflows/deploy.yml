@@ -55,11 +55,18 @@ jobs:
       - name: Run migrator job and wait
         run: |
           set -euo pipefail
-          # Update the job template to point at the new image, then start.
+          # Resolve the managed identity attached to the migrator job (for ACR pull).
+          MIGRATOR_MI=$(az containerapp job show \
+            --name "$MIGRATOR_JOB_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "identity.userAssignedIdentities | keys(@) | [0]" -o tsv)
+          # Update the job template to point at the new image + configure ACR pull.
           az containerapp job update \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG"
+            --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
+            --registry-server "$ACR_LOGIN_SERVER" \
+            --registry-identity "$MIGRATOR_MI"
           EXEC_NAME=$(az containerapp job start \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -83,18 +90,30 @@ jobs:
 
       - name: Update api container app
         run: |
+          API_MI=$(az containerapp show \
+            --name "$API_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "identity.userAssignedIdentities | keys(@) | [0]" -o tsv)
           az containerapp update \
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
-            --set-env-vars "AllowedOrigins__0=https://${PUBLIC_FQDN}"
+            --set-env-vars "AllowedOrigins__0=https://${PUBLIC_FQDN}" \
+            --registry-server "$ACR_LOGIN_SERVER" \
+            --registry-identity "$API_MI"
 
       - name: Update web container app
         run: |
+          API_MI=$(az containerapp show \
+            --name "$API_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "identity.userAssignedIdentities | keys(@) | [0]" -o tsv)
           az containerapp update \
             --name "$WEB_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG"
+            --image "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG" \
+            --registry-server "$ACR_LOGIN_SERVER" \
+            --registry-identity "$API_MI"
 
       - name: Smoke test /health
         run: |
