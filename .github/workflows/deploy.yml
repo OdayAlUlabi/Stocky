@@ -60,13 +60,17 @@ jobs:
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --query "identity.userAssignedIdentities | keys(@) | [0]" -o tsv)
-          # Update the job template to point at the new image + configure ACR pull.
+          # Configure ACR pull via managed identity (idempotent; needed on first real deploy).
+          az containerapp job registry set \
+            --name "$MIGRATOR_JOB_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --server "$ACR_LOGIN_SERVER" \
+            --identity "$MIGRATOR_MI"
+          # Update the job template to point at the new image.
           az containerapp job update \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
-            --registry-server "$ACR_LOGIN_SERVER" \
-            --registry-identity "$MIGRATOR_MI"
+            --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG"
           EXEC_NAME=$(az containerapp job start \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
