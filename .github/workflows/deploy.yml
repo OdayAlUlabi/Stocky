@@ -126,6 +126,10 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
             --set-env-vars "AllowedOrigins__0=https://${PUBLIC_FQDN}"
+          az containerapp ingress update \
+            --name "$API_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --target-port 8080
 
       - name: Update web container app
         run: |
@@ -142,13 +146,17 @@ jobs:
             --name "$WEB_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG"
+          az containerapp ingress update \
+            --name "$WEB_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --target-port 8080
 
       - name: Smoke test /health
         run: |
           for i in $(seq 1 12); do
-            CODE=$(curl -kLs -o /dev/null -w "%{http_code}" "https://${PUBLIC_FQDN}/health" || true)
-            echo "health: $CODE"
-            [ "$CODE" = "200" ] && exit 0
+            BODY=$(curl -kLs "https://${PUBLIC_FQDN}/health" || true)
+            echo "health response: $BODY"
+            echo "$BODY" | grep -q '"status"' && exit 0
             sleep 10
           done
           echo "Smoke test failed"; exit 1
