@@ -116,26 +116,32 @@ jobs:
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --query "identity.userAssignedIdentities | keys(@) | [0]" -o tsv)
+          az containerapp registry set \
+            --name "$API_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --server "$ACR_LOGIN_SERVER" \
+            --identity "$API_MI"
           az containerapp update \
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
-            --set-env-vars "AllowedOrigins__0=https://${PUBLIC_FQDN}" \
-            --registry-server "$ACR_LOGIN_SERVER" \
-            --registry-identity "$API_MI"
+            --set-env-vars "AllowedOrigins__0=https://${PUBLIC_FQDN}"
 
       - name: Update web container app
         run: |
-          API_MI=$(az containerapp show \
-            --name "$API_APP_NAME" \
+          WEB_MI=$(az containerapp show \
+            --name "$WEB_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --query "identity.userAssignedIdentities | keys(@) | [0]" -o tsv)
+          az containerapp registry set \
+            --name "$WEB_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --server "$ACR_LOGIN_SERVER" \
+            --identity "$WEB_MI"
           az containerapp update \
             --name "$WEB_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG" \
-            --registry-server "$ACR_LOGIN_SERVER" \
-            --registry-identity "$API_MI"
+            --image "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG"
 
       - name: Smoke test /health
         run: |
