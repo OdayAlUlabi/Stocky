@@ -68,11 +68,13 @@ jobs:
             --identity "$MIGRATOR_MI"
           # Update the job template: new image + ensure --migrate-only args are set
           # (bootstrap provisioning leaves command/args null; we must set them here).
+          # Note: --args=VALUE (= form) is required because --migrate-only starts with --
+          # and argparse would misinterpret it as a CLI flag without the = assignment.
           az containerapp job update \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
-            --args "--migrate-only"
+            --args='--migrate-only'
           EXEC_NAME=$(az containerapp job start \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
