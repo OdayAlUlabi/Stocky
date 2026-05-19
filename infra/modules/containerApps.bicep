@@ -21,6 +21,8 @@ param sqlDbName string
 param entraTenantId string
 @description('Entra API client id (audience).')
 param entraApiClientId string
+@description('Google OAuth client id for JWT Bearer token validation.')
+param googleClientId string
 @description('Application Insights connection string.')
 param appiConnectionString string
 @description('App Gateway public FQDN used for CORS AllowedOrigins.')
@@ -79,6 +81,7 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'AzureAd__TenantId', value: entraTenantId }
             { name: 'AzureAd__ClientId', value: entraApiClientId }
             { name: 'AzureAd__Audience', value: 'api://${entraApiClientId}' }
+            { name: 'Google__ClientId', value: googleClientId }
             { name: 'AZURE_CLIENT_ID', value: apiIdentityClientId }
             { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDbName};Authentication=Active Directory Managed Identity;User Id=${apiIdentityClientId};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
             { name: 'AllowedOrigins__0', value: 'https://${publicHostname}' }

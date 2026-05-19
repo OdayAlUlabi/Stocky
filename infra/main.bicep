@@ -20,6 +20,9 @@ param entraTenantId string
 @description('Entra API app registration client id (audience).')
 param entraApiClientId string
 
+@description('Google OAuth client id used for JWT Bearer validation on the API.')
+param googleClientId string
+
 @description('Object id of the Entra group/user that will be SQL Entra admin (break-glass).')
 param sqlEntraAdminObjectId string
 
@@ -236,6 +239,7 @@ module apps 'modules/containerApps.bicep' = {
     sqlDbName: sql.outputs.dbName
     entraTenantId: entraTenantId
     entraApiClientId: entraApiClientId
+    googleClientId: googleClientId
     appiConnectionString: obs.outputs.appiConnectionString
     publicHostname: 'placeholder.local' // CI updates AllowedOrigins to the AppGw FQDN after first deploy
     imageTag: imageTag

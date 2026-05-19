@@ -6,6 +6,7 @@
     "location": { "value": "${AZURE_LOCATION}" },
     "entraTenantId": { "value": "${AZURE_TENANT_ID}" },
     "entraApiClientId": { "value": "${ENTRA_API_CLIENT_ID}" },
+    "googleClientId": { "value": "${GOOGLE_CLIENT_ID}" },
     "sqlEntraAdminObjectId": { "value": "${SQL_ENTRA_ADMIN_OBJECT_ID}" },
     "sqlEntraAdminLogin": { "value": "${SQL_ENTRA_ADMIN_LOGIN}" },
     "githubRepo": { "value": "${GITHUB_REPO=OdayAlUlabi/Stocky}" },
