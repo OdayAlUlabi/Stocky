@@ -20,6 +20,7 @@ env:
   WEB_APP_NAME:          ${{ vars.WEB_APP_NAME }}
   MIGRATOR_JOB_NAME:     ${{ vars.MIGRATOR_JOB_NAME }}
   PUBLIC_FQDN:           ${{ vars.PUBLIC_FQDN }}
+  VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
   IMAGE_TAG:             ${{ github.sha }}
   # Override to '["self-hosted","linux","stocky"]' (JSON array as a single string)
   # via repo Variable RUNS_ON_DEPLOY once the in-VNet runner is online. Defaults
@@ -54,7 +55,9 @@ jobs:
 
       - name: Build + push web image
         run: |
-          docker build -f src/Web/Dockerfile -t "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG" .
+          docker build -f src/Web/Dockerfile \
+            --build-arg VITE_GOOGLE_CLIENT_ID="$VITE_GOOGLE_CLIENT_ID" \
+            -t "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG" .
           docker push "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG"
 
       - name: Run migrator job and wait
