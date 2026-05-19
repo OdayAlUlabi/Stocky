@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   id-token: write
   contents: read
@@ -34,6 +38,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       contains(toJSON(github.event.commits.*.modified), 'src/runner/')
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +67,7 @@ jobs:
   # ── Parallel image builds ─────────────────────────────────────────────────────
   build-api:
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -89,6 +95,7 @@ jobs:
 
   build-web:
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -119,6 +126,7 @@ jobs:
   migrate:
     needs: [build-api]
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 45
     environment: prod
     steps:
       - uses: actions/checkout@v4
@@ -180,6 +188,7 @@ jobs:
   deploy-api:
     needs: [migrate]
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 10
     environment: prod
     steps:
       - uses: actions/checkout@v4
@@ -215,6 +224,7 @@ jobs:
   deploy-web:
     needs: [build-web]
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 10
     environment: prod
     steps:
       - uses: actions/checkout@v4
@@ -251,6 +261,7 @@ jobs:
   smoke-test:
     needs: [deploy-api, deploy-web]
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 5
     steps:
       - name: Smoke test /health
         run: |
