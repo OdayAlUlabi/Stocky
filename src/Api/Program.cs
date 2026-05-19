@@ -4,6 +4,8 @@ using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Data.Common;
 using Stocky.Api.Data;
 using Stocky.Api.Services;
 
@@ -16,11 +18,36 @@ var migrateOnly = args.Contains("--migrate-only", StringComparer.OrdinalIgnoreCa
 var connectionString = builder.Configuration.GetConnectionString("Sql")
     ?? builder.Configuration["Sql:ConnectionString"];
 
-builder.Services.AddDbContext<StockyDbContext>(options =>
+// When a SQL connection string uses ActiveDirectoryManagedIdentity auth, SqlClient calls
+// the ACA IMDS proxy on EVERY new SqlConnection. The ACA IMDS proxy throttles under burst
+// (e.g. EnableRetryOnFailure replaying connections during SQL Serverless cold-start) and
+// returns HTTP 500. Fix: strip the auth keyword from the connection string and inject the
+// token via a DbConnectionInterceptor instead. Azure.Identity caches the token (~55 min)
+// so only the first connection ever hits IMDS.
+if (!string.IsNullOrWhiteSpace(connectionString) && !migrateOnly)
+{
+    var azureClientId = builder.Configuration["AZURE_CLIENT_ID"];
+    TokenCredential sqlCredential = string.IsNullOrWhiteSpace(azureClientId)
+        ? new DefaultAzureCredential()
+        : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(azureClientId));
+    builder.Services.AddSingleton<TokenCredential>(sqlCredential);
+    builder.Services.AddSingleton<SqlTokenInterceptor>();
+}
+
+builder.Services.AddDbContext<StockyDbContext>((sp, options) =>
 {
     if (!string.IsNullOrWhiteSpace(connectionString))
     {
-        options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure());
+        // Strip ActiveDirectoryManagedIdentity auth — token is injected by SqlTokenInterceptor.
+        var csb = new SqlConnectionStringBuilder(connectionString);
+        csb.Authentication = SqlAuthenticationMethod.NotSpecified;
+        csb.Remove("User ID");
+        var connStrWithoutAuth = csb.ConnectionString;
+
+        options.UseSqlServer(connStrWithoutAuth, sql => sql.EnableRetryOnFailure());
+        var interceptor = sp.GetService<SqlTokenInterceptor>();
+        if (interceptor != null)
+            options.AddInterceptors(interceptor);
     }
     else
     {
@@ -377,3 +404,40 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+// Injects an Azure AD access token on every SqlConnection before it is opened,
+// bypassing SqlClient's per-connection IMDS call which can throttle the ACA proxy.
+// Azure.Identity caches the token (~55 min), so only the first call ever hits IMDS.
+internal sealed class SqlTokenInterceptor(TokenCredential credential) : DbConnectionInterceptor
+{
+    private static readonly string[] SqlScope = ["https://database.windows.net/.default"];
+
+    public override async ValueTask<InterceptionResult> ConnectionOpeningAsync(
+        DbConnection connection,
+        ConnectionEventData eventData,
+        InterceptionResult result,
+        CancellationToken cancellationToken = default)
+    {
+        if (connection is SqlConnection sqlConn && string.IsNullOrEmpty(sqlConn.AccessToken))
+        {
+            var token = await credential.GetTokenAsync(
+                new TokenRequestContext(SqlScope), cancellationToken);
+            sqlConn.AccessToken = token.Token;
+        }
+        return result;
+    }
+
+    public override InterceptionResult ConnectionOpening(
+        DbConnection connection,
+        ConnectionEventData eventData,
+        InterceptionResult result)
+    {
+        if (connection is SqlConnection sqlConn && string.IsNullOrEmpty(sqlConn.AccessToken))
+        {
+            var token = credential.GetTokenAsync(
+                new TokenRequestContext(SqlScope), CancellationToken.None).GetAwaiter().GetResult();
+            sqlConn.AccessToken = token.Token;
+        }
+        return result;
+    }
+}
