@@ -131,8 +131,8 @@ resource web 'Microsoft.App/containerApps@2024-10-02-preview' = {
       ingress: {
         external: true
         targetPort: isBootstrap ? 80 : 8080
-        transport: 'auto'
-        allowInsecure: false
+        transport: 'http'
+        allowInsecure: true
       }
       registries: isBootstrap ? [] : [
         {

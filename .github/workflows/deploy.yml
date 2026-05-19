@@ -149,7 +149,9 @@ jobs:
           az containerapp ingress update \
             --name "$WEB_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --target-port 8080
+            --target-port 8080 \
+            --allow-insecure \
+            --transport http
 
       - name: Smoke test /health
         run: |

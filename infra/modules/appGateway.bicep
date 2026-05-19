@@ -135,8 +135,8 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
       {
         name: 'https-web'
         properties: {
-          port: 443
-          protocol: 'Https'
+          port: 80
+          protocol: 'Http'
           pickHostNameFromBackendAddress: true
           requestTimeout: 60
           probe: { id: resourceId('Microsoft.Network/applicationGateways/probes', agwName, 'probe-web') }
@@ -160,7 +160,7 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
       {
         name: 'probe-web'
         properties: {
-          protocol: 'Https'
+          protocol: 'Http'
           path: '/'
           host: webBackendFqdn
           interval: 30
