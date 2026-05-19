@@ -293,6 +293,7 @@ module appgw 'modules/appGateway.bicep' = {
     webBackendFqdn: apps.outputs.webFqdn
     agwIdentityId: ids.outputs.agwIdId
     tlsCertSecretUri: tlsCertSecretUri
+    lawId: obs.outputs.lawId
   }
 }
 

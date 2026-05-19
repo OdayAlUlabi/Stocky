@@ -16,6 +16,8 @@ param webBackendFqdn string
 param agwIdentityId string
 @description('Key Vault secret URI of the TLS certificate. When non-empty, enables the HTTPS (443) listener and redirects HTTP→HTTPS. Format: https://kv-xxx.vault.azure.net/secrets/cert-name (omit version for always-latest).')
 param tlsCertSecretUri string = ''
+@description('Log Analytics workspace resource ID for AGW diagnostic settings (access + firewall logs).')
+param lawId string
 
 resource pip 'Microsoft.Network/publicIPAddresses@2024-01-01' = {
   name: 'pip-${prefix}-agw'
@@ -48,6 +50,27 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
         {
           ruleSetType: 'OWASP'
           ruleSetVersion: '3.2'
+        }
+      ]
+      // JWT Bearer tokens contain base64url characters and sub-strings that
+      // routinely trigger OWASP SQL-injection (942xxx) and XSS (941xxx) rules.
+      // Exclude the Authorization header from those rule groups so that
+      // authenticated API calls (POST/PUT/DELETE) are not incorrectly blocked.
+      exclusions: [
+        {
+          matchVariable: 'RequestHeaderNames'
+          selectorMatchOperator: 'Equals'
+          selector: 'authorization'
+          exclusionManagedRuleSets: [
+            {
+              ruleSetType: 'OWASP'
+              ruleSetVersion: '3.2'
+              ruleGroups: [
+                { ruleGroupName: 'REQUEST-942-APPLICATION-ATTACK-SQLI', rules: [] }
+                { ruleGroupName: 'REQUEST-941-APPLICATION-ATTACK-XSS', rules: [] }
+              ]
+            }
+          ]
         }
       ]
     }
@@ -288,6 +311,18 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
           ]
         }
       }
+    ]
+  }
+}
+
+resource agwDiagSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'agw-diag'
+  scope: appgw
+  properties: {
+    workspaceId: lawId
+    logs: [
+      { category: 'ApplicationGatewayAccessLog',   enabled: true }
+      { category: 'ApplicationGatewayFirewallLog',  enabled: true }
     ]
   }
 }
