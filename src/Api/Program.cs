@@ -1,6 +1,8 @@
 using Azure.Core;
 using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Azure.Security.KeyVault.Secrets;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -27,9 +29,33 @@ var connectionString = builder.Configuration.GetConnectionString("Sql")
 if (!string.IsNullOrWhiteSpace(connectionString) && !migrateOnly)
 {
     var azureClientId = builder.Configuration["AZURE_CLIENT_ID"];
-    TokenCredential sqlCredential = string.IsNullOrWhiteSpace(azureClientId)
-        ? new DefaultAzureCredential()
-        : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(azureClientId));
+    var spClientId = builder.Configuration["Sql:SpClientId"];
+    var spTenantId = builder.Configuration["Sql:TenantId"];
+    var kvUri = builder.Configuration["KeyVaultUri"];
+
+    TokenCredential sqlCredential;
+    if (!string.IsNullOrWhiteSpace(spClientId) && !string.IsNullOrWhiteSpace(spTenantId)
+        && !string.IsNullOrWhiteSpace(kvUri))
+    {
+        // Use managed identity to fetch the SP cert from Key Vault, then authenticate
+        // to SQL as the service principal — eliminates IMDS dependency for SQL tokens.
+        TokenCredential kvCredential = string.IsNullOrWhiteSpace(azureClientId)
+            ? new DefaultAzureCredential()
+            : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(azureClientId));
+        var secretClient = new SecretClient(new Uri(kvUri), kvCredential);
+        var certSecret = await secretClient.GetSecretAsync("stocky-api-sql-cert");
+        var certBytes = Convert.FromBase64String(certSecret.Value.Value);
+        var certificate = X509CertificateLoader.LoadPkcs12(
+            certBytes, (string?)null,
+            X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
+        sqlCredential = new ClientCertificateCredential(spTenantId, spClientId, certificate);
+    }
+    else
+    {
+        sqlCredential = string.IsNullOrWhiteSpace(azureClientId)
+            ? new DefaultAzureCredential()
+            : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(azureClientId));
+    }
     builder.Services.AddSingleton<TokenCredential>(sqlCredential);
     builder.Services.AddSingleton<SqlTokenInterceptor>();
 }
