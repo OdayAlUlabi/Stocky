@@ -3,9 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 import { MantineProvider, createTheme, localStorageColorSchemeManager } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
-import { MsalProvider } from '@azure/msal-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { msalInstance } from './auth/msal';
+import { GoogleAuthProvider } from './auth/googleAuth';
 import { router } from './routes/router';
 
 import '@mantine/core/styles.css';
@@ -26,17 +25,15 @@ const queryClient = new QueryClient({
   }
 });
 
-await msalInstance.initialize();
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MsalProvider instance={msalInstance}>
+    <GoogleAuthProvider>
       <QueryClientProvider client={queryClient}>
         <MantineProvider theme={theme} defaultColorScheme="auto" colorSchemeManager={colorSchemeManager}>
           <Notifications position="top-right" />
           <RouterProvider router={router} />
         </MantineProvider>
       </QueryClientProvider>
-    </MsalProvider>
+    </GoogleAuthProvider>
   </StrictMode>
 );

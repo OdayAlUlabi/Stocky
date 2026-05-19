@@ -10,8 +10,6 @@
 param defaultDomain string
 @description('ACA environment static IP address.')
 param staticIp string
-@description('VNet resource id to link the zone to.')
-param vnetId string
 @description('Tags applied to all resources.')
 param tags object
 
@@ -30,14 +28,7 @@ resource wildcard 'Microsoft.Network/privateDnsZones/A@2024-06-01' = {
   }
 }
 
-resource vnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
-  parent: zone
-  name: 'link-vnet'
-  location: 'global'
-  properties: {
-    registrationEnabled: false
-    virtualNetwork: { id: vnetId }
-  }
-}
+// NOTE: Azure auto-creates the VNet link for internal ACA environments with VNet integration.
+// Do NOT declare a vnetLink here — it will conflict on subsequent provisions.
 
 output zoneId string = zone.id

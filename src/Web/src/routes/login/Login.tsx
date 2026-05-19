@@ -1,14 +1,12 @@
-import { Button, Card, Center, Stack, Text, Title } from '@mantine/core';
-import { IconBrandWindows } from '@tabler/icons-react';
-import { useMsal, useIsAuthenticated } from '@azure/msal-react';
+import { Card, Center, Stack, Text, Title } from '@mantine/core';
+import { GoogleLogin } from '@react-oauth/google';
 import { Navigate } from 'react-router-dom';
-import { loginRequest, isAuthConfigured } from '../../auth/msal';
+import { useGoogleAuth, isAuthConfigured } from '../../auth/googleAuth';
 
 export function Login() {
-  const { instance } = useMsal();
-  const isAuthed = useIsAuthenticated();
+  const { isAuthenticated, setCredential } = useGoogleAuth();
 
-  if (isAuthed) return <Navigate to="/" replace />;
+  if (isAuthenticated) return <Navigate to="/" replace />;
 
   return (
     <Center mih="100vh" p="md">
@@ -16,18 +14,18 @@ export function Login() {
         <Stack align="center" gap="md">
           <Title order={2}>Sign in to Stocky</Title>
           <Text c="dimmed" ta="center">Track positions, trades, and watchlists across your accounts.</Text>
-          <Button
-            fullWidth
-            size="md"
-            leftSection={<IconBrandWindows size={18} />}
-            onClick={() => instance.loginRedirect(loginRequest)}
-            disabled={!isAuthConfigured}
-          >
-            Continue with Microsoft
-          </Button>
-          {!isAuthConfigured && (
+          {isAuthConfigured ? (
+            <GoogleLogin
+              onSuccess={(response) => {
+                if (response.credential) setCredential(response.credential);
+              }}
+              onError={() => {}}
+              useOneTap
+              auto_select
+            />
+          ) : (
             <Text size="xs" c="dimmed" ta="center">
-              Entra is not configured. Set <code>VITE_ENTRA_TENANT_ID</code> and <code>VITE_ENTRA_SPA_CLIENT_ID</code>.
+              Google OAuth is not configured. Set <code>VITE_GOOGLE_CLIENT_ID</code>.
             </Text>
           )}
         </Stack>

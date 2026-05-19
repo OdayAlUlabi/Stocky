@@ -13,8 +13,11 @@ param cicdPrincipalId string
 param migratorPrincipalId string
 @description('Self-hosted GitHub runner identity principal id.')
 param runnerPrincipalId string
+@description('App Gateway identity principal id (reads TLS cert from Key Vault).')
+param agwPrincipalId string
 
 var roleKvSecretsUser   = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+var roleKvCertUser      = 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba' // Key Vault Certificate User
 var roleAcrPull         = '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
 var roleAcrPush         = '8311e382-0749-4cb8-b61a-304f252e45ec' // AcrPush
 var roleContribAcaApps  = 'b24988ac-6180-42a0-ab88-20f7382dd24c' // Contributor (resource-group scope for CI to update apps; tighten later via custom role)
@@ -92,6 +95,28 @@ resource runnerKvRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(prefix, kvId, runnerPrincipalId, 'kvSecretsUser')
   properties: {
     principalId: runnerPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleKvSecretsUser)
+  }
+}
+
+// agw UAMI: Key Vault Certificate User on KV (read TLS certificate for SSL offload)
+resource agwKvCertRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: resourceGroup()
+  name: guid(prefix, kvId, agwPrincipalId, 'kvCertUser')
+  properties: {
+    principalId: agwPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleKvCertUser)
+  }
+}
+
+// agw UAMI: Key Vault Secrets User on KV (needed when TLS cert is stored as a KV secret, not KV certificate)
+resource agwKvSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: resourceGroup()
+  name: guid(prefix, kvId, agwPrincipalId, 'kvSecretsUser')
+  properties: {
+    principalId: agwPrincipalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleKvSecretsUser)
   }

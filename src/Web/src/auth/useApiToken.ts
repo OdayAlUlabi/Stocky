@@ -1,29 +1,29 @@
-import { useMsal } from '@azure/msal-react';
 import { useCallback } from 'react';
-import { apiTokenRequest, isAuthConfigured } from './msal';
-import { InteractionRequiredAuthError } from '@azure/msal-browser';
+import { useGoogleAuth, isAuthConfigured } from './googleAuth';
 
 /**
- * Returns a function that resolves to an access token for the API scope.
- * When auth is not configured (local dev without Entra), returns undefined so
- * the API can be called anonymously while standing up the UI.
+ * Returns a function that resolves to a Google ID token for API Bearer auth.
+ * When auth is not configured (local dev without Google OAuth), returns undefined.
+ * Clears the stored credential and triggers re-auth if the token has expired.
  */
 export function useApiToken() {
-  const { instance, accounts } = useMsal();
+  const { credential, setCredential } = useGoogleAuth();
 
   return useCallback(async (): Promise<string | undefined> => {
     if (!isAuthConfigured) return undefined;
-    const account = accounts[0];
-    if (!account) return undefined;
+    if (!credential) return undefined;
+    // Clear and force re-login if the token has expired.
     try {
-      const result = await instance.acquireTokenSilent({ ...apiTokenRequest, account });
-      return result.accessToken;
-    } catch (err) {
-      if (err instanceof InteractionRequiredAuthError) {
-        await instance.acquireTokenRedirect({ ...apiTokenRequest, account });
+      const base64 = credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64));
+      if (typeof payload.exp === 'number' && Date.now() >= payload.exp * 1000) {
+        setCredential(null);
         return undefined;
       }
-      throw err;
+    } catch {
+      setCredential(null);
+      return undefined;
     }
-  }, [instance, accounts]);
+    return credential;
+  }, [credential, setCredential]);
 }

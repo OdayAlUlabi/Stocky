@@ -14,9 +14,10 @@ param vnetAddressSpace string = '10.40.0.0/20'
 param hubFirewallPrivateIp string = ''
 
 var addressSpace = vnetAddressSpace
-var acaSubnetCidr = cidrSubnet(addressSpace, 23, 0)     // /23 ACA infrastructure subnet (min /23)
-var peSubnetCidr  = cidrSubnet(addressSpace, 27, 16)    // /27 private endpoints (offset 16x /27 = /23 boundary)
+var acaSubnetCidr    = cidrSubnet(addressSpace, 23, 0)  // /23 ACA infrastructure subnet (min /23)
+var peSubnetCidr    = cidrSubnet(addressSpace, 27, 16)  // /27 private endpoints (offset 16x /27 = /23 boundary)
 var appGwSubnetCidr = cidrSubnet(addressSpace, 27, 17)  // /27 App Gateway
+var runnerSubnetCidr = cidrSubnet(addressSpace, 27, 18) // /27 self-hosted runner VM
 
 var forceTunnel = !empty(hubFirewallPrivateIp)
 
@@ -75,6 +76,51 @@ resource nsgPe 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
   }
 }
 
+resource nsgRunner 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
+  name: 'nsg-${prefix}-runner'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: [
+      {
+        name: 'DenyInboundFromInternet'
+        properties: {
+          priority: 4096
+          direction: 'Inbound'
+          access: 'Deny'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: 'Internet'
+          destinationAddressPrefix: '*'
+        }
+      }
+    ]
+  }
+}
+
+// NAT Gateway for runner VM outbound internet (apt, Docker, GitHub API, runner binary).
+// In ALZ mode the 0.0.0.0/0 UDR in routeTable takes precedence, so the NAT GW is
+// bypassed and traffic goes via the hub firewall instead — having both is safe.
+resource natGwPip 'Microsoft.Network/publicIPAddresses@2024-01-01' = {
+  name: 'pip-${prefix}-runner-nat'
+  location: location
+  tags: tags
+  sku: { name: 'Standard' }
+  properties: { publicIPAllocationMethod: 'Static' }
+}
+
+resource natGw 'Microsoft.Network/natGateways@2024-01-01' = {
+  name: 'ngw-${prefix}-runner'
+  location: location
+  tags: tags
+  sku: { name: 'Standard' }
+  properties: {
+    idleTimeoutInMinutes: 4
+    publicIpAddresses: [ { id: natGwPip.id } ]
+  }
+}
+
 resource nsgAppGw 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
   name: 'nsg-${prefix}-agw'
   location: location
@@ -116,6 +162,19 @@ resource nsgAppGw 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '443'
+          sourceAddressPrefix: 'Internet'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'AllowHttpInbound'
+        properties: {
+          priority: 210
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '80'
           sourceAddressPrefix: 'Internet'
           destinationAddressPrefix: '*'
         }
@@ -166,6 +225,16 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
           networkSecurityGroup: { id: nsgAppGw.id }
         }
       }
+      {
+        name: 'snet-runner'
+        properties: {
+          addressPrefix: runnerSubnetCidr
+          networkSecurityGroup: { id: nsgRunner.id }
+          natGateway: { id: natGw.id }
+          privateEndpointNetworkPolicies: 'Disabled'
+          routeTable: forceTunnel ? { id: routeTable.id } : null
+        }
+      }
     ]
   }
 }
@@ -175,3 +244,4 @@ output vnetName string = vnet.name
 output acaSubnetId string = '${vnet.id}/subnets/snet-aca-infra'
 output peSubnetId string = '${vnet.id}/subnets/snet-pe'
 output appGwSubnetId string = '${vnet.id}/subnets/snet-appgw'
+output runnerSubnetId string = '${vnet.id}/subnets/snet-runner'

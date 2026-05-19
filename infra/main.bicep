@@ -54,7 +54,7 @@ param useHubRemoteGateways bool = false
 param centralDnsZonesRgId string = ''
 
 // ---------- Self-hosted GitHub runner parameters ----------
-@description('Deploy an in-VNet self-hosted GitHub Actions runner (KEDA ACA Job). Strongly recommended in ALZ mode so CI can reach private endpoints.')
+@description('Deploy an in-VNet self-hosted GitHub Actions runner (Ubuntu VM). Strongly recommended in ALZ mode so CI can reach private endpoints.')
 param deployGitHubRunner bool = true
 
 @description('GitHub owner (org or user) the runner registers to.')
@@ -63,25 +63,20 @@ param githubOwner string = 'OdayAlUlabi'
 @description('GitHub repository name. Leave empty to register at org scope.')
 param githubRunnerRepo string = 'Stocky'
 
-@description('GitHub App id for runner registration tokens. Required when deployGitHubRunner=true.')
+@description('GitHub App id for runner registration tokens. Leave empty to use PAT mode.')
 param githubAppId string = ''
 
-@description('GitHub App installation id. Required when deployGitHubRunner=true.')
+@description('GitHub App installation id. Leave empty to use PAT mode.')
 param githubInstallationId string = ''
 
 @description('Key Vault secret name that holds the GitHub App PEM private key. Populated out-of-band before first runner execution.')
 param githubAppPrivateKeySecretName string = 'github-app-private-key'
 
-@description('Key Vault secret name for a GitHub PAT (classic, repo+workflow scopes). Set to "github-runner-pat" to enable PAT-based runner registration when App credentials are not available.')
-param githubRunnerPatSecretName string = ''
-
-@description('Self-hosted runner labels (comma-separated) appended to "self-hosted, linux".')
+@description('Self-hosted runner labels (comma-separated) appended to "self-hosted,linux".')
 param githubRunnerLabels string = 'stocky'
 
-@description('Max parallel self-hosted runner replicas.')
-@minValue(1)
-@maxValue(50)
-param githubRunnerMaxReplicas int = 5
+@description('VM SKU for the runner. Standard_B2s is sufficient for most CI workloads.')
+param githubRunnerVmSize string = 'Standard_B2s'
 
 @description('Image tag to deploy. Use "placeholder" (default) for first-time infrastructure bootstrap. Set to a real ACR tag (e.g. "latest") to deploy app images and configure ACR pull credentials.')
 param imageTag string = 'placeholder'
@@ -92,10 +87,7 @@ param tlsCertSecretUri string = ''
 var resourceToken = uniqueString(subscription().id, resourceGroup().id, environmentName)
 var prefix = 'stocky-${environmentName}'
 var alzConnected = !empty(hubVnetResourceId)
-// Deploy runner when GitHub App credentials are set (App mode) or when a
-// PAT KV secret name is configured (PAT mode — set GITHUB_RUNNER_PAT_SECRET=github-runner-pat).
-var hasRunnerCreds = !empty(githubAppId) && !empty(githubInstallationId) || !empty(githubRunnerPatSecretName)
-var canDeployRunner = deployGitHubRunner && hasRunnerCreds
+var canDeployRunner = deployGitHubRunner && (!empty(githubAppId) && !empty(githubInstallationId) || true) // PAT mode uses 'github-runner-pat' KV secret when App creds are empty
 
 // ---------- Observability ----------
 module obs 'modules/observability.bicep' = {
@@ -268,17 +260,15 @@ module jobs 'modules/containerJobs.bicep' = {
   dependsOn: [ rbac ]
 }
 
-// ---------- Self-hosted GitHub Actions runner (in-spoke, ALZ-friendly) ----------
-module runner 'modules/githubRunner.bicep' = if (canDeployRunner) {
+// ---------- Self-hosted GitHub Actions runner (VM, in-spoke, ALZ-friendly) ----------
+module runner 'modules/githubRunnerVM.bicep' = if (canDeployRunner) {
   name: 'runner'
   params: {
     prefix: prefix
     location: location
     tags: tags
-    envId: env.outputs.envId
-    acrLoginServer: acr.outputs.acrLoginServer
+    subnetId: net.outputs.runnerSubnetId
     runnerIdentityId: ids.outputs.runnerIdId
-    runnerIdentityClientId: ids.outputs.runnerIdClientId
     keyVaultUri: kv.outputs.kvUri
     githubOwner: githubOwner
     githubRepo: githubRunnerRepo
@@ -286,8 +276,7 @@ module runner 'modules/githubRunner.bicep' = if (canDeployRunner) {
     githubInstallationId: githubInstallationId
     githubAppPrivateKeySecretName: githubAppPrivateKeySecretName
     runnerLabels: githubRunnerLabels
-    maxReplicas: githubRunnerMaxReplicas
-    bootstrapRunnerImage: false
+    vmSize: githubRunnerVmSize
   }
   dependsOn: [ rbac ]
 }
@@ -309,7 +298,7 @@ module appgw 'modules/appGateway.bicep' = {
 
 // ---------- Outputs ----------
 output GH_RUNNER_DEPLOYED bool = canDeployRunner
-output GH_RUNNER_JOB_NAME string = canDeployRunner ? runner!.outputs.runnerJobName : ''
+output GH_RUNNER_VM_NAME string = canDeployRunner ? runner!.outputs.runnerVmName : ''
 output GH_RUNNER_LABELS string = canDeployRunner ? runner!.outputs.runnerLabelsOut : ''
 output AZURE_LOCATION string = location
 output AZURE_RESOURCE_GROUP string = resourceGroup().name

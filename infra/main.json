@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "7900827506250470593"
+      "templateHash": "17985540217943291516"
     }
   },
   "parameters": {
@@ -115,7 +115,7 @@
       "type": "bool",
       "defaultValue": true,
       "metadata": {
-        "description": "Deploy an in-VNet self-hosted GitHub Actions runner (KEDA ACA Job). Strongly recommended in ALZ mode so CI can reach private endpoints."
+        "description": "Deploy an in-VNet self-hosted GitHub Actions runner (Ubuntu VM). Strongly recommended in ALZ mode so CI can reach private endpoints."
       }
     },
     "githubOwner": {
@@ -136,14 +136,14 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "GitHub App id for runner registration tokens. Required when deployGitHubRunner=true."
+        "description": "GitHub App id for runner registration tokens. Leave empty to use PAT mode."
       }
     },
     "githubInstallationId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "GitHub App installation id. Required when deployGitHubRunner=true."
+        "description": "GitHub App installation id. Leave empty to use PAT mode."
       }
     },
     "githubAppPrivateKeySecretName": {
@@ -153,27 +153,18 @@
         "description": "Key Vault secret name that holds the GitHub App PEM private key. Populated out-of-band before first runner execution."
       }
     },
-    "githubRunnerPatSecretName": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Key Vault secret name for a GitHub PAT (classic, repo+workflow scopes). Set to \"github-runner-pat\" to enable PAT-based runner registration when App credentials are not available."
-      }
-    },
     "githubRunnerLabels": {
       "type": "string",
       "defaultValue": "stocky",
       "metadata": {
-        "description": "Self-hosted runner labels (comma-separated) appended to \"self-hosted, linux\"."
+        "description": "Self-hosted runner labels (comma-separated) appended to \"self-hosted,linux\"."
       }
     },
-    "githubRunnerMaxReplicas": {
-      "type": "int",
-      "defaultValue": 5,
-      "minValue": 1,
-      "maxValue": 50,
+    "githubRunnerVmSize": {
+      "type": "string",
+      "defaultValue": "Standard_B2s",
       "metadata": {
-        "description": "Max parallel self-hosted runner replicas."
+        "description": "VM SKU for the runner. Standard_B2s is sufficient for most CI workloads."
       }
     },
     "imageTag": {
@@ -195,8 +186,7 @@
     "resourceToken": "[uniqueString(subscription().id, resourceGroup().id, parameters('environmentName'))]",
     "prefix": "[format('stocky-{0}', parameters('environmentName'))]",
     "alzConnected": "[not(empty(parameters('hubVnetResourceId')))]",
-    "hasRunnerCreds": "[or(and(not(empty(parameters('githubAppId'))), not(empty(parameters('githubInstallationId')))), not(empty(parameters('githubRunnerPatSecretName'))))]",
-    "canDeployRunner": "[and(parameters('deployGitHubRunner'), variables('hasRunnerCreds'))]"
+    "canDeployRunner": "[and(parameters('deployGitHubRunner'), or(and(not(empty(parameters('githubAppId'))), not(empty(parameters('githubInstallationId')))), true()))]"
   },
   "resources": {
     "obs": {
@@ -334,7 +324,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "3697535919660410040"
+              "templateHash": "6044558644528238792"
             }
           },
           "parameters": {
@@ -376,6 +366,7 @@
             "acaSubnetCidr": "[cidrSubnet(variables('addressSpace'), 23, 0)]",
             "peSubnetCidr": "[cidrSubnet(variables('addressSpace'), 27, 16)]",
             "appGwSubnetCidr": "[cidrSubnet(variables('addressSpace'), 27, 17)]",
+            "runnerSubnetCidr": "[cidrSubnet(variables('addressSpace'), 27, 18)]",
             "forceTunnel": "[not(empty(parameters('hubFirewallPrivateIp')))]"
           },
           "resources": [
@@ -433,6 +424,64 @@
                   }
                 ]
               }
+            },
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2024-01-01",
+              "name": "[format('nsg-{0}-runner', parameters('prefix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "DenyInboundFromInternet",
+                    "properties": {
+                      "priority": 4096,
+                      "direction": "Inbound",
+                      "access": "Deny",
+                      "protocol": "*",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "*",
+                      "sourceAddressPrefix": "Internet",
+                      "destinationAddressPrefix": "*"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/publicIPAddresses",
+              "apiVersion": "2024-01-01",
+              "name": "[format('pip-{0}-runner-nat', parameters('prefix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "properties": {
+                "publicIPAllocationMethod": "Static"
+              }
+            },
+            {
+              "type": "Microsoft.Network/natGateways",
+              "apiVersion": "2024-01-01",
+              "name": "[format('ngw-{0}-runner', parameters('prefix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "properties": {
+                "idleTimeoutInMinutes": 4,
+                "publicIpAddresses": [
+                  {
+                    "id": "[resourceId('Microsoft.Network/publicIPAddresses', format('pip-{0}-runner-nat', parameters('prefix')))]"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', format('pip-{0}-runner-nat', parameters('prefix')))]"
+              ]
             },
             {
               "type": "Microsoft.Network/networkSecurityGroups",
@@ -548,13 +597,29 @@
                         "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}-agw', parameters('prefix')))]"
                       }
                     }
+                  },
+                  {
+                    "name": "snet-runner",
+                    "properties": {
+                      "addressPrefix": "[variables('runnerSubnetCidr')]",
+                      "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}-runner', parameters('prefix')))]"
+                      },
+                      "natGateway": {
+                        "id": "[resourceId('Microsoft.Network/natGateways', format('ngw-{0}-runner', parameters('prefix')))]"
+                      },
+                      "privateEndpointNetworkPolicies": "Disabled",
+                      "routeTable": "[if(variables('forceTunnel'), createObject('id', resourceId('Microsoft.Network/routeTables', format('rt-{0}-egress', parameters('prefix')))), null())]"
+                    }
                   }
                 ]
               },
               "dependsOn": [
+                "[resourceId('Microsoft.Network/natGateways', format('ngw-{0}-runner', parameters('prefix')))]",
                 "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}-aca', parameters('prefix')))]",
                 "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}-agw', parameters('prefix')))]",
                 "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}-pe', parameters('prefix')))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups', format('nsg-{0}-runner', parameters('prefix')))]",
                 "[resourceId('Microsoft.Network/routeTables', format('rt-{0}-egress', parameters('prefix')))]"
               ]
             }
@@ -579,6 +644,10 @@
             "appGwSubnetId": {
               "type": "string",
               "value": "[format('{0}/subnets/snet-appgw', resourceId('Microsoft.Network/virtualNetworks', format('vnet-{0}', parameters('prefix'))))]"
+            },
+            "runnerSubnetId": {
+              "type": "string",
+              "value": "[format('{0}/subnets/snet-runner', resourceId('Microsoft.Network/virtualNetworks', format('vnet-{0}', parameters('prefix'))))]"
             }
           }
         }
@@ -2527,17 +2596,11 @@
           "tags": {
             "value": "[parameters('tags')]"
           },
-          "envId": {
-            "value": "[reference('env').outputs.envId.value]"
-          },
-          "acrLoginServer": {
-            "value": "[reference('acr').outputs.acrLoginServer.value]"
+          "subnetId": {
+            "value": "[reference('net').outputs.runnerSubnetId.value]"
           },
           "runnerIdentityId": {
             "value": "[reference('ids').outputs.runnerIdId.value]"
-          },
-          "runnerIdentityClientId": {
-            "value": "[reference('ids').outputs.runnerIdClientId.value]"
           },
           "keyVaultUri": {
             "value": "[reference('kv').outputs.kvUri.value]"
@@ -2560,11 +2623,8 @@
           "runnerLabels": {
             "value": "[parameters('githubRunnerLabels')]"
           },
-          "maxReplicas": {
-            "value": "[parameters('githubRunnerMaxReplicas')]"
-          },
-          "bootstrapRunnerImage": {
-            "value": false
+          "vmSize": {
+            "value": "[parameters('githubRunnerVmSize')]"
           }
         },
         "template": {
@@ -2574,7 +2634,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "1037944428573453051"
+              "templateHash": "14102007304257850113"
             }
           },
           "parameters": {
@@ -2596,16 +2656,10 @@
                 "description": "Tags."
               }
             },
-            "envId": {
+            "subnetId": {
               "type": "string",
               "metadata": {
-                "description": "ACA managed environment id."
-              }
-            },
-            "acrLoginServer": {
-              "type": "string",
-              "metadata": {
-                "description": "ACR login server (the runner image is pulled from here)."
+                "description": "Subnet resource id for the runner NIC (snet-runner)."
               }
             },
             "runnerIdentityId": {
@@ -2614,93 +2668,122 @@
                 "description": "Runner UAMI resource id."
               }
             },
-            "runnerIdentityClientId": {
-              "type": "string",
-              "metadata": {
-                "description": "Runner UAMI client id."
-              }
-            },
             "keyVaultUri": {
               "type": "string",
               "metadata": {
-                "description": "Key Vault URI (https://kv-...vault.azure.net)."
+                "description": "Key Vault base URI, e.g. https://kv-xxx.vault.azure.net/."
               }
             },
             "githubOwner": {
               "type": "string",
               "metadata": {
-                "description": "GitHub owner/repo or owner (org) the runner registers to."
+                "description": "GitHub owner (org or user) the runner registers to."
               }
             },
             "githubRepo": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "GitHub repository name (leave empty to register at org scope)."
+                "description": "GitHub repository name. Leave empty for org-scope runner."
               }
             },
             "githubAppId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "GitHub App id used to obtain installation tokens. Leave empty to use PAT mode."
+                "description": "GitHub App id for runner registration tokens. Leave empty to use PAT mode."
               }
             },
             "githubInstallationId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "GitHub App installation id for the target org/repo. Leave empty to use PAT mode."
+                "description": "GitHub App installation id. Leave empty to use PAT mode."
               }
             },
             "githubAppPrivateKeySecretName": {
               "type": "string",
               "defaultValue": "github-app-private-key",
               "metadata": {
-                "description": "Key Vault secret name that holds the GitHub App PEM private key."
-              }
-            },
-            "runnerImage": {
-              "type": "string",
-              "defaultValue": "[format('{0}/stocky-gh-runner:latest', parameters('acrLoginServer'))]",
-              "metadata": {
-                "description": "Runner image (default: ephemeral runner image to be pushed to ACR)."
-              }
-            },
-            "bootstrapRunnerImage": {
-              "type": "bool",
-              "defaultValue": true,
-              "metadata": {
-                "description": "When true, swaps the runner image for a public MCR sample so first-provision succeeds before the real runner image has been pushed to ACR. Set to false once the runner image has been built and pushed."
+                "description": "Key Vault secret name holding the GitHub App PEM private key."
               }
             },
             "runnerLabels": {
               "type": "string",
               "defaultValue": "stocky",
               "metadata": {
-                "description": "Runner labels appended to \"self-hosted, linux\". Jobs target these via runs-on."
+                "description": "Runner labels (comma-separated) appended to \"self-hosted,linux\"."
               }
             },
-            "maxReplicas": {
-              "type": "int",
-              "defaultValue": 5,
-              "minValue": 1,
-              "maxValue": 50,
+            "vmSize": {
+              "type": "string",
+              "defaultValue": "Standard_B2s",
               "metadata": {
-                "description": "Max parallel runner replicas."
+                "description": "VM SKU. Standard_B2s (2 vCPU / 4 GiB) is suitable for most CI workloads."
+              }
+            },
+            "osDiskSizeGiB": {
+              "type": "int",
+              "defaultValue": 128,
+              "metadata": {
+                "description": "OS disk size in GiB. 128 GiB covers the runner binary, Docker images, and build cache."
+              }
+            },
+            "adminUsername": {
+              "type": "string",
+              "defaultValue": "azureuser",
+              "metadata": {
+                "description": "VM admin username. Only used for emergency Bastion access."
+              }
+            },
+            "adminPassword": {
+              "type": "securestring",
+              "defaultValue": "[newGuid()]",
+              "minLength": 12,
+              "metadata": {
+                "description": "VM admin password. Randomly generated when not supplied; the VM has no internet-facing SSH port."
+              }
+            },
+            "forceUpdateTag": {
+              "type": "string",
+              "defaultValue": "[utcNow()]",
+              "metadata": {
+                "description": "Forces the CustomScript extension to re-run on every deployment. Leave as default (utcNow) to always apply the latest setup."
               }
             }
           },
           "variables": {
-            "effectiveRunnerImage": "[if(parameters('bootstrapRunnerImage'), 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest', parameters('runnerImage'))]",
             "useAppAuth": "[and(not(empty(parameters('githubAppId'))), not(empty(parameters('githubInstallationId'))))]",
-            "credSecretName": "[if(variables('useAppAuth'), parameters('githubAppPrivateKeySecretName'), 'github-runner-pat')]"
+            "useAppAuthStr": "[if(variables('useAppAuth'), 'true', 'false')]",
+            "credSecretName": "[if(variables('useAppAuth'), parameters('githubAppPrivateKeySecretName'), 'github-runner-pat')]",
+            "setupScript": "#!/bin/bash\n# Self-hosted GitHub Actions runner setup script for Azure VM.\n#\n# Reads all configuration from environment variables set by the\n# Bicep CustomScript extension commandToExecute before running this script:\n#\n#   GH_OWNER     - GitHub organisation / user name\n#   GH_REPO      - repository name (empty = org-level runner)\n#   GH_LABELS    - comma-separated extra labels (appended to \"self-hosted,linux\")\n#   KV_URI       - Key Vault base URI, e.g. https://kv-xxx.vault.azure.net/\n#   USE_APP_AUTH - \"true\" for GitHub App token, anything else for PAT\n#   APP_ID       - GitHub App id (required when USE_APP_AUTH=true)\n#   INSTALL_ID   - GitHub App installation id (required when USE_APP_AUTH=true)\n#   CRED_NAME    - Key Vault secret name that holds the credential\n#\n# The script:\n#   1. Installs prerequisites (curl, jq, openssl, libicu-dev, git, Docker, Azure CLI)\n#   2. Fetches the runner credential from Key Vault via managed identity (IMDS)\n#   3. Obtains a GitHub runner registration token\n#   4. Downloads, configures and starts the runner as a systemd service\n#\n# Re-runs are safe: 'config.sh --replace' re-registers without manual cleanup.\n\nset -euo pipefail\nexport DEBIAN_FRONTEND=noninteractive\n\nRUNNER_VERSION=\"2.323.0\"\nRUNNER_HOME=\"/opt/github-runner\"\nRUNNER_USER=\"ghrunner\"\n\nlog() { echo \"[runner-setup] $(date -u '+%H:%M:%S') $*\"; }\n\n# ---------------------------------------------------------------------------\n# 1. Prerequisites\n# ---------------------------------------------------------------------------\nlog \"Updating apt and installing prerequisites...\"\napt-get update -qq\napt-get install -y --no-install-recommends \\\n  curl jq openssl libicu-dev git ca-certificates gnupg lsb-release 2>/dev/null\n\n# Docker\nif ! command -v docker &>/dev/null; then\n  log \"Installing Docker...\"\n  install -m 0755 -d /etc/apt/keyrings\n  curl -fsSL https://download.docker.com/linux/ubuntu/gpg \\\n    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg\n  chmod a+r /etc/apt/keyrings/docker.gpg\n  echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \\\n    https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\" \\\n    > /etc/apt/sources.list.d/docker.list\n  apt-get update -qq\n  apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io\n  systemctl enable docker\n  systemctl start docker\nfi\n\n# Azure CLI\nif ! command -v az &>/dev/null; then\n  log \"Installing Azure CLI...\"\n  curl -sL https://aka.ms/InstallAzureCLIDeb | bash\nfi\n\n# ---------------------------------------------------------------------------\n# 2. Fetch credential from Key Vault via managed identity\n# ---------------------------------------------------------------------------\nlog \"Acquiring managed identity token for Key Vault...\"\nMI_TOKEN=$(curl -sf \\\n  -H \"Metadata: true\" \\\n  \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net\" \\\n  | jq -r '.access_token')\n\nlog \"Fetching credential '${CRED_NAME}' from Key Vault...\"\nCRED=$(curl -sf \\\n  -H \"Authorization: Bearer ${MI_TOKEN}\" \\\n  \"${KV_URI}secrets/${CRED_NAME}?api-version=7.4\" \\\n  | jq -r '.value')\n\n# ---------------------------------------------------------------------------\n# 3. Get GitHub runner registration token\n# ---------------------------------------------------------------------------\nif [ \"${USE_APP_AUTH}\" = \"true\" ]; then\n  log \"Generating GitHub App JWT (app id=${APP_ID})...\"\n  NOW=$(date +%s)\n  EXP=$((NOW + 540))   # 9-minute window; GitHub max is 10 min\n\n  HEADER=$(printf '{\"alg\":\"RS256\",\"typ\":\"JWT\"}' \\\n    | openssl base64 -A | tr '+/' '-_' | tr -d '=')\n  PAYLOAD=$(printf '{\"iat\":%s,\"exp\":%s,\"iss\":\"%s\"}' \"${NOW}\" \"${EXP}\" \"${APP_ID}\" \\\n    | openssl base64 -A | tr '+/' '-_' | tr -d '=')\n\n  KEY_FILE=$(mktemp)\n  chmod 600 \"${KEY_FILE}\"\n  printf '%s' \"${CRED}\" > \"${KEY_FILE}\"\n  SIG=$(printf '%s.%s' \"${HEADER}\" \"${PAYLOAD}\" \\\n    | openssl dgst -sha256 -sign \"${KEY_FILE}\" \\\n    | openssl base64 -A | tr '+/' '-_' | tr -d '=')\n  rm -f \"${KEY_FILE}\"\n\n  JWT=\"${HEADER}.${PAYLOAD}.${SIG}\"\n\n  log \"Exchanging JWT for installation token (installation=${INSTALL_ID})...\"\n  INSTALL_TOKEN=$(curl -sf \\\n    -X POST \\\n    -H \"Authorization: Bearer ${JWT}\" \\\n    -H \"Accept: application/vnd.github+json\" \\\n    \"https://api.github.com/app/installations/${INSTALL_ID}/access_tokens\" \\\n    | jq -r '.token')\n\n  AUTH_HEADER=\"token ${INSTALL_TOKEN}\"\nelse\n  log \"Using PAT auth...\"\n  AUTH_HEADER=\"token ${CRED}\"\nfi\n\nif [ -z \"${GH_REPO:-}\" ]; then\n  log \"Getting org-scope registration token...\"\n  REG_TOKEN=$(curl -sf -X POST \\\n    -H \"Authorization: ${AUTH_HEADER}\" \\\n    -H \"Accept: application/vnd.github+json\" \\\n    \"https://api.github.com/orgs/${GH_OWNER}/actions/runners/registration-token\" \\\n    | jq -r '.token')\n  RUNNER_URL=\"https://github.com/${GH_OWNER}\"\nelse\n  log \"Getting repo-scope registration token...\"\n  REG_TOKEN=$(curl -sf -X POST \\\n    -H \"Authorization: ${AUTH_HEADER}\" \\\n    -H \"Accept: application/vnd.github+json\" \\\n    \"https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/runners/registration-token\" \\\n    | jq -r '.token')\n  RUNNER_URL=\"https://github.com/${GH_OWNER}/${GH_REPO}\"\nfi\n\n# ---------------------------------------------------------------------------\n# 4. Download and configure the runner\n# ---------------------------------------------------------------------------\nid \"${RUNNER_USER}\" &>/dev/null || useradd -m -s /bin/bash \"${RUNNER_USER}\"\n# Add runner user to docker group so workflows can run Docker commands\nusermod -aG docker \"${RUNNER_USER}\" 2>/dev/null || true\n\nmkdir -p \"${RUNNER_HOME}\"\ncd \"${RUNNER_HOME}\"\n\nif [ ! -f ./config.sh ]; then\n  log \"Downloading runner v${RUNNER_VERSION}...\"\n  curl -Lo actions-runner.tar.gz \\\n    \"https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz\"\n  tar xzf actions-runner.tar.gz\n  rm -f actions-runner.tar.gz\nfi\n\nchown -R \"${RUNNER_USER}:${RUNNER_USER}\" \"${RUNNER_HOME}\"\n\nRUNNER_NAME=\"vm-$(hostname | tr '[:upper:]' '[:lower:]')\"\nlog \"Configuring runner '${RUNNER_NAME}' -> ${RUNNER_URL}...\"\nsudo -u \"${RUNNER_USER}\" ./config.sh \\\n  --url \"${RUNNER_URL}\" \\\n  --token \"${REG_TOKEN}\" \\\n  --name \"${RUNNER_NAME}\" \\\n  --labels \"self-hosted,linux,${GH_LABELS}\" \\\n  --work \"_work\" \\\n  --unattended \\\n  --replace\n\n# ---------------------------------------------------------------------------\n# 5. Install as systemd service and start\n# ---------------------------------------------------------------------------\nlog \"Installing and starting runner service...\"\n./svc.sh install \"${RUNNER_USER}\"\n./svc.sh start\n\nlog \"Runner '${RUNNER_NAME}' is active. Labels: self-hosted,linux,${GH_LABELS}\"\n",
+            "commandToExecute": "[format('export GH_OWNER=\"{0}\" GH_REPO=\"{1}\" GH_LABELS=\"{2}\" KV_URI=\"{3}\" USE_APP_AUTH=\"{4}\" APP_ID=\"{5}\" INSTALL_ID=\"{6}\" CRED_NAME=\"{7}\" && echo \"{8}\" | base64 -d | bash', parameters('githubOwner'), parameters('githubRepo'), parameters('runnerLabels'), parameters('keyVaultUri'), variables('useAppAuthStr'), parameters('githubAppId'), parameters('githubInstallationId'), variables('credSecretName'), base64(variables('setupScript')))]"
           },
           "resources": [
             {
-              "type": "Microsoft.App/jobs",
-              "apiVersion": "2024-10-02-preview",
-              "name": "[format('caj-{0}-gh-runner', parameters('prefix'))]",
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2024-01-01",
+              "name": "[format('nic-{0}-runner', parameters('prefix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig-runner",
+                    "properties": {
+                      "subnet": {
+                        "id": "[parameters('subnetId')]"
+                      },
+                      "privateIPAllocationMethod": "Dynamic"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2024-03-01",
+              "name": "[format('vm-{0}-runner', parameters('prefix'))]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "identity": {
@@ -2710,75 +2793,103 @@
                 }
               },
               "properties": {
-                "environmentId": "[parameters('envId')]",
-                "configuration": {
-                  "triggerType": "Event",
-                  "replicaTimeout": 3600,
-                  "replicaRetryLimit": 1,
-                  "eventTriggerConfig": {
-                    "parallelism": "[parameters('maxReplicas')]",
-                    "replicaCompletionCount": 1,
-                    "scale": {
-                      "minExecutions": 0,
-                      "maxExecutions": "[parameters('maxReplicas')]",
-                      "pollingInterval": 30,
-                      "rules": [
-                        {
-                          "name": "github-runner",
-                          "type": "github-runner",
-                          "metadata": "[if(variables('useAppAuth'), createObject('owner', parameters('githubOwner'), 'runnerScope', if(empty(parameters('githubRepo')), 'org', 'repo'), 'repos', if(empty(parameters('githubRepo')), '', parameters('githubRepo')), 'labels', parameters('runnerLabels'), 'applicationID', parameters('githubAppId'), 'installationID', parameters('githubInstallationId'), 'targetWorkflowQueueLength', '1'), createObject('owner', parameters('githubOwner'), 'runnerScope', if(empty(parameters('githubRepo')), 'org', 'repo'), 'repos', if(empty(parameters('githubRepo')), '', parameters('githubRepo')), 'labels', parameters('runnerLabels'), 'targetWorkflowQueueLength', '1'))]",
-                          "auth": [
-                            {
-                              "secretRef": "[variables('credSecretName')]",
-                              "triggerParameter": "[if(variables('useAppAuth'), 'appKey', 'personalAccessToken')]"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  },
-                  "secrets": [
-                    {
-                      "name": "[variables('credSecretName')]",
-                      "keyVaultUrl": "[format('{0}secrets/{1}', parameters('keyVaultUri'), variables('credSecretName'))]",
-                      "identity": "[parameters('runnerIdentityId')]"
-                    }
-                  ],
-                  "registries": "[if(parameters('bootstrapRunnerImage'), createArray(), createArray(createObject('server', parameters('acrLoginServer'), 'identity', parameters('runnerIdentityId'))))]"
+                "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
                 },
-                "template": {
-                  "containers": [
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "Canonical",
+                    "offer": "0001-com-ubuntu-server-jammy",
+                    "sku": "22_04-lts-gen2",
+                    "version": "latest"
+                  },
+                  "osDisk": {
+                    "createOption": "FromImage",
+                    "managedDisk": {
+                      "storageAccountType": "Premium_LRS"
+                    },
+                    "diskSizeGB": "[parameters('osDiskSizeGiB')]",
+                    "deleteOption": "Delete"
+                  }
+                },
+                "osProfile": {
+                  "computerName": "gh-runner",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "adminPassword": "[parameters('adminPassword')]",
+                  "linuxConfiguration": {
+                    "disablePasswordAuthentication": false,
+                    "provisionVMAgent": true,
+                    "patchSettings": {
+                      "patchMode": "AutomaticByPlatform",
+                      "assessmentMode": "AutomaticByPlatform"
+                    }
+                  }
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
                     {
-                      "name": "runner",
-                      "image": "[variables('effectiveRunnerImage')]",
-                      "resources": {
-                        "cpu": "[json('1.0')]",
-                        "memory": "2Gi"
-                      },
-                      "env": "[if(variables('useAppAuth'), createArray(createObject('name', 'ACCESS_TOKEN_SECRET_REF', 'value', variables('credSecretName')), createObject('name', 'APP_ID', 'value', parameters('githubAppId')), createObject('name', 'APP_INSTALLATION_ID', 'value', parameters('githubInstallationId')), createObject('name', 'APP_PRIVATE_KEY', 'secretRef', variables('credSecretName')), createObject('name', 'REPO_OWNER', 'value', parameters('githubOwner')), createObject('name', 'REPO_NAME', 'value', parameters('githubRepo')), createObject('name', 'RUNNER_SCOPE', 'value', if(empty(parameters('githubRepo')), 'org', 'repo')), createObject('name', 'ORG_NAME', 'value', parameters('githubOwner')), createObject('name', 'LABELS', 'value', parameters('runnerLabels')), createObject('name', 'EPHEMERAL', 'value', 'true'), createObject('name', 'DISABLE_AUTO_UPDATE', 'value', 'true'), createObject('name', 'AZURE_CLIENT_ID', 'value', parameters('runnerIdentityClientId'))), createArray(createObject('name', 'ACCESS_TOKEN', 'secretRef', variables('credSecretName')), createObject('name', 'REPO_OWNER', 'value', parameters('githubOwner')), createObject('name', 'REPO_NAME', 'value', parameters('githubRepo')), createObject('name', 'RUNNER_SCOPE', 'value', if(empty(parameters('githubRepo')), 'org', 'repo')), createObject('name', 'ORG_NAME', 'value', parameters('githubOwner')), createObject('name', 'LABELS', 'value', parameters('runnerLabels')), createObject('name', 'EPHEMERAL', 'value', 'true'), createObject('name', 'DISABLE_AUTO_UPDATE', 'value', 'true'), createObject('name', 'AZURE_CLIENT_ID', 'value', parameters('runnerIdentityClientId'))))]"
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', format('nic-{0}-runner', parameters('prefix')))]",
+                      "properties": {
+                        "deleteOption": "Delete"
+                      }
                     }
                   ]
+                },
+                "diagnosticsProfile": {
+                  "bootDiagnostics": {
+                    "enabled": true
+                  }
                 }
-              }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', format('nic-{0}-runner', parameters('prefix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Compute/virtualMachines/extensions",
+              "apiVersion": "2024-03-01",
+              "name": "[format('{0}/{1}', format('vm-{0}-runner', parameters('prefix')), 'runner-setup')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "publisher": "Microsoft.Azure.Extensions",
+                "type": "CustomScript",
+                "typeHandlerVersion": "2.1",
+                "autoUpgradeMinorVersion": true,
+                "forceUpdateTag": "[parameters('forceUpdateTag')]",
+                "protectedSettings": {
+                  "commandToExecute": "[variables('commandToExecute')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', format('vm-{0}-runner', parameters('prefix')))]"
+              ]
             }
           ],
           "outputs": {
-            "runnerJobName": {
+            "runnerVmName": {
               "type": "string",
-              "value": "[format('caj-{0}-gh-runner', parameters('prefix'))]"
+              "value": "[format('vm-{0}-runner', parameters('prefix'))]"
+            },
+            "runnerVmId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Compute/virtualMachines', format('vm-{0}-runner', parameters('prefix')))]"
+            },
+            "runnerPrivateIp": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', format('nic-{0}-runner', parameters('prefix'))), '2024-01-01').ipConfigurations[0].properties.privateIPAddress]"
             },
             "runnerLabelsOut": {
               "type": "string",
-              "value": "[parameters('runnerLabels')]"
+              "value": "[format('self-hosted,linux,{0}', parameters('runnerLabels'))]"
             }
           }
         }
       },
       "dependsOn": [
-        "acr",
-        "env",
         "ids",
         "kv",
+        "net",
         "rbac"
       ]
     },
@@ -3169,9 +3280,9 @@
       "type": "bool",
       "value": "[variables('canDeployRunner')]"
     },
-    "GH_RUNNER_JOB_NAME": {
+    "GH_RUNNER_VM_NAME": {
       "type": "string",
-      "value": "[if(variables('canDeployRunner'), reference('runner').outputs.runnerJobName.value, '')]"
+      "value": "[if(variables('canDeployRunner'), reference('runner').outputs.runnerVmName.value, '')]"
     },
     "GH_RUNNER_LABELS": {
       "type": "string",

@@ -24,8 +24,7 @@ import {
   IconMoon
 } from '@tabler/icons-react';
 import { NavLink as RouterNavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { useMsal, useIsAuthenticated } from '@azure/msal-react';
-import { isAuthConfigured } from '../../auth/msal';
+import { useGoogleAuth, isAuthConfigured } from '../../auth/googleAuth';
 import { usePortfolios, useSettings, useUpdateSettings } from '../../api/hooks';
 
 interface NavItem {
@@ -67,11 +66,9 @@ const portfolioItems: { to: (id: string) => string; label: string; icon: typeof 
 
 export function Shell() {
   const [opened, { toggle }] = useDisclosure();
-  const { instance, accounts } = useMsal();
-  const isAuthed = useIsAuthenticated();
+  const { user, isAuthenticated: isAuthed, signOut } = useGoogleAuth();
   const navigate = useNavigate();
   const params = useParams();
-  const account = accounts[0];
   const { data: portfolios } = usePortfolios();
   const { setColorScheme } = useMantineColorScheme();
   const computedScheme = useComputedColorScheme('light', { getInitialValueInEffect: true });
@@ -127,17 +124,22 @@ export function Shell() {
                       {isDark ? <IconSun size={16} /> : <IconMoon size={16} />}
                     </ActionIcon>
                   </Tooltip>
-                  <Avatar radius="xl" size="sm" color="blue">
-                    {(account?.name ?? account?.username ?? 'U').slice(0, 1).toUpperCase()}
+                  <Avatar
+                    radius="xl"
+                    size="sm"
+                    src={user?.picture}
+                    color="blue"
+                  >
+                    {(user?.name ?? 'U').slice(0, 1).toUpperCase()}
                   </Avatar>
-                  <Text size="sm" visibleFrom="sm">{account?.name ?? account?.username ?? 'Guest'}</Text>
+                  <Text size="sm" visibleFrom="sm">{user?.name ?? user?.email ?? 'Guest'}</Text>
                 </Group>
               </UnstyledButton>
             </Menu.Target>
             <Menu.Dropdown>
               <Menu.Item onClick={() => navigate('/settings')}>Settings</Menu.Item>
               {isAuthConfigured && isAuthed ? (
-                <Menu.Item leftSection={<IconLogout size={16} />} onClick={() => instance.logoutRedirect()}>Sign out</Menu.Item>
+                <Menu.Item leftSection={<IconLogout size={16} />} onClick={signOut}>Sign out</Menu.Item>
               ) : (
                 <Menu.Item onClick={() => navigate('/login')}>Sign in</Menu.Item>
               )}

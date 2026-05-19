@@ -40,6 +40,13 @@ resource runnerId 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' 
   tags: tags
 }
 
+// App Gateway identity: pulls TLS certificate from Key Vault for HTTPS SSL offload.
+resource agwId 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-${prefix}-agw'
+  location: location
+  tags: tags
+}
+
 // Federated credentials: trust GitHub Actions OIDC issuer.
 // @batchSize(1) serializes FIC creation — Azure's UAMI service rejects
 // concurrent FIC writes for the same managed identity (ConcurrentFederatedIdentityCredentialsWritesForSingleManagedIdentity).
@@ -69,5 +76,9 @@ output migratorIdClientId string = migratorId.properties.clientId
 output runnerIdId string = runnerId.id
 output runnerIdPrincipalId string = runnerId.properties.principalId
 output runnerIdClientId string = runnerId.properties.clientId
+
+output agwIdId string = agwId.id
+output agwIdPrincipalId string = agwId.properties.principalId
+output agwIdClientId string = agwId.properties.clientId
 
 output githubRepoOut string = githubRepo

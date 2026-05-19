@@ -1,0 +1,83 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.8.12551",
+      "templateHash": "8715048966834476148"
+    }
+  },
+  "parameters": {
+    "defaultDomain": {
+      "type": "string",
+      "metadata": {
+        "description": "ACA environment defaultDomain (e.g. abc123.swedencentral.azurecontainerapps.io)."
+      }
+    },
+    "staticIp": {
+      "type": "string",
+      "metadata": {
+        "description": "ACA environment static IP address."
+      }
+    },
+    "vnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "VNet resource id to link the zone to."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "metadata": {
+        "description": "Tags applied to all resources."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2024-06-01",
+      "name": "[parameters('defaultDomain')]",
+      "location": "global",
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/A",
+      "apiVersion": "2024-06-01",
+      "name": "[format('{0}/{1}', parameters('defaultDomain'), '*')]",
+      "properties": {
+        "ttl": 3600,
+        "aRecords": [
+          {
+            "ipv4Address": "[parameters('staticIp')]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('defaultDomain'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2024-06-01",
+      "name": "[format('{0}/{1}', parameters('defaultDomain'), 'link-vnet')]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[parameters('vnetId')]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('defaultDomain'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "zoneId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/privateDnsZones', parameters('defaultDomain'))]"
+    }
+  }
+}

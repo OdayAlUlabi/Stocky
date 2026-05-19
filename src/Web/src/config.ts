@@ -1,5 +1,8 @@
 export const config = {
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5170',
+  google: {
+    clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
+  },
   entra: {
     tenantId: import.meta.env.VITE_ENTRA_TENANT_ID ?? '',
     spaClientId: import.meta.env.VITE_ENTRA_SPA_CLIENT_ID ?? '',

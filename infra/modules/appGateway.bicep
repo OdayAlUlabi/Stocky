@@ -12,6 +12,10 @@ param subnetId string
 param apiBackendFqdn string
 @description('Web container app FQDN (private).')
 param webBackendFqdn string
+@description('User-assigned managed identity resource ID for App Gateway to pull TLS cert from Key Vault.')
+param agwIdentityId string
+@description('Key Vault secret URI of the TLS certificate. When non-empty, enables the HTTPS (443) listener and redirects HTTP→HTTPS. Format: https://kv-xxx.vault.azure.net/secrets/cert-name (omit version for always-latest).')
+param tlsCertSecretUri string = ''
 
 resource pip 'Microsoft.Network/publicIPAddresses@2024-01-01' = {
   name: 'pip-${prefix}-agw'
@@ -21,6 +25,9 @@ resource pip 'Microsoft.Network/publicIPAddresses@2024-01-01' = {
   properties: {
     publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
+    dnsSettings: {
+      domainNameLabel: 'stocky'
+    }
   }
 }
 
@@ -50,11 +57,20 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
 // Custom private DNS zone for the ACA env is created in privateDns.bicep.
 // App Gateway resolves the env FQDN through Azure DNS which will hit that zone.
 var agwName = 'agw-${prefix}'
+var httpsEnabled = !empty(tlsCertSecretUri)
+// Public FQDN is deterministic: <label>.<location>.cloudapp.azure.com
+var publicFqdn = 'stocky.${location}.cloudapp.azure.com'
 
 resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
   name: agwName
   location: location
   tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${agwIdentityId}': {}
+    }
+  }
   properties: {
     sku: {
       name: 'WAF_v2'
@@ -77,6 +93,14 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
         properties: { publicIPAddress: { id: pip.id } }
       }
     ]
+    sslCertificates: httpsEnabled ? [
+      {
+        name: 'tls-cert'
+        properties: {
+          keyVaultSecretId: tlsCertSecretUri
+        }
+      }
+    ] : []
     frontendPorts: [
       {
         name: 'port-443'
@@ -147,17 +171,93 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
         }
       }
     ]
-    httpListeners: [
+    httpListeners: concat(
+      [
+        {
+          name: 'listener-http'
+          properties: {
+            frontendIPConfiguration: { id: resourceId('Microsoft.Network/applicationGateways/frontendIPConfigurations', agwName, 'feip-public') }
+            frontendPort: { id: resourceId('Microsoft.Network/applicationGateways/frontendPorts', agwName, 'port-80') }
+            protocol: 'Http'
+          }
+        }
+      ],
+      httpsEnabled ? [
+        {
+          name: 'listener-https'
+          properties: {
+            frontendIPConfiguration: { id: resourceId('Microsoft.Network/applicationGateways/frontendIPConfigurations', agwName, 'feip-public') }
+            frontendPort: { id: resourceId('Microsoft.Network/applicationGateways/frontendPorts', agwName, 'port-443') }
+            protocol: 'Https'
+            sslCertificate: { id: resourceId('Microsoft.Network/applicationGateways/sslCertificates', agwName, 'tls-cert') }
+          }
+        }
+      ] : []
+    )
+    redirectConfigurations: httpsEnabled ? [
       {
-        name: 'listener-http'
+        name: 'redirect-http-to-https'
         properties: {
-          frontendIPConfiguration: { id: resourceId('Microsoft.Network/applicationGateways/frontendIPConfigurations', agwName, 'feip-public') }
-          frontendPort: { id: resourceId('Microsoft.Network/applicationGateways/frontendPorts', agwName, 'port-80') }
-          protocol: 'Http'
+          redirectType: 'Permanent'
+          targetListener: { id: resourceId('Microsoft.Network/applicationGateways/httpListeners', agwName, 'listener-https') }
+          includePath: true
+          includeQueryString: true
+        }
+      }
+    ] : []
+    // Rewrite ACA-internal Location headers to the public App Gateway FQDN.
+    // When ACA's envoy proxy issues a redirect (e.g. HTTP→HTTPS or trailing-slash
+    // normalisation) it uses the Host it received (the ACA FQDN) in the Location
+    // value. This rule rewrites those to the public URL before the browser sees them.
+    rewriteRuleSets: [
+      {
+        name: 'fix-location'
+        properties: {
+          rewriteRules: [
+            {
+              name: 'rewrite-aca-location'
+              ruleSequence: 100
+              conditions: [
+                {
+                  variable: 'http_resp_Location'
+                  pattern: 'https?://[^/]+\\.azurecontainerapps\\.io(/.*)?'
+                  ignoreCase: true
+                  negate: false
+                }
+              ]
+              actionSet: {
+                responseHeaderConfigurations: [
+                  {
+                    headerName: 'Location'
+                    headerValue: '${httpsEnabled ? 'https' : 'http'}://${publicFqdn}{http_resp_Location_1}'
+                  }
+                ]
+              }
+            }
+          ]
         }
       }
     ]
-    requestRoutingRules: [
+    requestRoutingRules: httpsEnabled ? [
+      {
+        name: 'http-to-https'
+        properties: {
+          ruleType: 'Basic'
+          priority: 50
+          httpListener: { id: resourceId('Microsoft.Network/applicationGateways/httpListeners', agwName, 'listener-http') }
+          redirectConfiguration: { id: resourceId('Microsoft.Network/applicationGateways/redirectConfigurations', agwName, 'redirect-http-to-https') }
+        }
+      }
+      {
+        name: 'https-to-backends'
+        properties: {
+          ruleType: 'PathBasedRouting'
+          priority: 100
+          httpListener: { id: resourceId('Microsoft.Network/applicationGateways/httpListeners', agwName, 'listener-https') }
+          urlPathMap: { id: resourceId('Microsoft.Network/applicationGateways/urlPathMaps', agwName, 'paths') }
+        }
+      }
+    ] : [
       {
         name: 'http-to-web'
         properties: {
@@ -174,6 +274,7 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
         properties: {
           defaultBackendAddressPool: { id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'pool-web') }
           defaultBackendHttpSettings: { id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', agwName, 'https-web') }
+          defaultRewriteRuleSet: { id: resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', agwName, 'fix-location') }
           pathRules: [
             {
               name: 'api'
@@ -181,6 +282,7 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
                 paths: [ '/api/*', '/hubs/*', '/health' ]
                 backendAddressPool: { id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'pool-api') }
                 backendHttpSettings: { id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', agwName, 'https-api') }
+                rewriteRuleSet: { id: resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', agwName, 'fix-location') }
               }
             }
           ]
@@ -191,4 +293,4 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
 }
 
 output appGwPublicIp string = pip.properties.ipAddress
-output appGwFqdn string = pip.properties.ipAddress // caller may attach a CNAME for a custom domain
+output appGwFqdn string = pip.properties.dnsSettings.fqdn
