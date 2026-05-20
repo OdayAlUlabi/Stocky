@@ -449,8 +449,8 @@ using (var scope = app.Services.CreateScope())
 // for user-assigned identities. Pre-acquiring the token here populates MSAL's cache so
 // SqlTokenInterceptor.ConnectionOpeningAsync returns from cache on the first request,
 // preventing EF Core's EnableRetryOnFailure from bursting IMDS with repeated failures.
-var sqlCredential = app.Services.GetService<TokenCredential>();
-if (sqlCredential is not null)
+var warmupCred = app.Services.GetService<TokenCredential>();
+if (warmupCred is not null)
 {
     Console.WriteLine("Warming up SQL credential via IMDS...");
     var imdsReady = false;
@@ -458,7 +458,7 @@ if (sqlCredential is not null)
     {
         try
         {
-            await sqlCredential.GetTokenAsync(
+            await warmupCred.GetTokenAsync(
                 new TokenRequestContext(["https://database.windows.net/.default"]),
                 CancellationToken.None);
             imdsReady = true;

@@ -13,6 +13,10 @@ param acrLoginServer string
 param apiIdentityId string
 @description('User-assigned identity client id (for SQL connection string).')
 param apiIdentityClientId string
+@description('Dedicated SQL service account identity resource id.')
+param apiSqlIdentityId string
+@description('Dedicated SQL service account identity client id (used for AZURE_CLIENT_ID and SQL connection string).')
+param apiSqlIdentityClientId string
 @description('SQL server FQDN.')
 param sqlServerFqdn string
 @description('SQL database name.')
@@ -47,6 +51,7 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
     type: 'UserAssigned'
     userAssignedIdentities: {
       '${apiIdentityId}': {}
+      '${apiSqlIdentityId}': {}
     }
   }
   properties: {
@@ -82,8 +87,8 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'AzureAd__ClientId', value: entraApiClientId }
             { name: 'AzureAd__Audience', value: 'api://${entraApiClientId}' }
             { name: 'Google__ClientId', value: googleClientId }
-            { name: 'AZURE_CLIENT_ID', value: apiIdentityClientId }
-            { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDbName};Authentication=Active Directory Managed Identity;User Id=${apiIdentityClientId};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
+            { name: 'AZURE_CLIENT_ID', value: apiSqlIdentityClientId }
+            { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDbName};Authentication=Active Directory Managed Identity;User Id=${apiSqlIdentityClientId};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
             { name: 'AllowedOrigins__0', value: 'https://${publicHostname}' }
             // PORT is read by the bootstrap helloworld image; the real ASP.NET
             // image ignores it (it honours ASPNETCORE_URLS instead).

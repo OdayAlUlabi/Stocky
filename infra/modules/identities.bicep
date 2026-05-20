@@ -47,6 +47,14 @@ resource agwId 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   tags: tags
 }
 
+// Dedicated SQL service account — least-privilege identity for runtime SQL access.
+// ACR pull and other workload roles stay on id-${prefix}-api; this identity is SQL-only.
+resource apiSqlId 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-${prefix}-api-sql'
+  location: location
+  tags: tags
+}
+
 // Federated credentials: trust GitHub Actions OIDC issuer.
 // @batchSize(1) serializes FIC creation — Azure's UAMI service rejects
 // concurrent FIC writes for the same managed identity (ConcurrentFederatedIdentityCredentialsWritesForSingleManagedIdentity).
@@ -80,5 +88,9 @@ output runnerIdClientId string = runnerId.properties.clientId
 output agwIdId string = agwId.id
 output agwIdPrincipalId string = agwId.properties.principalId
 output agwIdClientId string = agwId.properties.clientId
+
+output apiSqlIdId string = apiSqlId.id
+output apiSqlIdPrincipalId string = apiSqlId.properties.principalId
+output apiSqlIdClientId string = apiSqlId.properties.clientId
 
 output githubRepoOut string = githubRepo

@@ -235,6 +235,8 @@ module apps 'modules/containerApps.bicep' = {
     acrLoginServer: acr.outputs.acrLoginServer
     apiIdentityId: ids.outputs.apiIdId
     apiIdentityClientId: ids.outputs.apiIdClientId
+    apiSqlIdentityId: ids.outputs.apiSqlIdId
+    apiSqlIdentityClientId: ids.outputs.apiSqlIdClientId
     sqlServerFqdn: sql.outputs.serverFqdn
     sqlDbName: sql.outputs.dbName
     entraTenantId: entraTenantId
