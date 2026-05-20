@@ -444,6 +444,42 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Warm up the SQL managed identity credential before serving traffic.
+// ACA's IMDS proxy returns HTTP 500 for the first 60-120 s after container cold-start
+// for user-assigned identities. Pre-acquiring the token here populates MSAL's cache so
+// SqlTokenInterceptor.ConnectionOpeningAsync returns from cache on the first request,
+// preventing EF Core's EnableRetryOnFailure from bursting IMDS with repeated failures.
+var sqlCredential = app.Services.GetService<TokenCredential>();
+if (sqlCredential is not null)
+{
+    Console.WriteLine("Warming up SQL credential via IMDS...");
+    var imdsReady = false;
+    for (var attempt = 1; attempt <= 12 && !imdsReady; attempt++)
+    {
+        try
+        {
+            await sqlCredential.GetTokenAsync(
+                new TokenRequestContext(["https://database.windows.net/.default"]),
+                CancellationToken.None);
+            imdsReady = true;
+            Console.WriteLine($"SQL credential warm-up complete (attempt {attempt}/12).");
+        }
+        catch (Exception ex)
+        {
+            if (attempt < 12)
+            {
+                Console.WriteLine($"SQL IMDS attempt {attempt}/12 failed: {ex.Message}. Retrying in 10s...");
+                await Task.Delay(10_000);
+            }
+            else
+            {
+                Console.WriteLine($"SQL IMDS warm-up exhausted after 12 attempts: {ex.Message}. " +
+                    "Starting app anyway — first SQL request may fail.");
+            }
+        }
+    }
+}
+
 app.Run();
 
 // Injects an Azure AD access token on every SqlConnection before it is opened,
