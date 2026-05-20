@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "17985540217943291516"
+      "templateHash": "9161698282832344905"
     }
   },
   "parameters": {
@@ -45,6 +45,12 @@
       "type": "string",
       "metadata": {
         "description": "Entra API app registration client id (audience)."
+      }
+    },
+    "googleClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "Google OAuth client id used for JWT Bearer validation on the API."
       }
     },
     "sqlEntraAdminObjectId": {
@@ -2096,6 +2102,9 @@
           "entraApiClientId": {
             "value": "[parameters('entraApiClientId')]"
           },
+          "googleClientId": {
+            "value": "[parameters('googleClientId')]"
+          },
           "appiConnectionString": {
             "value": "[reference('obs').outputs.appiConnectionString.value]"
           },
@@ -2113,7 +2122,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "17914537551811346987"
+              "templateHash": "8445252802601872753"
             }
           },
           "parameters": {
@@ -2181,6 +2190,12 @@
               "type": "string",
               "metadata": {
                 "description": "Entra API client id (audience)."
+              }
+            },
+            "googleClientId": {
+              "type": "string",
+              "metadata": {
+                "description": "Google OAuth client id for JWT Bearer token validation."
               }
             },
             "appiConnectionString": {
@@ -2276,6 +2291,10 @@
                           "value": "[format('api://{0}', parameters('entraApiClientId'))]"
                         },
                         {
+                          "name": "Google__ClientId",
+                          "value": "[parameters('googleClientId')]"
+                        },
+                        {
                           "name": "AZURE_CLIENT_ID",
                           "value": "[parameters('apiIdentityClientId')]"
                         },
@@ -2330,8 +2349,8 @@
                   "ingress": {
                     "external": true,
                     "targetPort": "[if(variables('isBootstrap'), 80, 8080)]",
-                    "transport": "auto",
-                    "allowInsecure": false
+                    "transport": "http",
+                    "allowInsecure": true
                   },
                   "registries": "[if(variables('isBootstrap'), createArray(), createArray(createObject('server', parameters('acrLoginServer'), 'identity', parameters('apiIdentityId'))))]"
                 },
@@ -2634,7 +2653,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "14102007304257850113"
+              "templateHash": "904566054896524339"
             }
           },
           "parameters": {
@@ -2756,7 +2775,7 @@
             "useAppAuth": "[and(not(empty(parameters('githubAppId'))), not(empty(parameters('githubInstallationId'))))]",
             "useAppAuthStr": "[if(variables('useAppAuth'), 'true', 'false')]",
             "credSecretName": "[if(variables('useAppAuth'), parameters('githubAppPrivateKeySecretName'), 'github-runner-pat')]",
-            "setupScript": "#!/bin/bash\n# Self-hosted GitHub Actions runner setup script for Azure VM.\n#\n# Reads all configuration from environment variables set by the\n# Bicep CustomScript extension commandToExecute before running this script:\n#\n#   GH_OWNER     - GitHub organisation / user name\n#   GH_REPO      - repository name (empty = org-level runner)\n#   GH_LABELS    - comma-separated extra labels (appended to \"self-hosted,linux\")\n#   KV_URI       - Key Vault base URI, e.g. https://kv-xxx.vault.azure.net/\n#   USE_APP_AUTH - \"true\" for GitHub App token, anything else for PAT\n#   APP_ID       - GitHub App id (required when USE_APP_AUTH=true)\n#   INSTALL_ID   - GitHub App installation id (required when USE_APP_AUTH=true)\n#   CRED_NAME    - Key Vault secret name that holds the credential\n#\n# The script:\n#   1. Installs prerequisites (curl, jq, openssl, libicu-dev, git, Docker, Azure CLI)\n#   2. Fetches the runner credential from Key Vault via managed identity (IMDS)\n#   3. Obtains a GitHub runner registration token\n#   4. Downloads, configures and starts the runner as a systemd service\n#\n# Re-runs are safe: 'config.sh --replace' re-registers without manual cleanup.\n\nset -euo pipefail\nexport DEBIAN_FRONTEND=noninteractive\n\nRUNNER_VERSION=\"2.323.0\"\nRUNNER_HOME=\"/opt/github-runner\"\nRUNNER_USER=\"ghrunner\"\n\nlog() { echo \"[runner-setup] $(date -u '+%H:%M:%S') $*\"; }\n\n# ---------------------------------------------------------------------------\n# 1. Prerequisites\n# ---------------------------------------------------------------------------\nlog \"Updating apt and installing prerequisites...\"\napt-get update -qq\napt-get install -y --no-install-recommends \\\n  curl jq openssl libicu-dev git ca-certificates gnupg lsb-release 2>/dev/null\n\n# Docker\nif ! command -v docker &>/dev/null; then\n  log \"Installing Docker...\"\n  install -m 0755 -d /etc/apt/keyrings\n  curl -fsSL https://download.docker.com/linux/ubuntu/gpg \\\n    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg\n  chmod a+r /etc/apt/keyrings/docker.gpg\n  echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \\\n    https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\" \\\n    > /etc/apt/sources.list.d/docker.list\n  apt-get update -qq\n  apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io\n  systemctl enable docker\n  systemctl start docker\nfi\n\n# Azure CLI\nif ! command -v az &>/dev/null; then\n  log \"Installing Azure CLI...\"\n  curl -sL https://aka.ms/InstallAzureCLIDeb | bash\nfi\n\n# ---------------------------------------------------------------------------\n# 2. Fetch credential from Key Vault via managed identity\n# ---------------------------------------------------------------------------\nlog \"Acquiring managed identity token for Key Vault...\"\nMI_TOKEN=$(curl -sf \\\n  -H \"Metadata: true\" \\\n  \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net\" \\\n  | jq -r '.access_token')\n\nlog \"Fetching credential '${CRED_NAME}' from Key Vault...\"\nCRED=$(curl -sf \\\n  -H \"Authorization: Bearer ${MI_TOKEN}\" \\\n  \"${KV_URI}secrets/${CRED_NAME}?api-version=7.4\" \\\n  | jq -r '.value')\n\n# ---------------------------------------------------------------------------\n# 3. Get GitHub runner registration token\n# ---------------------------------------------------------------------------\nif [ \"${USE_APP_AUTH}\" = \"true\" ]; then\n  log \"Generating GitHub App JWT (app id=${APP_ID})...\"\n  NOW=$(date +%s)\n  EXP=$((NOW + 540))   # 9-minute window; GitHub max is 10 min\n\n  HEADER=$(printf '{\"alg\":\"RS256\",\"typ\":\"JWT\"}' \\\n    | openssl base64 -A | tr '+/' '-_' | tr -d '=')\n  PAYLOAD=$(printf '{\"iat\":%s,\"exp\":%s,\"iss\":\"%s\"}' \"${NOW}\" \"${EXP}\" \"${APP_ID}\" \\\n    | openssl base64 -A | tr '+/' '-_' | tr -d '=')\n\n  KEY_FILE=$(mktemp)\n  chmod 600 \"${KEY_FILE}\"\n  printf '%s' \"${CRED}\" > \"${KEY_FILE}\"\n  SIG=$(printf '%s.%s' \"${HEADER}\" \"${PAYLOAD}\" \\\n    | openssl dgst -sha256 -sign \"${KEY_FILE}\" \\\n    | openssl base64 -A | tr '+/' '-_' | tr -d '=')\n  rm -f \"${KEY_FILE}\"\n\n  JWT=\"${HEADER}.${PAYLOAD}.${SIG}\"\n\n  log \"Exchanging JWT for installation token (installation=${INSTALL_ID})...\"\n  INSTALL_TOKEN=$(curl -sf \\\n    -X POST \\\n    -H \"Authorization: Bearer ${JWT}\" \\\n    -H \"Accept: application/vnd.github+json\" \\\n    \"https://api.github.com/app/installations/${INSTALL_ID}/access_tokens\" \\\n    | jq -r '.token')\n\n  AUTH_HEADER=\"token ${INSTALL_TOKEN}\"\nelse\n  log \"Using PAT auth...\"\n  AUTH_HEADER=\"token ${CRED}\"\nfi\n\nif [ -z \"${GH_REPO:-}\" ]; then\n  log \"Getting org-scope registration token...\"\n  REG_TOKEN=$(curl -sf -X POST \\\n    -H \"Authorization: ${AUTH_HEADER}\" \\\n    -H \"Accept: application/vnd.github+json\" \\\n    \"https://api.github.com/orgs/${GH_OWNER}/actions/runners/registration-token\" \\\n    | jq -r '.token')\n  RUNNER_URL=\"https://github.com/${GH_OWNER}\"\nelse\n  log \"Getting repo-scope registration token...\"\n  REG_TOKEN=$(curl -sf -X POST \\\n    -H \"Authorization: ${AUTH_HEADER}\" \\\n    -H \"Accept: application/vnd.github+json\" \\\n    \"https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/runners/registration-token\" \\\n    | jq -r '.token')\n  RUNNER_URL=\"https://github.com/${GH_OWNER}/${GH_REPO}\"\nfi\n\n# ---------------------------------------------------------------------------\n# 4. Download and configure the runner\n# ---------------------------------------------------------------------------\nid \"${RUNNER_USER}\" &>/dev/null || useradd -m -s /bin/bash \"${RUNNER_USER}\"\n# Add runner user to docker group so workflows can run Docker commands\nusermod -aG docker \"${RUNNER_USER}\" 2>/dev/null || true\n\nmkdir -p \"${RUNNER_HOME}\"\ncd \"${RUNNER_HOME}\"\n\nif [ ! -f ./config.sh ]; then\n  log \"Downloading runner v${RUNNER_VERSION}...\"\n  curl -Lo actions-runner.tar.gz \\\n    \"https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz\"\n  tar xzf actions-runner.tar.gz\n  rm -f actions-runner.tar.gz\nfi\n\nchown -R \"${RUNNER_USER}:${RUNNER_USER}\" \"${RUNNER_HOME}\"\n\nRUNNER_NAME=\"vm-$(hostname | tr '[:upper:]' '[:lower:]')\"\nlog \"Configuring runner '${RUNNER_NAME}' -> ${RUNNER_URL}...\"\nsudo -u \"${RUNNER_USER}\" ./config.sh \\\n  --url \"${RUNNER_URL}\" \\\n  --token \"${REG_TOKEN}\" \\\n  --name \"${RUNNER_NAME}\" \\\n  --labels \"self-hosted,linux,${GH_LABELS}\" \\\n  --work \"_work\" \\\n  --unattended \\\n  --replace\n\n# ---------------------------------------------------------------------------\n# 5. Install as systemd service and start\n# ---------------------------------------------------------------------------\nlog \"Installing and starting runner service...\"\n./svc.sh install \"${RUNNER_USER}\"\n./svc.sh start\n\nlog \"Runner '${RUNNER_NAME}' is active. Labels: self-hosted,linux,${GH_LABELS}\"\n",
+            "setupScript": "#!/bin/bash\n# Self-hosted GitHub Actions runner setup script for Azure VM.\n#\n# Reads all configuration from environment variables set by the\n# Bicep CustomScript extension commandToExecute before running this script:\n#\n#   GH_OWNER     - GitHub organisation / user name\n#   GH_REPO      - repository name (empty = org-level runner)\n#   GH_LABELS    - comma-separated extra labels (appended to \"self-hosted,linux\")\n#   KV_URI       - Key Vault base URI, e.g. https://kv-xxx.vault.azure.net/\n#   USE_APP_AUTH - \"true\" for GitHub App token, anything else for PAT\n#   APP_ID       - GitHub App id (required when USE_APP_AUTH=true)\n#   INSTALL_ID   - GitHub App installation id (required when USE_APP_AUTH=true)\n#   CRED_NAME    - Key Vault secret name that holds the credential\n#\n# The script:\n#   1. Installs prerequisites (curl, jq, openssl, libicu-dev, git, Docker, Azure CLI)\n#   2. Fetches the runner credential from Key Vault via managed identity (IMDS)\n#   3. Obtains a GitHub runner registration token\n#   4. Downloads, configures and starts the runner as a systemd service\n#\n# Re-runs are safe: 'config.sh --replace' re-registers without manual cleanup.\n\nset -euo pipefail\nexport DEBIAN_FRONTEND=noninteractive\n\nRUNNER_VERSION=\"2.323.0\"\nRUNNER_HOME=\"/opt/github-runner\"\nRUNNER_USER=\"ghrunner\"\n\nlog() { echo \"[runner-setup] $(date -u '+%H:%M:%S') $*\"; }\n\n# ---------------------------------------------------------------------------\n# 1. Prerequisites\n# ---------------------------------------------------------------------------\n# azure.archive.ubuntu.com is HTTP-only (no HTTPS server on port 443) and port 80\n# is blocked by network policy.  Switch to archive.ubuntu.com which supports HTTPS.\nlog \"Switching apt sources from azure mirror to archive.ubuntu.com (HTTPS)...\"\nsed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list\nsed -i 's|http://security.ubuntu.com|https://security.ubuntu.com|g' /etc/apt/sources.list\nsed -i 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g' /etc/apt/sources.list\nfind /etc/apt/sources.list.d/ -name '*.list' \\\n  -exec sed -i 's|http://azure\\.archive\\.ubuntu\\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' {} \\; 2>/dev/null || true\nfind /etc/apt/sources.list.d/ -name '*.list' \\\n  -exec sed -i 's|http://|https://|g' {} \\; 2>/dev/null || true\n\nlog \"Disabling apt TLS peer verification (firewall may do TLS inspection)...\"\ncat > /etc/apt/apt.conf.d/99noverify <<'APTEOF'\nAcquire::https::Verify-Peer \"false\";\nAcquire::https::Verify-Host \"false\";\nAPTEOF\n\n# Wrap curl so that all invocations (including scripts piped to bash) skip TLS validation.\nmkdir -p /usr/local/sbin/curlwrap\ncat > /usr/local/sbin/curlwrap/curl <<'CURLWRAP'\n#!/bin/bash\nexec /usr/bin/curl -k \"$@\"\nCURLWRAP\nchmod +x /usr/local/sbin/curlwrap/curl\nexport PATH=\"/usr/local/sbin/curlwrap:${PATH}\"\n\nlog \"Disabling automatic apt update timers and services...\"\nsystemctl disable apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true\nsystemctl stop apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true\nsystemctl stop unattended-upgrades apt-daily.service apt-daily-upgrade.service 2>/dev/null || true\n\nlog \"Killing any running apt/dpkg/unattended-upgrades processes...\"\npkill -TERM -f unattended-upgrades 2>/dev/null || true\nsleep 3\npkill -KILL -f unattended-upgrades 2>/dev/null || true\npkill -KILL -x apt-get 2>/dev/null || true\nsleep 2\n\nlog \"Waiting for apt lock files to be released...\"\nfor _lock in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock; do\n  _waited=0\n  while fuser \"${_lock}\" >/dev/null 2>&1; do\n    log \"Lock ${_lock} still held, waiting...\"\n    sleep 5\n    _waited=$((_waited + 5))\n    [ \"${_waited}\" -ge 300 ] && break\n  done\ndone\n\nlog \"Clearing apt lists cache (so new mirror URLs are used on next update)...\"\nrm -rf /var/lib/apt/lists/*\n\nlog \"Updating apt (failure here is non-fatal)...\"\napt-get update -qq 2>/dev/null || log \"apt-get update failed; will rely on pre-installed packages + static binaries\"\n\n# curl, git, openssl, gnupg, ca-certificates, lsb-release are pre-installed on Ubuntu 22.04 LTS.\n# jq may need to be fetched; libicu-dev (dev headers) is NOT needed.\nlog \"Installing prerequisites (best-effort)...\"\napt-get install -y --no-install-recommends \\\n  curl jq openssl git ca-certificates gnupg lsb-release 2>/dev/null || \\\n  log \"apt-get install had errors; will use static binaries where needed\"\n\n# jq static binary fallback — works even when apt mirrors are unreachable\nif ! command -v jq >/dev/null 2>&1; then\n  log \"jq not available via apt; downloading static binary from GitHub...\"\n  curl -kfsSL -o /usr/local/bin/jq \\\n    \"https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64\"\n  chmod +x /usr/local/bin/jq\nfi\n\n# Verify critical tools are present\ncommand -v curl   >/dev/null || { log \"ERROR: curl missing\"; exit 1; }\ncommand -v jq     >/dev/null || { log \"ERROR: jq missing (apt and static download both failed)\"; exit 1; }\ncommand -v openssl>/dev/null || { log \"ERROR: openssl missing\"; exit 1; }\n\n# Docker — best-effort; network may block download.docker.com\nif ! command -v docker &>/dev/null; then\n  log \"Installing Docker (best-effort)...\"\n  (\n    set +euo pipefail\n    install -m 0755 -d /etc/apt/keyrings\n    curl -fksSL https://download.docker.com/linux/ubuntu/gpg \\\n      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg\n    chmod a+r /etc/apt/keyrings/docker.gpg\n    echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \\\n      https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\" \\\n      > /etc/apt/sources.list.d/docker.list\n    apt-get update -qq\n    apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io\n    systemctl enable docker && systemctl start docker\n  ) && log \"Docker installed\" || log \"Warning: Docker installation failed — workflows requiring Docker may not work\"\nfi\n\n# Azure CLI — best-effort\nif ! command -v az &>/dev/null; then\n  log \"Installing Azure CLI (best-effort)...\"\n  (\n    set +euo pipefail\n    curl -ksSL https://aka.ms/InstallAzureCLIDeb | bash\n  ) && log \"Azure CLI installed\" || log \"Warning: Azure CLI installation failed — workflows using 'az' may not work\"\nfi\n\n# ---------------------------------------------------------------------------\n# 2. Fetch credential from Key Vault via managed identity\n# ---------------------------------------------------------------------------\nlog \"Acquiring managed identity token for Key Vault...\"\nMI_TOKEN=$(curl -sf \\\n  -H \"Metadata: true\" \\\n  \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net\" \\\n  | jq -r '.access_token')\n\nlog \"Fetching credential '${CRED_NAME}' from Key Vault...\"\nCRED=$(curl -sf \\\n  -H \"Authorization: Bearer ${MI_TOKEN}\" \\\n  \"${KV_URI}secrets/${CRED_NAME}?api-version=7.4\" \\\n  | jq -r '.value')\n\n# ---------------------------------------------------------------------------\n# 3. Get GitHub runner registration token\n# ---------------------------------------------------------------------------\nif [ \"${USE_APP_AUTH}\" = \"true\" ]; then\n  log \"Generating GitHub App JWT (app id=${APP_ID})...\"\n  NOW=$(date +%s)\n  EXP=$((NOW + 540))   # 9-minute window; GitHub max is 10 min\n\n  HEADER=$(printf '{\"alg\":\"RS256\",\"typ\":\"JWT\"}' \\\n    | openssl base64 -A | tr '+/' '-_' | tr -d '=')\n  PAYLOAD=$(printf '{\"iat\":%s,\"exp\":%s,\"iss\":\"%s\"}' \"${NOW}\" \"${EXP}\" \"${APP_ID}\" \\\n    | openssl base64 -A | tr '+/' '-_' | tr -d '=')\n\n  KEY_FILE=$(mktemp)\n  chmod 600 \"${KEY_FILE}\"\n  printf '%s' \"${CRED}\" > \"${KEY_FILE}\"\n  SIG=$(printf '%s.%s' \"${HEADER}\" \"${PAYLOAD}\" \\\n    | openssl dgst -sha256 -sign \"${KEY_FILE}\" \\\n    | openssl base64 -A | tr '+/' '-_' | tr -d '=')\n  rm -f \"${KEY_FILE}\"\n\n  JWT=\"${HEADER}.${PAYLOAD}.${SIG}\"\n\n  log \"Exchanging JWT for installation token (installation=${INSTALL_ID})...\"\n  INSTALL_TOKEN=$(curl -sf \\\n    -X POST \\\n    -H \"Authorization: Bearer ${JWT}\" \\\n    -H \"Accept: application/vnd.github+json\" \\\n    \"https://api.github.com/app/installations/${INSTALL_ID}/access_tokens\" \\\n    | jq -r '.token')\n\n  AUTH_HEADER=\"token ${INSTALL_TOKEN}\"\nelse\n  log \"Using PAT auth...\"\n  AUTH_HEADER=\"token ${CRED}\"\nfi\n\nif [ -z \"${GH_REPO:-}\" ]; then\n  log \"Getting org-scope registration token...\"\n  REG_TOKEN=$(curl -sf -X POST \\\n    -H \"Authorization: ${AUTH_HEADER}\" \\\n    -H \"Accept: application/vnd.github+json\" \\\n    \"https://api.github.com/orgs/${GH_OWNER}/actions/runners/registration-token\" \\\n    | jq -r '.token')\n  RUNNER_URL=\"https://github.com/${GH_OWNER}\"\nelse\n  log \"Getting repo-scope registration token...\"\n  REG_TOKEN=$(curl -sf -X POST \\\n    -H \"Authorization: ${AUTH_HEADER}\" \\\n    -H \"Accept: application/vnd.github+json\" \\\n    \"https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/runners/registration-token\" \\\n    | jq -r '.token')\n  RUNNER_URL=\"https://github.com/${GH_OWNER}/${GH_REPO}\"\nfi\n\n# ---------------------------------------------------------------------------\n# 4. Download and configure the runner\n# ---------------------------------------------------------------------------\nid \"${RUNNER_USER}\" &>/dev/null || useradd -m -s /bin/bash \"${RUNNER_USER}\"\n# Add runner user to docker group so workflows can run Docker commands\nusermod -aG docker \"${RUNNER_USER}\" 2>/dev/null || true\n\nmkdir -p \"${RUNNER_HOME}\"\ncd \"${RUNNER_HOME}\"\n\nif [ ! -f ./config.sh ]; then\n  log \"Downloading runner v${RUNNER_VERSION}...\"\n  curl -kLo actions-runner.tar.gz \\\n    \"https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz\"\n  tar xzf actions-runner.tar.gz\n  rm -f actions-runner.tar.gz\nfi\n\nchown -R \"${RUNNER_USER}:${RUNNER_USER}\" \"${RUNNER_HOME}\"\n\nRUNNER_NAME=\"vm-$(hostname | tr '[:upper:]' '[:lower:]')\"\nlog \"Configuring runner '${RUNNER_NAME}' -> ${RUNNER_URL}...\"\nsudo -u \"${RUNNER_USER}\" ./config.sh \\\n  --url \"${RUNNER_URL}\" \\\n  --token \"${REG_TOKEN}\" \\\n  --name \"${RUNNER_NAME}\" \\\n  --labels \"self-hosted,linux,${GH_LABELS}\" \\\n  --work \"_work\" \\\n  --unattended \\\n  --replace\n\n# ---------------------------------------------------------------------------\n# 5. Install as systemd service and start\n# ---------------------------------------------------------------------------\nlog \"Installing and starting runner service...\"\n./svc.sh install \"${RUNNER_USER}\"\n./svc.sh start\n\nlog \"Runner '${RUNNER_NAME}' is active. Labels: self-hosted,linux,${GH_LABELS}\"\n",
             "commandToExecute": "[format('export GH_OWNER=\"{0}\" GH_REPO=\"{1}\" GH_LABELS=\"{2}\" KV_URI=\"{3}\" USE_APP_AUTH=\"{4}\" APP_ID=\"{5}\" INSTALL_ID=\"{6}\" CRED_NAME=\"{7}\" && echo \"{8}\" | base64 -d | bash', parameters('githubOwner'), parameters('githubRepo'), parameters('runnerLabels'), parameters('keyVaultUri'), variables('useAppAuthStr'), parameters('githubAppId'), parameters('githubInstallationId'), variables('credSecretName'), base64(variables('setupScript')))]"
           },
           "resources": [
@@ -2926,6 +2945,9 @@
           },
           "tlsCertSecretUri": {
             "value": "[parameters('tlsCertSecretUri')]"
+          },
+          "lawId": {
+            "value": "[reference('obs').outputs.lawId.value]"
           }
         },
         "template": {
@@ -2935,7 +2957,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "10646832848671899669"
+              "templateHash": "2622262765038081045"
             }
           },
           "parameters": {
@@ -2987,6 +3009,12 @@
               "metadata": {
                 "description": "Key Vault secret URI of the TLS certificate. When non-empty, enables the HTTPS (443) listener and redirects HTTP→HTTPS. Format: https://kv-xxx.vault.azure.net/secrets/cert-name (omit version for always-latest)."
               }
+            },
+            "lawId": {
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics workspace resource ID for AGW diagnostic settings (access + firewall logs)."
+              }
             }
           },
           "variables": {
@@ -3032,6 +3060,29 @@
                     {
                       "ruleSetType": "OWASP",
                       "ruleSetVersion": "3.2"
+                    }
+                  ],
+                  "exclusions": [
+                    {
+                      "matchVariable": "RequestHeaderNames",
+                      "selectorMatchOperator": "Equals",
+                      "selector": "authorization",
+                      "exclusionManagedRuleSets": [
+                        {
+                          "ruleSetType": "OWASP",
+                          "ruleSetVersion": "3.2",
+                          "ruleGroups": [
+                            {
+                              "ruleGroupName": "REQUEST-942-APPLICATION-ATTACK-SQLI",
+                              "rules": []
+                            },
+                            {
+                              "ruleGroupName": "REQUEST-941-APPLICATION-ATTACK-XSS",
+                              "rules": []
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 }
@@ -3134,8 +3185,8 @@
                   {
                     "name": "https-web",
                     "properties": {
-                      "port": 443,
-                      "protocol": "Https",
+                      "port": 80,
+                      "protocol": "Http",
                       "pickHostNameFromBackendAddress": true,
                       "requestTimeout": 60,
                       "probe": {
@@ -3165,7 +3216,7 @@
                   {
                     "name": "probe-web",
                     "properties": {
-                      "protocol": "Https",
+                      "protocol": "Http",
                       "path": "/",
                       "host": "[parameters('webBackendFqdn')]",
                       "interval": 30,
@@ -3254,6 +3305,28 @@
                 "[resourceId('Microsoft.Network/publicIPAddresses', format('pip-{0}-agw', parameters('prefix')))]",
                 "[resourceId('Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies', format('waf-{0}', parameters('prefix')))]"
               ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[resourceId('Microsoft.Network/applicationGateways', variables('agwName'))]",
+              "name": "agw-diag",
+              "properties": {
+                "workspaceId": "[parameters('lawId')]",
+                "logs": [
+                  {
+                    "category": "ApplicationGatewayAccessLog",
+                    "enabled": true
+                  },
+                  {
+                    "category": "ApplicationGatewayFirewallLog",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/applicationGateways', variables('agwName'))]"
+              ]
             }
           ],
           "outputs": {
@@ -3271,7 +3344,8 @@
       "dependsOn": [
         "apps",
         "ids",
-        "net"
+        "net",
+        "obs"
       ]
     }
   },

@@ -100,6 +100,8 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
               type: 'Readiness'
               httpGet: { path: '/health', port: 8080 }
               periodSeconds: 10
+              initialDelaySeconds: 30
+              failureThreshold: 10
             }
           ]
         }

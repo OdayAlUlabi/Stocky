@@ -39,11 +39,26 @@ if (!string.IsNullOrWhiteSpace(connectionString) && !migrateOnly)
     {
         // Use managed identity to fetch the SP cert from Key Vault, then authenticate
         // to SQL as the service principal — eliminates IMDS dependency for SQL tokens.
+        // Retry: the ACA IMDS proxy can be unavailable for several seconds at container
+        // cold-start, causing ManagedIdentityCredential to throw on the first attempt.
         TokenCredential kvCredential = string.IsNullOrWhiteSpace(azureClientId)
             ? new DefaultAzureCredential()
             : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(azureClientId));
         var secretClient = new SecretClient(new Uri(kvUri), kvCredential);
-        var certSecret = await secretClient.GetSecretAsync("stocky-api-sql-cert");
+        KeyVaultSecret certSecret = null!;
+        for (var attempt = 1; attempt <= 10; attempt++)
+        {
+            try
+            {
+                certSecret = await secretClient.GetSecretAsync("stocky-api-sql-cert");
+                break;
+            }
+            catch (Exception ex) when (attempt < 10)
+            {
+                Console.WriteLine($"KV/IMDS attempt {attempt}/10 failed: {ex.Message}. Retrying in 10s...");
+                await Task.Delay(10_000);
+            }
+        }
         var certBytes = Convert.FromBase64String(certSecret.Value.Value);
         var certificate = X509CertificateLoader.LoadPkcs12(
             certBytes, (string?)null,
