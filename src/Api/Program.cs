@@ -59,7 +59,7 @@ if (!string.IsNullOrWhiteSpace(connectionString) && !migrateOnly)
                 await Task.Delay(10_000);
             }
         }
-        var certBytes = Convert.FromBase64String(certSecret.Value.Value);
+        var certBytes = Convert.FromBase64String(certSecret.Value);
         var certificate = X509CertificateLoader.LoadPkcs12(
             certBytes, (string?)null,
             X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
