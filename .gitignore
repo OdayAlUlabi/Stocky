@@ -37,6 +37,15 @@ Thumbs.db
 # ---- Logs ----
 *.log
 
+# ---- Temp / scratch files (CI scripts, one-off outputs) ----
+.tmp-*
+*.tmp
+azd_output.txt
+bicep_output.txt
+diagnostic_results.txt
+.azd-out.log
+.azd-preview-result.txt
+
 # ---- Personal brokerage data (do not commit) ----
 ab-invest-*.csv
 docs/Portfolio_Management_Feature_Spec.docx
