@@ -54,4 +54,5 @@ jobs:
           cache-dependency-path: src/Web/package-lock.json
       - run: npm ci || npm install
       - run: npm run lint
+      - run: npm test
       - run: npm run build

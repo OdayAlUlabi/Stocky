@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "9161698282832344905"
+      "templateHash": "1717372774800078625"
     }
   },
   "parameters": {
@@ -33,18 +33,6 @@
       },
       "metadata": {
         "description": "Tags applied to all resources."
-      }
-    },
-    "entraTenantId": {
-      "type": "string",
-      "metadata": {
-        "description": "Entra ID tenant id used by the API."
-      }
-    },
-    "entraApiClientId": {
-      "type": "string",
-      "metadata": {
-        "description": "Entra API app registration client id (audience)."
       }
     },
     "googleClientId": {
@@ -925,7 +913,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "1019817081334502266"
+              "templateHash": "7080109948994144231"
             }
           },
           "parameters": {
@@ -997,6 +985,13 @@
               "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
               "apiVersion": "2023-01-31",
               "name": "[format('id-{0}-agw', parameters('prefix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[format('id-{0}-api-sql', parameters('prefix'))]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]"
             },
@@ -1082,6 +1077,18 @@
             "agwIdClientId": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-agw', parameters('prefix'))), '2023-01-31').clientId]"
+            },
+            "apiSqlIdId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-api-sql', parameters('prefix')))]"
+            },
+            "apiSqlIdPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-api-sql', parameters('prefix'))), '2023-01-31').principalId]"
+            },
+            "apiSqlIdClientId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-api-sql', parameters('prefix'))), '2023-01-31').clientId]"
             },
             "githubRepoOut": {
               "type": "string",
@@ -2090,17 +2097,17 @@
           "apiIdentityClientId": {
             "value": "[reference('ids').outputs.apiIdClientId.value]"
           },
+          "apiSqlIdentityId": {
+            "value": "[reference('ids').outputs.apiSqlIdId.value]"
+          },
+          "apiSqlIdentityClientId": {
+            "value": "[reference('ids').outputs.apiSqlIdClientId.value]"
+          },
           "sqlServerFqdn": {
             "value": "[reference('sql').outputs.serverFqdn.value]"
           },
           "sqlDbName": {
             "value": "[reference('sql').outputs.dbName.value]"
-          },
-          "entraTenantId": {
-            "value": "[parameters('entraTenantId')]"
-          },
-          "entraApiClientId": {
-            "value": "[parameters('entraApiClientId')]"
           },
           "googleClientId": {
             "value": "[parameters('googleClientId')]"
@@ -2122,7 +2129,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "8445252802601872753"
+              "templateHash": "5306182759603305503"
             }
           },
           "parameters": {
@@ -2168,6 +2175,18 @@
                 "description": "User-assigned identity client id (for SQL connection string)."
               }
             },
+            "apiSqlIdentityId": {
+              "type": "string",
+              "metadata": {
+                "description": "Dedicated SQL service account identity resource id."
+              }
+            },
+            "apiSqlIdentityClientId": {
+              "type": "string",
+              "metadata": {
+                "description": "Dedicated SQL service account identity client id (used for AZURE_CLIENT_ID and SQL connection string)."
+              }
+            },
             "sqlServerFqdn": {
               "type": "string",
               "metadata": {
@@ -2178,18 +2197,6 @@
               "type": "string",
               "metadata": {
                 "description": "SQL database name."
-              }
-            },
-            "entraTenantId": {
-              "type": "string",
-              "metadata": {
-                "description": "Entra tenant id."
-              }
-            },
-            "entraApiClientId": {
-              "type": "string",
-              "metadata": {
-                "description": "Entra API client id (audience)."
               }
             },
             "googleClientId": {
@@ -2234,7 +2241,8 @@
               "identity": {
                 "type": "UserAssigned",
                 "userAssignedIdentities": {
-                  "[format('{0}', parameters('apiIdentityId'))]": {}
+                  "[format('{0}', parameters('apiIdentityId'))]": {},
+                  "[format('{0}', parameters('apiSqlIdentityId'))]": {}
                 }
               },
               "properties": {
@@ -2275,32 +2283,16 @@
                           "value": "~3"
                         },
                         {
-                          "name": "AzureAd__Instance",
-                          "value": "https://login.microsoftonline.com/"
-                        },
-                        {
-                          "name": "AzureAd__TenantId",
-                          "value": "[parameters('entraTenantId')]"
-                        },
-                        {
-                          "name": "AzureAd__ClientId",
-                          "value": "[parameters('entraApiClientId')]"
-                        },
-                        {
-                          "name": "AzureAd__Audience",
-                          "value": "[format('api://{0}', parameters('entraApiClientId'))]"
-                        },
-                        {
                           "name": "Google__ClientId",
                           "value": "[parameters('googleClientId')]"
                         },
                         {
                           "name": "AZURE_CLIENT_ID",
-                          "value": "[parameters('apiIdentityClientId')]"
+                          "value": "[parameters('apiSqlIdentityClientId')]"
                         },
                         {
                           "name": "ConnectionStrings__Sql",
-                          "value": "[format('Server=tcp:{0},1433;Database={1};Authentication=Active Directory Managed Identity;User Id={2};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', parameters('sqlServerFqdn'), parameters('sqlDbName'), parameters('apiIdentityClientId'))]"
+                          "value": "[format('Server=tcp:{0},1433;Database={1};Authentication=Active Directory Managed Identity;User Id={2};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', parameters('sqlServerFqdn'), parameters('sqlDbName'), parameters('apiSqlIdentityClientId'))]"
                         },
                         {
                           "name": "AllowedOrigins__0",
@@ -2311,7 +2303,7 @@
                           "value": "8080"
                         }
                       ],
-                      "probes": "[if(variables('isBootstrap'), createArray(), createArray(createObject('type', 'Liveness', 'httpGet', createObject('path', '/health', 'port', 8080), 'periodSeconds', 30, 'initialDelaySeconds', 15), createObject('type', 'Readiness', 'httpGet', createObject('path', '/health', 'port', 8080), 'periodSeconds', 10)))]"
+                      "probes": "[if(variables('isBootstrap'), createArray(), createArray(createObject('type', 'Liveness', 'httpGet', createObject('path', '/health', 'port', 8080), 'periodSeconds', 30, 'initialDelaySeconds', 15), createObject('type', 'Readiness', 'httpGet', createObject('path', '/health', 'port', 8080), 'periodSeconds', 10, 'initialDelaySeconds', 30, 'failureThreshold', 10)))]"
                     }
                   ],
                   "scale": {

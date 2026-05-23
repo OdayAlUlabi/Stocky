@@ -1,11 +1,10 @@
 export const config = {
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5170',
+  // Default to '' so the SPA talks same-origin to the API via the App Gateway path-route
+  // (/api/*, /hubs/*, /health). Override with VITE_API_BASE_URL at build time only for
+  // local dev (e.g. http://localhost:5170). Setting it in a deployed build defeats the
+  // same-origin guarantee that protects the API behind the gateway.
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
   google: {
     clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
-  },
-  entra: {
-    tenantId: import.meta.env.VITE_ENTRA_TENANT_ID ?? '',
-    spaClientId: import.meta.env.VITE_ENTRA_SPA_CLIENT_ID ?? '',
-    apiScope: import.meta.env.VITE_ENTRA_API_SCOPE ?? 'api://stocky/access'
   }
 } as const;

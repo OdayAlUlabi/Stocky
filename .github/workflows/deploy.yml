@@ -25,6 +25,7 @@ env:
   MIGRATOR_JOB_NAME:     ${{ vars.MIGRATOR_JOB_NAME }}
   PUBLIC_FQDN:           ${{ vars.PUBLIC_FQDN }}
   VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+  GOOGLE_CLIENT_ID:      ${{ secrets.GOOGLE_CLIENT_ID }}
   IMAGE_TAG:             ${{ github.sha }}
   # Override to '["self-hosted","linux","stocky"]' (JSON array as a single string)
   # via repo Variable RUNS_ON_DEPLOY once the in-VNet runner is online. Defaults
@@ -115,6 +116,7 @@ jobs:
             --cache-from "$ACR_LOGIN_SERVER/stocky-web:cache" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --build-arg VITE_GOOGLE_CLIENT_ID="$VITE_GOOGLE_CLIENT_ID" \
+            --build-arg VITE_API_BASE_URL="" \
             -f src/Web/Dockerfile \
             -t "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG" \
             -t "$ACR_LOGIN_SERVER/stocky-web:cache" \
@@ -215,7 +217,9 @@ jobs:
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
-            --set-env-vars "AllowedOrigins__0=https://${PUBLIC_FQDN}"
+            --set-env-vars \
+              "AllowedOrigins__0=https://${PUBLIC_FQDN}" \
+              "Google__ClientId=${GOOGLE_CLIENT_ID}"
           az containerapp ingress update \
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \

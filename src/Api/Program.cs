@@ -181,6 +181,16 @@ if (migrateOnly)
 
 var googleClientId = builder.Configuration["Google:ClientId"];
 
+// Fail loudly in non-Development if Google client id is missing. The previous behaviour
+// silently registered a no-op JwtBearer that rejected every token, which surfaced as
+// blanket 401s on a deployed environment. Refusing to start is far easier to diagnose.
+if (string.IsNullOrWhiteSpace(googleClientId) && !builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException(
+        "Google:ClientId is not configured. Set the Google__ClientId env var (or Google:ClientId config) " +
+        "to the Google OAuth Web client id used by the SPA. Refusing to start in a non-Development environment.");
+}
+
 var authBuilder = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
 if (!string.IsNullOrWhiteSpace(googleClientId))
 {
@@ -193,13 +203,32 @@ if (!string.IsNullOrWhiteSpace(googleClientId))
             ValidateIssuer = true,
             ValidIssuers = ["accounts.google.com", "https://accounts.google.com"],
             ValidateAudience = true,
-            ValidAudience = googleClientId
+            ValidAudience = googleClientId,
+            ValidateLifetime = true,
+            RequireSignedTokens = true,
+            RequireExpirationTime = true,
+            ClockSkew = TimeSpan.FromMinutes(2)
+        };
+        // Surface validation failures into App Insights so future 401s are diagnosable
+        // without code changes (audience mismatch, expired, signature, etc.).
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = ctx =>
+            {
+                var logger = ctx.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Stocky.Auth.JwtBearer");
+                logger.LogWarning(ctx.Exception,
+                    "JWT bearer authentication failed: {Message}", ctx.Exception?.Message);
+                return Task.CompletedTask;
+            }
         };
     });
 }
 else
 {
-    // No-op bearer so UseAuthentication() can resolve the default scheme in dev.
+    // Development only: no-op bearer so UseAuthentication() resolves the default scheme.
+    // The dev-bypass middleware further down injects a synthetic user for unauthenticated calls.
     authBuilder.AddJwtBearer(_ => { });
 }
 // M14 #91 — API-key bearer scheme (sk_*) for /v1/public endpoints
@@ -403,7 +432,14 @@ app.UseAuthentication();
 
 // Dev-only auth bypass: when Google OAuth isn't configured AND the request didn't already
 // authenticate via an API key, inject a synthetic user so the UI is browsable.
-if (app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(googleClientId))
+// Defence-in-depth: in addition to IsDevelopment(), require an explicit opt-in flag
+// (Auth:AllowDevBypass=true) so a mis-set ASPNETCORE_ENVIRONMENT can never grant anonymous
+// access in production. Also refuse to wire the bypass if running in Production.
+var allowDevBypass = app.Configuration.GetValue<bool>("Auth:AllowDevBypass");
+if (app.Environment.IsDevelopment()
+    && !app.Environment.IsProduction()
+    && allowDevBypass
+    && string.IsNullOrWhiteSpace(googleClientId))
 {
     app.Use(async (ctx, next) =>
     {
@@ -518,3 +554,6 @@ internal sealed class SqlTokenInterceptor(TokenCredential credential) : DbConnec
         return result;
     }
 }
+
+// Expose Program to WebApplicationFactory<Program> in integration tests.
+public partial class Program { }

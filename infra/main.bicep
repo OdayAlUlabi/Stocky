@@ -14,12 +14,6 @@ param tags object = {
   app: 'stocky'
 }
 
-@description('Entra ID tenant id used by the API.')
-param entraTenantId string
-
-@description('Entra API app registration client id (audience).')
-param entraApiClientId string
-
 @description('Google OAuth client id used for JWT Bearer validation on the API.')
 param googleClientId string
 
@@ -239,8 +233,6 @@ module apps 'modules/containerApps.bicep' = {
     apiSqlIdentityClientId: ids.outputs.apiSqlIdClientId
     sqlServerFqdn: sql.outputs.serverFqdn
     sqlDbName: sql.outputs.dbName
-    entraTenantId: entraTenantId
-    entraApiClientId: entraApiClientId
     googleClientId: googleClientId
     appiConnectionString: obs.outputs.appiConnectionString
     publicHostname: 'placeholder.local' // CI updates AllowedOrigins to the AppGw FQDN after first deploy

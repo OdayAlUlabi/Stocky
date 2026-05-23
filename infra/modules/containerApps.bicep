@@ -21,10 +21,6 @@ param apiSqlIdentityClientId string
 param sqlServerFqdn string
 @description('SQL database name.')
 param sqlDbName string
-@description('Entra tenant id.')
-param entraTenantId string
-@description('Entra API client id (audience).')
-param entraApiClientId string
 @description('Google OAuth client id for JWT Bearer token validation.')
 param googleClientId string
 @description('Application Insights connection string.')
@@ -81,11 +77,6 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appiConnectionString }
             { name: 'ApplicationInsightsAgent_EXTENSION_VERSION', value: '~3' }
-            #disable-next-line no-hardcoded-env-urls
-            { name: 'AzureAd__Instance', value: 'https://login.microsoftonline.com/' }
-            { name: 'AzureAd__TenantId', value: entraTenantId }
-            { name: 'AzureAd__ClientId', value: entraApiClientId }
-            { name: 'AzureAd__Audience', value: 'api://${entraApiClientId}' }
             { name: 'Google__ClientId', value: googleClientId }
             { name: 'AZURE_CLIENT_ID', value: apiSqlIdentityClientId }
             { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDbName};Authentication=Active Directory Managed Identity;User Id=${apiSqlIdentityClientId};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
