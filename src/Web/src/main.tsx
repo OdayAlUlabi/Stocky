@@ -6,6 +6,7 @@ import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GoogleAuthProvider } from './auth/googleAuth';
 import { router } from './routes/router';
+import { ApiError } from './api/client';
 
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
@@ -21,7 +22,20 @@ const colorSchemeManager = localStorageColorSchemeManager({ key: 'stocky-color-s
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 }
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (error instanceof ApiError && error.status === 401) return false;
+        return failureCount < 1;
+      }
+    },
+    mutations: {
+      retry: (failureCount, error) => {
+        if (error instanceof ApiError && error.status === 401) return false;
+        return failureCount < 1;
+      }
+    }
   }
 });
 

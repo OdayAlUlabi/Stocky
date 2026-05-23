@@ -48,6 +48,9 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
       : (body && typeof body === 'object' && 'title' in (body as Record<string, unknown>)
         ? String((body as Record<string, unknown>).title)
         : `${res.status} ${res.statusText}`);
+    if (res.status === 401) {
+      window.dispatchEvent(new CustomEvent('stocky:unauthorized'));
+    }
     throw new ApiError(res.status, body, message);
   }
   if (res.status === 204) return undefined as T;

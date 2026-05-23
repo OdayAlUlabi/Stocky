@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { GoogleOAuthProvider, googleLogout } from '@react-oauth/google';
 import { config } from '../config';
 
@@ -73,6 +73,14 @@ export function GoogleAuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     googleLogout();
     setCredential(null);
+  }, [setCredential]);
+
+  // Auto sign-out when any API call receives a 401 (expired or missing token).
+  useEffect(() => {
+    if (!isAuthConfigured) return;
+    const handler = () => setCredential(null);
+    window.addEventListener('stocky:unauthorized', handler);
+    return () => window.removeEventListener('stocky:unauthorized', handler);
   }, [setCredential]);
 
   return (
