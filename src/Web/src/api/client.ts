@@ -48,7 +48,10 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
       : (body && typeof body === 'object' && 'title' in (body as Record<string, unknown>)
         ? String((body as Record<string, unknown>).title)
         : `${res.status} ${res.statusText}`);
-    if (res.status === 401) {
+    // Only trigger re-auth when no token was sent (local session expired or missing).
+    // If a token was sent and the server still returned 401, it is a server-side
+    // configuration issue — do not sign the user out; let the error surface in the UI.
+    if (res.status === 401 && !opts.token) {
       window.dispatchEvent(new CustomEvent('stocky:unauthorized'));
     }
     throw new ApiError(res.status, body, message);
