@@ -22,10 +22,6 @@
     <ProjectReference Include="..\Api\Stocky.Api.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.0" />
-  </ItemGroup>
-
   <!--
     The Api project's appsettings.*.json files are pulled in as transitive
     content via the ProjectReference, colliding with this project's own

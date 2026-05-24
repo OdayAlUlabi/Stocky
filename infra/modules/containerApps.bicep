@@ -179,9 +179,13 @@ resource web 'Microsoft.App/containerApps@2024-10-02-preview' = {
           ]
         }
       ]
+      // Legacy SPA disabled — AGW now points pool-web at the MVC app.
+      // ACA disallows maxReplicas=0, so use min=0 and a minimal cap; with no
+      // traffic the cluster will scale to zero. Resource kept (not deleted)
+      // so the FQDN stays stable in case we ever need to revert.
       scale: {
-        minReplicas: 1
-        maxReplicas: 3
+        minReplicas: 0
+        maxReplicas: 1
       }
     }
   }

@@ -290,7 +290,9 @@ module appgw 'modules/appGateway.bicep' = {
     tags: tags
     subnetId: net.outputs.appGwSubnetId
     apiBackendFqdn: apps.outputs.apiFqdn
-    webBackendFqdn: apps.outputs.webFqdn
+    // Google OAuth removed; AGW now routes default traffic to the MVC app.
+    // Legacy nginx SPA (apps.outputs.webFqdn) is scaled to 0.
+    webBackendFqdn: apps.outputs.webMvcFqdn
     agwIdentityId: ids.outputs.agwIdId
     tlsCertSecretUri: tlsCertSecretUri
     lawId: obs.outputs.lawId

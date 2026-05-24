@@ -1,31 +1,18 @@
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Stocky.Web.Mvc.Controllers;
 
+// Google OAuth has been removed. AutoAuthenticationHandler signs every
+// request in as a fixed local user, so /Account/Login is a no-op redirect
+// kept only for any residual LoginPath references.
 public class AccountController : Controller
 {
     [HttpGet]
     public IActionResult Login(string? returnUrl = null)
-    {
-        // Kick off Google OIDC challenge; on success the cookie middleware
-        // sets .Stocky.Auth and redirects back to returnUrl.
-        var props = new AuthenticationProperties
-        {
-            RedirectUri = string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl
-        };
-        return Challenge(props, GoogleDefaults.AuthenticationScheme);
-    }
+        => LocalRedirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
 
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Logout()
-    {
-        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return RedirectToAction(nameof(SignedOut));
-    }
+    [HttpGet]
+    public IActionResult Logout() => RedirectToAction(nameof(SignedOut));
 
     [HttpGet]
     public IActionResult SignedOut() => View();

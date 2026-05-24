@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api;
+using Stocky.Web.Mvc.Internal;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,47 +11,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 
 // -----------------------------------------------------------------------------
-// Auth — cookie sign-in with optional Google OIDC challenge.
-//
-// Design: we use cookie auth as the SignInScheme so HTML pages get a stable
-// session cookie after the OIDC dance. The cookie carries the Google `sub`
-// claim — UserContextExtensions.GetOwnerId() already reads `sub` first, so
-// rows owned by SPA users remain accessible after the cutover.
-//
-// When Google is not configured (e.g. local dev without secrets) the app still
-// boots; protected endpoints will 401 until you wire credentials. See
-// docs/non-spa-rearchitecture.md §4.4.
+// Auth — single-user passthrough. Google OAuth has been removed; every
+// request is signed in as a fixed local identity by AutoAuthenticationHandler
+// so existing [Authorize] attributes and owner-scoped queries keep working.
+// Override the owner id via the Auth:LocalOwnerId config key to keep
+// previously-owned rows visible.
 // -----------------------------------------------------------------------------
-var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
-var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-
-var authBuilder = builder.Services
-    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(o =>
-    {
-        o.LoginPath = "/Account/Login";
-        o.LogoutPath = "/Account/Logout";
-        o.AccessDeniedPath = "/Account/Login";
-        o.ExpireTimeSpan = TimeSpan.FromDays(7);
-        o.SlidingExpiration = true;
-        o.Cookie.HttpOnly = true;
-        o.Cookie.SameSite = SameSiteMode.Lax;
-        o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-        o.Cookie.Name = ".Stocky.Auth";
-    });
-
-if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
-{
-    authBuilder.AddGoogle(GoogleDefaults.AuthenticationScheme, o =>
-    {
-        o.ClientId = googleClientId;
-        o.ClientSecret = googleClientSecret;
-        o.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        // Persist the Google `sub` claim verbatim so GetOwnerId() finds it.
-        o.ClaimActions.MapJsonKey("sub", "sub");
-        o.SaveTokens = false;
-    });
-}
+builder.Services
+    .AddAuthentication(AutoAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, AutoAuthenticationHandler>(
+        AutoAuthenticationHandler.SchemeName, _ => { });
 
 builder.Services.AddAuthorization();
 builder.Services.AddAntiforgery(o => o.HeaderName = "X-CSRF-TOKEN");

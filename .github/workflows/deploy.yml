@@ -249,8 +249,7 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
             --set-env-vars \
-              "AllowedOrigins__0=https://${PUBLIC_FQDN}" \
-              "Google__ClientId=${VITE_GOOGLE_CLIENT_ID}"
+              "AllowedOrigins__0=https://${PUBLIC_FQDN}"
           az containerapp ingress update \
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -326,8 +325,7 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$ACR_LOGIN_SERVER/stocky-web-mvc:$IMAGE_TAG" \
             --set-env-vars \
-              "AllowedOrigins__0=https://${PUBLIC_FQDN}" \
-              "Authentication__Google__ClientId=${VITE_GOOGLE_CLIENT_ID}"
+              "AllowedOrigins__0=https://${PUBLIC_FQDN}"
           az containerapp ingress update \
             --name "$WEB_MVC_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
