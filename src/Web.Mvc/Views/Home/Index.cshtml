@@ -5,86 +5,242 @@
     var selected = ViewBag.SelectedPortfolioId as Guid?;
 }
 
-<header style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
-    <h2 style="margin:0;">Dashboard</h2>
-    @if (portfolios.Count > 1)
-    {
-        <form method="get" action="/" style="margin:0;">
-            <select name="portfolioId" onchange="this.form.submit()">
-                <option value="">All portfolios</option>
-                @foreach (var p in portfolios)
-                {
-                    <option value="@p.Id" selected="@(selected == p.Id)">@p.Name</option>
-                }
-            </select>
-        </form>
-    }
-</header>
+<div class="page-header">
+    <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    <div class="actions">
+        @if (portfolios.Count > 1)
+        {
+            <form method="get" action="/" style="margin:0;display:flex;gap:.5rem;align-items:center;">
+                <label style="margin:0;">Portfolio</label>
+                <select name="portfolioId" onchange="this.form.submit()">
+                    <option value="">All portfolios</option>
+                    @foreach (var p in portfolios)
+                    {
+                        <option value="@p.Id" selected="@(selected == p.Id)">@p.Name</option>
+                    }
+                </select>
+            </form>
+        }
+        <a class="btn btn-ghost btn-sm" href="/Transactions"><i class="bi bi-arrow-left-right"></i> Transactions</a>
+        <a class="btn btn-primary btn-sm" href="/Portfolios"><i class="bi bi-briefcase"></i> Portfolios</a>
+    </div>
+</div>
 
 @if (Model is null)
 {
-    <p>No data.</p>
+    <article>
+        <p class="text-muted" style="margin:0;"><i class="bi bi-info-circle"></i> No dashboard data yet. Create a portfolio to get started.</p>
+    </article>
     return;
 }
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin:1rem 0;">
-    <article><small>Total value</small><h3>@Model.TotalValue.Money(Model.Currency)</h3></article>
-    <article><small>Day P&amp;L</small><h3 class="@Model.DayPnL.SignClass()">@Model.DayPnL.Money(Model.Currency) (@Model.DayPnLPercent.Pct())</h3></article>
-    <article><small>Total return</small><h3 class="@Model.TotalReturn.SignClass()">@Model.TotalReturn.Money(Model.Currency) (@Model.TotalReturnPercent.Pct())</h3></article>
-    <article><small>Cash</small><h3>@Model.CashBalance.Money(Model.Currency)</h3></article>
+@{
+    var dayUp = Model.DayPnL >= 0;
+    var totUp = Model.TotalReturn >= 0;
+}
+
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="label"><i class="bi bi-wallet2"></i> Total value</div>
+        <div class="value">@Model.TotalValue.Money(Model.Currency)</div>
+        <div class="delta text-muted">As of @Model.AsOf.ToLocalTime().ToString("MMM d · HH:mm")</div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-activity"></i> Day P&amp;L</div>
+        <div class="value @Model.DayPnL.SignClass()">@Model.DayPnL.Money(Model.Currency)</div>
+        <div class="delta">
+            <span class="@(dayUp ? "badge-up" : "badge-down")">
+                <i class="bi @(dayUp ? "bi-caret-up-fill" : "bi-caret-down-fill")"></i>
+                @Model.DayPnLPercent.Pct()
+            </span>
+        </div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-graph-up"></i> Total return</div>
+        <div class="value @Model.TotalReturn.SignClass()">@Model.TotalReturn.Money(Model.Currency)</div>
+        <div class="delta">
+            <span class="@(totUp ? "badge-up" : "badge-down")">
+                <i class="bi @(totUp ? "bi-caret-up-fill" : "bi-caret-down-fill")"></i>
+                @Model.TotalReturnPercent.Pct()
+            </span>
+        </div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-cash-stack"></i> Cash</div>
+        <div class="value">@Model.CashBalance.Money(Model.Currency)</div>
+        <div class="delta text-muted">Equity @Model.TotalEquity.Money(Model.Currency)</div>
+    </div>
 </div>
 
-<details open>
-    <summary><strong>Asset allocation</strong></summary>
-    <table>
-        <thead><tr><th>Class</th><th style="text-align:right;">Value</th><th style="text-align:right;">%</th></tr></thead>
-        <tbody>
-            @foreach (var s in Model.AssetClassAllocation)
-            {
-                <tr><td>@s.Label</td><td style="text-align:right;">@s.Value.Money(Model.Currency)</td><td style="text-align:right;">@s.Percent.Pct()</td></tr>
-            }
-        </tbody>
-    </table>
-</details>
-
-<details>
-    <summary><strong>Sector allocation</strong></summary>
-    <table>
-        <thead><tr><th>Sector</th><th style="text-align:right;">Value</th><th style="text-align:right;">%</th></tr></thead>
-        <tbody>
-            @foreach (var s in Model.SectorAllocation)
-            {
-                <tr><td>@s.Label</td><td style="text-align:right;">@s.Value.Money(Model.Currency)</td><td style="text-align:right;">@s.Percent.Pct()</td></tr>
-            }
-        </tbody>
-    </table>
-</details>
-
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+<div class="grid-2">
     <article>
-        <header><strong>Top gainers</strong></header>
+        <header>
+            <span><i class="bi bi-pie-chart"></i> Asset allocation</span>
+            <small class="text-muted">@Model.AssetClassAllocation.Count classes</small>
+        </header>
+        <div style="display:grid;grid-template-columns:160px 1fr;gap:1rem;align-items:center;">
+            <canvas id="assetChart" width="160" height="160"></canvas>
+            <table>
+                <tbody>
+                    @foreach (var s in Model.AssetClassAllocation)
+                    {
+                        <tr>
+                            <td><span class="dot" data-label="@s.Label"></span> @s.Label</td>
+                            <td style="text-align:right;">@s.Value.Money(Model.Currency)</td>
+                            <td style="text-align:right;" class="text-muted">@s.Percent.Pct()</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </article>
+
+    <article>
+        <header>
+            <span><i class="bi bi-bar-chart"></i> Sector allocation</span>
+            <small class="text-muted">@Model.SectorAllocation.Count sectors</small>
+        </header>
+        <table>
+            <thead><tr><th>Sector</th><th style="text-align:right;">Value</th><th style="text-align:right;">%</th></tr></thead>
+            <tbody>
+                @foreach (var s in Model.SectorAllocation.Take(8))
+                {
+                    <tr>
+                        <td>@s.Label</td>
+                        <td style="text-align:right;">@s.Value.Money(Model.Currency)</td>
+                        <td style="text-align:right;">
+                            <div style="display:flex;align-items:center;gap:.4rem;justify-content:flex-end;">
+                                <div style="width:60px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;">
+                                    <div style="width:@(Math.Min(100m, Math.Abs(s.Percent)).ToString(System.Globalization.CultureInfo.InvariantCulture))%;height:100%;background:var(--primary);"></div>
+                                </div>
+                                <span style="min-width:50px;">@s.Percent.Pct()</span>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </article>
+</div>
+
+<div class="grid-2">
+    <article>
+        <header><span><i class="bi bi-arrow-up-right-circle text-green"></i> Top gainers</span></header>
         <table>
             <thead><tr><th>Symbol</th><th style="text-align:right;">Value</th><th style="text-align:right;">Day</th></tr></thead>
             <tbody>
+                @if (Model.TopGainers.Count == 0)
+                {
+                    <tr><td colspan="3" class="text-muted" style="text-align:center;padding:1rem;">No data</td></tr>
+                }
                 @foreach (var m in Model.TopGainers)
                 {
-                    <tr><td><a href="/Portfolios/@(Model.PortfolioId ?? Guid.Empty)/Positions/@m.Symbol">@m.Symbol</a></td><td style="text-align:right;">@m.MarketValue.Money(Model.Currency)</td><td style="text-align:right;" class="@m.DayChangePercent.SignClass()">@m.DayChangePercent.Pct()</td></tr>
+                    <tr>
+                        <td><a href="/Portfolios/@(Model.PortfolioId ?? Guid.Empty)/Positions/@m.Symbol"><strong>@m.Symbol</strong></a></td>
+                        <td style="text-align:right;">@m.MarketValue.Money(Model.Currency)</td>
+                        <td style="text-align:right;"><span class="badge-up"><i class="bi bi-caret-up-fill"></i>@m.DayChangePercent.Pct()</span></td>
+                    </tr>
                 }
             </tbody>
         </table>
     </article>
     <article>
-        <header><strong>Top losers</strong></header>
+        <header><span><i class="bi bi-arrow-down-right-circle text-red"></i> Top losers</span></header>
         <table>
             <thead><tr><th>Symbol</th><th style="text-align:right;">Value</th><th style="text-align:right;">Day</th></tr></thead>
             <tbody>
+                @if (Model.TopLosers.Count == 0)
+                {
+                    <tr><td colspan="3" class="text-muted" style="text-align:center;padding:1rem;">No data</td></tr>
+                }
                 @foreach (var m in Model.TopLosers)
                 {
-                    <tr><td><a href="/Portfolios/@(Model.PortfolioId ?? Guid.Empty)/Positions/@m.Symbol">@m.Symbol</a></td><td style="text-align:right;">@m.MarketValue.Money(Model.Currency)</td><td style="text-align:right;" class="@m.DayChangePercent.SignClass()">@m.DayChangePercent.Pct()</td></tr>
+                    <tr>
+                        <td><a href="/Portfolios/@(Model.PortfolioId ?? Guid.Empty)/Positions/@m.Symbol"><strong>@m.Symbol</strong></a></td>
+                        <td style="text-align:right;">@m.MarketValue.Money(Model.Currency)</td>
+                        <td style="text-align:right;"><span class="badge-down"><i class="bi bi-caret-down-fill"></i>@m.DayChangePercent.Pct()</span></td>
+                    </tr>
                 }
             </tbody>
         </table>
     </article>
 </div>
 
-<footer><small>As of @Model.AsOf.ToString("yyyy-MM-dd HH:mm 'UTC'")</small></footer>
+@if (Model.ValueHistory is { Count: > 0 })
+{
+    <article>
+        <header>
+            <span><i class="bi bi-graph-up-arrow"></i> Portfolio value</span>
+            <small class="text-muted">@Model.ValueHistory.Count points</small>
+        </header>
+        <canvas id="valueChart" height="80"></canvas>
+    </article>
+}
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        (function () {
+            const palette = ['#5b9dff','#16c784','#f0b90b','#ea3943','#a78bfa','#22d3ee','#fb7185','#84cc16','#f97316','#06b6d4'];
+            const css = getComputedStyle(document.documentElement);
+            const txtMuted = css.getPropertyValue('--text-muted').trim() || '#97a3b8';
+            const border = css.getPropertyValue('--border').trim() || '#243152';
+
+            // Tint legend dots inside the asset table
+            document.querySelectorAll('.dot').forEach((el, i) => {
+                el.style.display = 'inline-block';
+                el.style.width = '10px';
+                el.style.height = '10px';
+                el.style.borderRadius = '50%';
+                el.style.marginRight = '.35rem';
+                el.style.background = palette[i % palette.length];
+                el.style.verticalAlign = 'middle';
+            });
+
+            const assetCanvas = document.getElementById('assetChart');
+            if (assetCanvas && window.Chart) {
+                const labels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AssetClassAllocation.Select(a => a.Label)));
+                const data = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AssetClassAllocation.Select(a => a.Value)));
+                new Chart(assetCanvas, {
+                    type: 'doughnut',
+                    data: { labels, datasets: [{ data, backgroundColor: palette, borderColor: '#131c2e', borderWidth: 2 }] },
+                    options: {
+                        responsive: false,
+                        plugins: { legend: { display: false } },
+                        cutout: '65%'
+                    }
+                });
+            }
+
+            const valueCanvas = document.getElementById('valueChart');
+            if (valueCanvas && window.Chart) {
+                const labels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ValueHistory.Select(p => p.Date.ToString("yyyy-MM-dd"))));
+                const data = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ValueHistory.Select(p => p.Value)));
+                new Chart(valueCanvas, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            data,
+                            borderColor: '#5b9dff',
+                            backgroundColor: 'rgba(91,157,255,.15)',
+                            fill: true,
+                            tension: .3,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: txtMuted, maxTicksLimit: 8 }, grid: { color: border } },
+                            y: { ticks: { color: txtMuted }, grid: { color: border } }
+                        }
+                    }
+                });
+            }
+        })();
+    </script>
+}

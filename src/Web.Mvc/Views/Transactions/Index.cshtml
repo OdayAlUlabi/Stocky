@@ -3,35 +3,65 @@
     ViewData["Title"] = "Transactions";
     var pid = (Guid)ViewBag.PortfolioId;
 }
-<header style="display:flex;justify-content:space-between;align-items:baseline;">
-    <h2>Transactions · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
-    <div>
-        <a href="/Portfolios/@pid/Transactions/Create" role="button">+ New</a>
-        <a href="/Portfolios/@pid/Transactions/Import" role="button" class="secondary">Import CSV</a>
+
+<div class="page-header">
+    <h2>
+        <i class="bi bi-arrow-left-right"></i> Transactions
+        <small class="text-muted" style="font-size:.85rem;font-weight:400;">· <a href="/Portfolios/Detail/@pid"><i class="bi bi-arrow-left"></i> Back to portfolio</a></small>
+    </h2>
+    <div class="actions">
+        <a href="/Portfolios/@pid/Transactions/Import" class="btn btn-ghost"><i class="bi bi-upload"></i> Import CSV</a>
+        <a href="/Portfolios/@pid/Transactions/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> New transaction</a>
     </div>
-</header>
-<table>
-    <thead><tr><th>Date</th><th>Type</th><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Fee</th><th>Notes</th><th></th></tr></thead>
-    <tbody>
-        @foreach (var t in Model)
-        {
+</div>
+
+<article>
+    <table>
+        <thead>
             <tr>
-                <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
-                <td>@t.Type</td>
-                <td>@t.Symbol</td>
-                <td style="text-align:right;">@t.Quantity.Num(4)</td>
-                <td style="text-align:right;">@t.Price.Money(t.Currency)</td>
-                <td style="text-align:right;">@t.Fee.Money(t.Currency)</td>
-                <td>@t.Notes</td>
-                <td>
-                    <a href="/Portfolios/@pid/Transactions/Edit/@t.Id">Edit</a> ·
-                    <form method="post" action="/Portfolios/@pid/Transactions/Delete/@t.Id" style="display:inline;" onsubmit="return confirm('Delete?');">
-                        @Html.AntiForgeryToken()
-                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
-                    </form>
-                </td>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Symbol</th>
+                <th style="text-align:right;">Qty</th>
+                <th style="text-align:right;">Price</th>
+                <th style="text-align:right;">Fee</th>
+                <th>Notes</th>
+                <th style="text-align:right;">Actions</th>
             </tr>
-        }
-        @if (Model.Count == 0) { <tr><td colspan="8"><em>No transactions.</em></td></tr> }
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            @foreach (var t in Model)
+            {
+                var isBuy = string.Equals(t.Type, "Buy", StringComparison.OrdinalIgnoreCase);
+                var isSell = string.Equals(t.Type, "Sell", StringComparison.OrdinalIgnoreCase);
+                var pillCls = isBuy ? "badge-up" : isSell ? "badge-down" : "pill";
+                <tr>
+                    <td class="text-muted">@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
+                    <td><span class="@pillCls">@t.Type</span></td>
+                    <td><strong>@t.Symbol</strong></td>
+                    <td style="text-align:right;">@t.Quantity.Num(4)</td>
+                    <td style="text-align:right;">@t.Price.Money(t.Currency)</td>
+                    <td style="text-align:right;" class="text-muted">@t.Fee.Money(t.Currency)</td>
+                    <td class="text-muted">@t.Notes</td>
+                    <td style="text-align:right;">
+                        <a href="/Portfolios/@pid/Transactions/Edit/@t.Id" class="btn btn-ghost btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                        <form method="post" action="/Portfolios/@pid/Transactions/Delete/@t.Id" style="display:inline;" onsubmit="return confirm('Delete this transaction?');">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            @if (Model.Count == 0)
+            {
+                <tr>
+                    <td colspan="8" style="text-align:center;padding:2rem;">
+                        <div class="text-muted" style="margin-bottom:.75rem;"><i class="bi bi-inbox" style="font-size:2rem;"></i></div>
+                        <p class="text-muted">No transactions yet.</p>
+                        <a href="/Portfolios/@pid/Transactions/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add first transaction</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</article>
