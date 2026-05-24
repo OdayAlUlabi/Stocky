@@ -271,7 +271,7 @@ jobs:
 
   # ── Smoke test: waits for both deploys ────────────────────────────────────────
   smoke-test:
-    needs: [deploy-api, deploy-web, deploy-web-mvc]
+    needs: [deploy-api, deploy-web-mvc]
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
     timeout-minutes: 5
     steps:
