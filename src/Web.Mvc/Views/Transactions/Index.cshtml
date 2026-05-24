@@ -1,19 +1,28 @@
 @model List<TransactionDto>
 @{
-    ViewData["Title"] = "Transactions";
     var pid = (Guid)ViewBag.PortfolioId;
+    var portfolio = ViewBag.Portfolio as PortfolioDto;
+    ViewData["Title"] = (portfolio?.Name ?? "Portfolio") + " · Transactions";
+    ViewBag.PickerPathTemplate = "/Portfolios/{0}/Transactions";
 }
 
 <div class="page-header">
     <h2>
         <i class="bi bi-arrow-left-right"></i> Transactions
-        <small class="text-muted" style="font-size:.85rem;font-weight:400;">· <a href="/Portfolios/Detail/@pid"><i class="bi bi-arrow-left"></i> Back to portfolio</a></small>
+        @await Html.PartialAsync("_PortfolioPicker")
     </h2>
     <div class="actions">
+        <a href="/Portfolios/Detail/@pid" class="btn btn-ghost btn-sm"><i class="bi bi-arrow-left"></i> Portfolio</a>
+        <a href="/Portfolios/@pid/Cash" class="btn btn-ghost btn-sm"><i class="bi bi-cash-coin"></i> Cash</a>
         <a href="/Portfolios/@pid/Transactions/Import" class="btn btn-ghost"><i class="bi bi-upload"></i> Import CSV</a>
         <a href="/Portfolios/@pid/Transactions/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> New transaction</a>
     </div>
 </div>
+
+@if (TempData["Status"] is string status)
+{
+    <div class="flash success">@status</div>
+}
 
 <article>
     <table>

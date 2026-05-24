@@ -12,8 +12,9 @@ public class CashController : Controller
 {
     public async Task<IActionResult> Index(Guid portfolioId)
     {
-        var portfolio = await this.InvokeAsync<StockyApi.PortfoliosController, PortfolioDto>(
-            c => c.Get(portfolioId));
+        var portfolios = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>();
+        var portfolio = portfolios.FirstOrDefault(p => p.Id == portfolioId);
         if (portfolio is null) return NotFound();
 
         var rows = await this.InvokeAsync<StockyApi.CashController, IEnumerable<CashTransactionDto>>(
@@ -22,6 +23,7 @@ public class CashController : Controller
             c => c.Balances(portfolioId)) ?? Array.Empty<CashBalanceDto>();
         ViewBag.PortfolioId = portfolioId;
         ViewBag.Portfolio = portfolio;
+        ViewBag.Portfolios = portfolios.ToList();
         ViewBag.Balances = balances.ToList();
         return View(rows.ToList());
     }

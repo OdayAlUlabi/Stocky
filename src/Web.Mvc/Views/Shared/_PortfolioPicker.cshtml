@@ -1,0 +1,30 @@
+@*
+    Portfolio picker — used by Transactions, Cash and similar portfolio-scoped pages.
+    Expects ViewBag.Portfolios (List<PortfolioDto>) and ViewBag.PortfolioId (Guid).
+    Optional ViewBag.PickerPathTemplate, e.g. "/Portfolios/{0}/Cash" — defaults to /Portfolios/Detail/{0}.
+*@
+@{
+    var picks = ViewBag.Portfolios as List<PortfolioDto> ?? new List<PortfolioDto>();
+    var current = (Guid)ViewBag.PortfolioId;
+    var tmpl = (ViewBag.PickerPathTemplate as string) ?? "/Portfolios/Detail/{0}";
+    var portfolio = picks.FirstOrDefault(p => p.Id == current);
+}
+@if (picks.Count > 0)
+{
+    <div class="portfolio-picker">
+        <i class="bi bi-briefcase"></i>
+        <select onchange="if(this.value)window.location.href=this.value;" aria-label="Switch portfolio">
+            @foreach (var p in picks)
+            {
+                var url = string.Format(tmpl, p.Id);
+                <option value="@url" selected="@(p.Id == current)">@p.Name (@p.BaseCurrency)</option>
+            }
+        </select>
+        @if (portfolio is not null)
+        {
+            <a href="/Portfolios/Detail/@portfolio.Id" class="text-muted" title="Open portfolio detail">
+                <i class="bi bi-box-arrow-up-right"></i>
+            </a>
+        }
+    </div>
+}
