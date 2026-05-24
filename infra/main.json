@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "8404776030761805271"
+      "templateHash": "1882440928709786249"
     }
   },
   "parameters": {
@@ -2168,7 +2168,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "14394981018235081146"
+              "templateHash": "2927535028078517002"
             }
           },
           "parameters": {
@@ -2280,7 +2280,6 @@
             "isBootstrap": "[equals(parameters('imageTag'), 'placeholder')]",
             "bootstrapImage": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
             "apiImage": "[if(variables('isBootstrap'), variables('bootstrapImage'), format('{0}/stocky-api:{1}', parameters('acrLoginServer'), parameters('imageTag')))]",
-            "webImage": "[if(variables('isBootstrap'), variables('bootstrapImage'), format('{0}/stocky-web:{1}', parameters('acrLoginServer'), parameters('imageTag')))]",
             "webMvcImage": "[if(variables('isBootstrap'), variables('bootstrapImage'), format('{0}/stocky-web-mvc:{1}', parameters('acrLoginServer'), parameters('imageTag')))]"
           },
           "resources": [
@@ -2398,53 +2397,6 @@
                         }
                       }
                     ]
-                  }
-                }
-              }
-            },
-            {
-              "type": "Microsoft.App/containerApps",
-              "apiVersion": "2024-10-02-preview",
-              "name": "[format('ca-{0}-web', parameters('prefix'))]",
-              "location": "[parameters('location')]",
-              "tags": "[union(parameters('tags'), createObject('azd-service-name', 'web'))]",
-              "identity": {
-                "type": "UserAssigned",
-                "userAssignedIdentities": {
-                  "[format('{0}', parameters('apiIdentityId'))]": {}
-                }
-              },
-              "properties": {
-                "managedEnvironmentId": "[parameters('envId')]",
-                "configuration": {
-                  "ingress": {
-                    "external": true,
-                    "targetPort": "[if(variables('isBootstrap'), 80, 8080)]",
-                    "transport": "http",
-                    "allowInsecure": true
-                  },
-                  "registries": "[if(variables('isBootstrap'), createArray(), createArray(createObject('server', parameters('acrLoginServer'), 'identity', parameters('apiIdentityId'))))]"
-                },
-                "template": {
-                  "containers": [
-                    {
-                      "name": "web",
-                      "image": "[variables('webImage')]",
-                      "resources": {
-                        "cpu": "[json('0.25')]",
-                        "memory": "0.5Gi"
-                      },
-                      "env": [
-                        {
-                          "name": "PORT",
-                          "value": "8080"
-                        }
-                      ]
-                    }
-                  ],
-                  "scale": {
-                    "minReplicas": 1,
-                    "maxReplicas": 3
                   }
                 }
               }
@@ -2573,17 +2525,9 @@
               "type": "string",
               "value": "[format('ca-{0}-api', parameters('prefix'))]"
             },
-            "webAppName": {
-              "type": "string",
-              "value": "[format('ca-{0}-web', parameters('prefix'))]"
-            },
             "apiFqdn": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.App/containerApps', format('ca-{0}-api', parameters('prefix'))), '2024-10-02-preview').configuration.ingress.fqdn]"
-            },
-            "webFqdn": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.App/containerApps', format('ca-{0}-web', parameters('prefix'))), '2024-10-02-preview').configuration.ingress.fqdn]"
             },
             "webMvcAppName": {
               "type": "string",
@@ -3136,7 +3080,7 @@
             "value": "[reference('apps').outputs.apiFqdn.value]"
           },
           "webBackendFqdn": {
-            "value": "[reference('apps').outputs.webFqdn.value]"
+            "value": "[reference('apps').outputs.webMvcFqdn.value]"
           },
           "agwIdentityId": {
             "value": "[reference('ids').outputs.agwIdId.value]"
@@ -3580,10 +3524,6 @@
       "type": "string",
       "value": "[reference('apps').outputs.apiFqdn.value]"
     },
-    "WEB_INTERNAL_FQDN": {
-      "type": "string",
-      "value": "[reference('apps').outputs.webFqdn.value]"
-    },
     "API_IDENTITY_CLIENT_ID": {
       "type": "string",
       "value": "[reference('ids').outputs.apiIdClientId.value]"
@@ -3616,9 +3556,13 @@
       "type": "string",
       "value": "[reference('apps').outputs.apiAppName.value]"
     },
-    "WEB_APP_NAME": {
+    "WEB_MVC_APP_NAME": {
       "type": "string",
-      "value": "[reference('apps').outputs.webAppName.value]"
+      "value": "[reference('apps').outputs.webMvcAppName.value]"
+    },
+    "WEB_MVC_INTERNAL_FQDN": {
+      "type": "string",
+      "value": "[reference('apps').outputs.webMvcFqdn.value]"
     },
     "MIGRATOR_JOB_NAME": {
       "type": "string",

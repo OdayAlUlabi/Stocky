@@ -290,8 +290,6 @@ module appgw 'modules/appGateway.bicep' = {
     tags: tags
     subnetId: net.outputs.appGwSubnetId
     apiBackendFqdn: apps.outputs.apiFqdn
-    // Google OAuth removed; AGW now routes default traffic to the MVC app.
-    // Legacy nginx SPA (apps.outputs.webFqdn) is scaled to 0.
     webBackendFqdn: apps.outputs.webMvcFqdn
     agwIdentityId: ids.outputs.agwIdId
     tlsCertSecretUri: tlsCertSecretUri
@@ -308,7 +306,6 @@ output AZURE_RESOURCE_GROUP string = resourceGroup().name
 output PUBLIC_IP string = appgw.outputs.appGwPublicIp
 output PUBLIC_FQDN string = appgw.outputs.appGwFqdn
 output API_INTERNAL_FQDN string = apps.outputs.apiFqdn
-output WEB_INTERNAL_FQDN string = apps.outputs.webFqdn
 output API_IDENTITY_CLIENT_ID string = ids.outputs.apiIdClientId
 output CICD_CLIENT_ID string = ids.outputs.cicdIdClientId
 output CICD_TENANT_ID string = subscription().tenantId
@@ -317,7 +314,6 @@ output ACR_LOGIN_SERVER string = acr.outputs.acrLoginServer
 output ACR_NAME string = acr.outputs.acrName
 output ACA_ENV_NAME string = env.outputs.envName
 output API_APP_NAME string = apps.outputs.apiAppName
-output WEB_APP_NAME string = apps.outputs.webAppName
 output WEB_MVC_APP_NAME string = apps.outputs.webMvcAppName
 output WEB_MVC_INTERNAL_FQDN string = apps.outputs.webMvcFqdn
 output MIGRATOR_JOB_NAME string = jobs.outputs.jobName

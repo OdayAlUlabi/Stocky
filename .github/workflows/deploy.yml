@@ -21,11 +21,9 @@ env:
   ACR_NAME:              ${{ vars.ACR_NAME }}
   ACR_LOGIN_SERVER:      ${{ vars.ACR_LOGIN_SERVER }}
   API_APP_NAME:          ${{ vars.API_APP_NAME }}
-  WEB_APP_NAME:          ${{ vars.WEB_APP_NAME }}
   WEB_MVC_APP_NAME:      ${{ vars.WEB_MVC_APP_NAME }}
   MIGRATOR_JOB_NAME:     ${{ vars.MIGRATOR_JOB_NAME }}
   PUBLIC_FQDN:           ${{ vars.PUBLIC_FQDN }}
-  VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
   IMAGE_TAG:             ${{ github.sha }}
   # Override to '["self-hosted","linux","stocky"]' (JSON array as a single string)
   # via repo Variable RUNS_ON_DEPLOY once the in-VNet runner is online. Defaults
@@ -94,39 +92,7 @@ jobs:
           docker push "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG"
           docker push "$ACR_LOGIN_SERVER/stocky-api:cache"
 
-  build-web:
-    runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-
-      - name: ACR login (OIDC)
-        run: az acr login --name "$ACR_NAME"
-
-      - name: Build + push web image
-        run: |
-          DOCKER_BUILDKIT=1 docker build \
-            --cache-from "$ACR_LOGIN_SERVER/stocky-web:cache" \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg VITE_GOOGLE_CLIENT_ID="$VITE_GOOGLE_CLIENT_ID" \
-            --build-arg VITE_API_BASE_URL="" \
-            -f src/Web/Dockerfile \
-            -t "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG" \
-            -t "$ACR_LOGIN_SERVER/stocky-web:cache" \
-            .
-          docker push "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG"
-          docker push "$ACR_LOGIN_SERVER/stocky-web:cache"
-
-  # ── New server-rendered MVC app (Stocky.Web.Mvc). Lives alongside the legacy
-  #    nginx SPA (`stocky-web`) until the manual App Gateway cutover in
-  #    docs/non-spa-rearchitecture.md §9.
+  # ── Server-rendered MVC app (Stocky.Web.Mvc) ────────────────────────────────
   build-web-mvc:
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
     timeout-minutes: 20
@@ -254,42 +220,6 @@ jobs:
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --target-port 8080
-
-  deploy-web:
-    needs: [build-web]
-    runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
-    timeout-minutes: 10
-    environment: prod
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Update web container app
-        run: |
-          WEB_MI=$(az identity show \
-            --name "id-stocky-prod-api" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query id -o tsv)
-          az containerapp registry set \
-            --name "$WEB_APP_NAME" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --server "$ACR_LOGIN_SERVER" \
-            --identity "$WEB_MI"
-          az containerapp update \
-            --name "$WEB_APP_NAME" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG"
-          az containerapp ingress update \
-            --name "$WEB_APP_NAME" \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --target-port 8080 \
-            --transport http
 
   # ── Web.Mvc: shares the API's SQL identity, so wait for migrations to land
   #    before starting it (it opens a DbContext on first request).
