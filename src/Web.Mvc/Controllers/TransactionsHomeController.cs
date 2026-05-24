@@ -63,24 +63,28 @@ public class CashHomeController : Controller
 public class PortfolioAnalyticsHomeController : Controller
 {
     [HttpGet("Performance")]
-    public Task<IActionResult> Performance() => RedirectToFirstPortfolio("Performance", "Create a portfolio to view performance.");
+    public Task<IActionResult> Performance() => ChoosePortfolio("Performance", "bi-bar-chart-line", "Create a portfolio to view performance.");
 
     [HttpGet("Reports")]
-    public Task<IActionResult> Reports() => RedirectToFirstPortfolio("Reports", "Create a portfolio to view reports.");
+    public Task<IActionResult> Reports() => ChoosePortfolio("Reports", "bi-file-earmark-bar-graph", "Create a portfolio to view reports.");
 
     [HttpGet("Rebalance")]
-    public Task<IActionResult> Rebalance() => RedirectToFirstPortfolio("Rebalance", "Create a portfolio to set rebalance targets.");
+    public Task<IActionResult> Rebalance() => ChoosePortfolio("Rebalance", "bi-sliders", "Create a portfolio to set rebalance targets.");
 
-    private async Task<IActionResult> RedirectToFirstPortfolio(string action, string emptyMessage)
+    private async Task<IActionResult> ChoosePortfolio(string action, string icon, string emptyMessage)
     {
-        var list = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
-            c => c.List()) ?? Array.Empty<PortfolioDto>();
-        var first = list.FirstOrDefault();
-        if (first is null)
+        var list = (await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>()).ToList();
+        if (list.Count == 0)
         {
             TempData["Status"] = emptyMessage;
             return Redirect("/Portfolios");
         }
-        return Redirect($"/Portfolios/{first.Id}/{action}");
+        if (list.Count == 1) return Redirect($"/Portfolios/{list[0].Id}/{action}");
+        ViewBag.Portfolios = list;
+        ViewBag.Kind = action;
+        ViewBag.PathTemplate = $"/Portfolios/{{0}}/{action}";
+        ViewBag.Icon = icon;
+        return View("~/Views/Shared/PortfolioChooser.cshtml");
     }
 }

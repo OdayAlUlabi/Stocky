@@ -6,10 +6,10 @@ namespace Stocky.Api.Services;
 
 /// <summary>
 /// Periodic refresher: pulls quotes for every symbol that appears in any
-/// holding or watchlist, writes a new PriceQuote row, and runs the alert
-/// evaluator. Interval comes from MarketData:RefreshSeconds (default 10,
-/// minimum 5). Skips iterations when the US equity market is closed unless
-/// MarketData:AlwaysRefresh=true.
+/// holding, watchlist, or transaction ledger, writes a new PriceQuote row,
+/// and runs the alert evaluator. Interval comes from MarketData:RefreshSeconds
+/// (default 5, minimum 5). Skips iterations when the US equity market is
+/// closed unless MarketData:AlwaysRefresh=true.
 /// </summary>
 public sealed class QuoteRefresher(
     IServiceProvider services,
@@ -21,7 +21,7 @@ public sealed class QuoteRefresher(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var seconds = config.GetValue("MarketData:RefreshSeconds", 10);
+        var seconds = config.GetValue("MarketData:RefreshSeconds", 5);
         var delay = TimeSpan.FromSeconds(Math.Max(seconds, 5));
         var alwaysRefresh = config.GetValue("MarketData:AlwaysRefresh", false);
 
@@ -65,6 +65,9 @@ public sealed class QuoteRefresher(
 
         var symbols = await db.Holdings.Select(h => h.Symbol)
             .Union(db.WatchlistItems.Select(w => w.Symbol))
+            .Union(db.Transactions
+                .Where(t => t.Symbol != null && t.Symbol != "")
+                .Select(t => t.Symbol!))
             .Distinct()
             .ToListAsync(ct);
         if (symbols.Count == 0) return;

@@ -1,10 +1,20 @@
 @model RebalanceReportDto
 @{
-    ViewData["Title"] = "Rebalance";
     var pid = (Guid)ViewBag.PortfolioId;
     var targets = ViewBag.Targets as List<RebalanceTargetDto> ?? new();
+    var portfolio = ViewBag.Portfolio as PortfolioDto;
+    ViewData["Title"] = (portfolio?.Name ?? "Portfolio") + " · Rebalance";
+    ViewBag.PickerPathTemplate = "/Portfolios/{0}/Rebalance";
 }
-<h2>Rebalance · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+<div class="page-header">
+    <h2>
+        <i class="bi bi-sliders"></i> Rebalance
+        @await Html.PartialAsync("_PortfolioPicker")
+    </h2>
+    <div class="actions">
+        <a href="/Portfolios/Detail/@pid" class="btn btn-ghost btn-sm"><i class="bi bi-arrow-left"></i> Portfolio</a>
+    </div>
+</div>
 @if (Model is null) { <p><em>No data.</em></p> return; }
 <p>Total value: <strong>@Model.TotalValue.Money(Model.Currency)</strong> · Target weight sum: <strong>@Model.TargetWeightSumPercent.Pct()</strong></p>
 

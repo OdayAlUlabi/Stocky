@@ -1,13 +1,23 @@
 @model PerformanceDto
 @{
-    ViewData["Title"] = "Performance";
     var pid = (Guid)ViewBag.PortfolioId;
     var days = (int)ViewBag.Days;
+    var portfolio = ViewBag.Portfolio as PortfolioDto;
+    ViewData["Title"] = (portfolio?.Name ?? "Portfolio") + " · Performance";
+    ViewBag.PickerPathTemplate = "/Portfolios/{0}/Performance?days=" + days;
 }
-<h2>Performance · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+<div class="page-header">
+    <h2>
+        <i class="bi bi-bar-chart-line"></i> Performance
+        @await Html.PartialAsync("_PortfolioPicker")
+    </h2>
+    <div class="actions">
+        <a href="/Portfolios/Detail/@pid" class="btn btn-ghost btn-sm"><i class="bi bi-arrow-left"></i> Portfolio</a>
+    </div>
+</div>
 <form method="get" action="/Portfolios/@pid/Performance" style="display:flex;gap:.5rem;align-items:end;">
     <label>Window (days) <input type="number" name="days" value="@days" min="7" max="3650" /></label>
-    <button type="submit">Apply</button>
+    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
 </form>
 
 @if (Model is null) { <p><em>No data.</em></p> return; }

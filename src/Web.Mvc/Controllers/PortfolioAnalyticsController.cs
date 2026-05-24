@@ -28,7 +28,7 @@ public class PortfolioAnalyticsController : Controller
     {
         var dto = await this.InvokeAsync<StockyApi.PerformanceController, PerformanceDto>(
             c => c.Get(portfolioId, days));
-        ViewBag.PortfolioId = portfolioId;
+        await LoadPortfolioContext(portfolioId);
         ViewBag.Days = days;
         return View(dto);
     }
@@ -73,7 +73,7 @@ public class PortfolioAnalyticsController : Controller
             c => c.Summary(portfolioId, from, to));
         var dividends = await this.InvokeAsync<StockyApi.ReportsController, IEnumerable<DividendRowDto>>(
             c => c.Dividends(portfolioId, year));
-        ViewBag.PortfolioId = portfolioId;
+        await LoadPortfolioContext(portfolioId);
         ViewBag.Dividends = (dividends ?? Array.Empty<DividendRowDto>()).ToList();
         ViewBag.From = from;
         ViewBag.To = to;
@@ -105,7 +105,7 @@ public class PortfolioAnalyticsController : Controller
             c => c.Get(portfolioId, ct));
         var targets = await this.InvokeAsync<StockyApi.RebalanceController, IEnumerable<RebalanceTargetDto>>(
             c => c.GetTargets(portfolioId, ct));
-        ViewBag.PortfolioId = portfolioId;
+        await LoadPortfolioContext(portfolioId);
         ViewBag.Targets = (targets ?? Array.Empty<RebalanceTargetDto>()).ToList();
         return View(report);
     }
@@ -156,5 +156,14 @@ public class PortfolioAnalyticsController : Controller
         if (dto is null) return NotFound();
         ViewBag.PortfolioId = portfolioId;
         return View(dto);
+    }
+
+    private async Task LoadPortfolioContext(Guid portfolioId)
+    {
+        var portfolios = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>();
+        ViewBag.PortfolioId = portfolioId;
+        ViewBag.Portfolios = portfolios.ToList();
+        ViewBag.Portfolio = portfolios.FirstOrDefault(p => p.Id == portfolioId);
     }
 }

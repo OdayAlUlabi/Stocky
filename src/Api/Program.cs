@@ -265,6 +265,7 @@ builder.Services.AddSingleton<IProviderCache, ProviderCache>();
 builder.Services.AddStockyDomainServices(builder.Configuration);
 
 builder.Services.AddHostedService<QuoteRefresher>();
+builder.Services.AddHostedService<HistoricalDataBackfillJob>();
 builder.Services.AddHostedService<SnapshotJob>();
 builder.Services.AddHostedService<AlertSweepJob>();
 builder.Services.AddHostedService<ReportScheduleJob>();

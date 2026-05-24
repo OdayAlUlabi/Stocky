@@ -13,6 +13,7 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
     public DbSet<Watchlist> Watchlists => Set<Watchlist>();
     public DbSet<WatchlistItem> WatchlistItems => Set<WatchlistItem>();
     public DbSet<PriceQuote> PriceQuotes => Set<PriceQuote>();
+    public DbSet<HistoricalPrice> HistoricalPrices => Set<HistoricalPrice>();
     public DbSet<Alert> Alerts => Set<Alert>();
     public DbSet<AlertEvent> AlertEvents => Set<AlertEvent>();
     public DbSet<InsiderTrade> InsiderTrades => Set<InsiderTrade>();
@@ -118,6 +119,17 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.Property(x => x.Change).HasPrecision(18, 8);
             e.Property(x => x.ChangePercent).HasPrecision(9, 4);
             e.HasOne(x => x.Instrument).WithMany().HasForeignKey(x => x.Symbol).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<HistoricalPrice>(e =>
+        {
+            e.HasIndex(x => new { x.Symbol, x.Date }).IsUnique();
+            e.Property(x => x.Symbol).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Close).HasPrecision(18, 8);
+            e.Property(x => x.Open).HasPrecision(18, 8);
+            e.Property(x => x.High).HasPrecision(18, 8);
+            e.Property(x => x.Low).HasPrecision(18, 8);
+            e.Property(x => x.Source).HasMaxLength(32);
         });
 
         modelBuilder.Entity<Alert>(e =>

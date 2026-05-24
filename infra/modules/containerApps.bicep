@@ -66,6 +66,16 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
           keyVaultUrl: '${kvUri}secrets/stocky-api-sql-cert'
           identity: apiIdentityId
         }
+        {
+          name: 'alpaca-api-key-id'
+          keyVaultUrl: '${kvUri}secrets/alpaca-api-key-id'
+          identity: apiIdentityId
+        }
+        {
+          name: 'alpaca-secret-key'
+          keyVaultUrl: '${kvUri}secrets/alpaca-secret-key'
+          identity: apiIdentityId
+        }
       ]
       ingress: {
         external: true
@@ -103,6 +113,9 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'Sql__ManagedIdentityClientId', value: apiSqlIdentityClientId }
             { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDbName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
             { name: 'AllowedOrigins__0', value: 'https://${publicHostname}' }
+            // Alpaca market data — credentials injected from KV (see secrets above).
+            { name: 'MarketData__Alpaca__ApiKeyId', secretRef: 'alpaca-api-key-id' }
+            { name: 'MarketData__Alpaca__ApiSecret', secretRef: 'alpaca-secret-key' }
             // PORT is read by the bootstrap helloworld image; the real ASP.NET
             // image ignores it (it honours ASPNETCORE_URLS instead).
             { name: 'PORT', value: '8080' }
@@ -162,6 +175,16 @@ resource webMvc 'Microsoft.App/containerApps@2024-10-02-preview' = {
           keyVaultUrl: '${kvUri}secrets/stocky-api-sql-cert'
           identity: apiIdentityId
         }
+        {
+          name: 'alpaca-api-key-id'
+          keyVaultUrl: '${kvUri}secrets/alpaca-api-key-id'
+          identity: apiIdentityId
+        }
+        {
+          name: 'alpaca-secret-key'
+          keyVaultUrl: '${kvUri}secrets/alpaca-secret-key'
+          identity: apiIdentityId
+        }
       ]
       ingress: {
         external: true
@@ -198,6 +221,8 @@ resource webMvc 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'Sql__ManagedIdentityClientId', value: apiSqlIdentityClientId }
             { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDbName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
             { name: 'AllowedOrigins__0', value: 'https://${publicHostname}' }
+            { name: 'MarketData__Alpaca__ApiKeyId', secretRef: 'alpaca-api-key-id' }
+            { name: 'MarketData__Alpaca__ApiSecret', secretRef: 'alpaca-secret-key' }
             { name: 'PORT', value: '8080' }
           ]
           probes: isBootstrap ? [] : [
