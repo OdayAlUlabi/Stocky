@@ -23,7 +23,9 @@ export function useApiToken() {
       if (typeof payload.exp === 'number') {
         const expiresAt = payload.exp * 1000;
         if (Date.now() >= expiresAt) {
-          setCredential(null);
+          // Token expired. Don't clear credential \u2014 SilentOneTap will re-auth silently.
+          // Return undefined so no token is sent; any 401 will have hadToken=false and
+          // won't trigger logout. Only a server-rejected token (hadToken=true) logs out.
           return undefined;
         }
         // Pre-emptive refresh: ask Google to re-prompt (best effort, non-blocking).

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useReducer, useState, type ReactNode } from 'react';
 import { GoogleOAuthProvider, googleLogout, useGoogleOneTapLogin } from '@react-oauth/google';
 import { config } from '../config';
 
@@ -75,8 +75,11 @@ export function GoogleAuthProvider({ children }: { children: ReactNode }) {
     setCredential(null);
   }, [setCredential]);
 
-  // Clear the credential exactly when the token hard-expires so that
-  // SilentOneTap (which is already pre-warming a new token) can swap it in.
+  // At token expiry, trigger a re-render so SilentOneTap (disabled while token is
+  // valid) re-enables and silently obtains a fresh credential via auto_select.
+  // We do NOT clear credential here — that immediately shows the login page.
+  // The credential is only cleared when the API explicitly rejects it (hadToken=true 401).
+  const [, forceRefresh] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
     if (!credential) return;
     try {
@@ -85,11 +88,11 @@ export function GoogleAuthProvider({ children }: { children: ReactNode }) {
       if (typeof payload.exp !== 'number') return;
       const expiresAt = payload.exp * 1000;
       const now = Date.now();
-      if (now >= expiresAt) { setCredential(null); return; }
-      const t = setTimeout(() => setCredential(null), expiresAt - now);
+      if (now >= expiresAt) { forceRefresh(); return; }
+      const t = setTimeout(forceRefresh, expiresAt - now);
       return () => clearTimeout(t);
     } catch { /* ignore malformed token */ }
-  }, [credential, setCredential]);
+  }, [credential]);
 
   // Auto sign-out when any API call receives a 401 with a token that was rejected.
   // Ignore 401s from requests that had no token (e.g. race condition on login).
@@ -132,7 +135,10 @@ function SilentOneTap({
       if (res.credential) setCredential(res.credential);
     },
     onError: () => {},
-    disabled: !isAuthConfigured || Boolean(credential),
+    // Fire when there is no credential, or when the existing credential has expired.
+    // Do NOT fire while the credential is still valid — showing One Tap during an active
+    // session causes dismissals that trigger Google's exponential cooldown.
+    disabled: !isAuthConfigured || (Boolean(credential) && !isExpired(credential!)),
     auto_select: true,
   });
   return null;
