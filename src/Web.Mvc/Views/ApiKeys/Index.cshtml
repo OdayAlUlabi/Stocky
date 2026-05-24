@@ -1,0 +1,57 @@
+@model List<ApiKeyDto>
+@{
+    ViewData["Title"] = "API keys";
+    var newName = TempData["NewKeyName"] as string;
+    var newPlain = TempData["NewKeyPlaintext"] as string;
+}
+<h2>API keys</h2>
+
+@if (!string.IsNullOrEmpty(newPlain))
+{
+    <article style="border:2px solid #fbbf24;">
+        <header><strong>New key created: @newName</strong></header>
+        <p>Copy this key now — it will <strong>not</strong> be shown again.</p>
+        <pre style="white-space:pre-wrap;word-break:break-all;"><code>@newPlain</code></pre>
+    </article>
+}
+
+<h3>Create new key</h3>
+<form method="post" action="/ApiKeys/Create" style="max-width:560px;">
+    @Html.AntiForgeryToken()
+    <div class="grid">
+        <label>Name <input name="name" required /></label>
+        <label>Scopes (optional, csv) <input name="scopes" placeholder="read,write" /></label>
+    </div>
+    <label>Expires at (optional) <input name="expiresAt" type="datetime-local" /></label>
+    <button type="submit">Create key</button>
+</form>
+
+<h3>Existing keys</h3>
+<table>
+    <thead><tr><th>Name</th><th>Prefix</th><th>Scopes</th><th>Created</th><th>Expires</th><th>Last used</th><th>Active</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var k in Model)
+        {
+            <tr>
+                <td>@k.Name</td>
+                <td><code>@k.Prefix…</code></td>
+                <td>@k.Scopes</td>
+                <td>@k.CreatedAt.ToString("yyyy-MM-dd")</td>
+                <td>@(k.ExpiresAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                <td>@(k.LastUsedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                <td>@(k.IsActive ? "Yes" : "No")</td>
+                <td>
+                    @if (k.IsActive)
+                    {
+                        <form method="post" action="/ApiKeys/Revoke" style="display:inline;" onsubmit="return confirm('Revoke?');">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@k.Id" />
+                            <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">Revoke</button>
+                        </form>
+                    }
+                </td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="8"><em>No keys.</em></td></tr> }
+    </tbody>
+</table>

@@ -1,0 +1,37 @@
+@model List<ModelPortfolioTemplateDto>
+@{ ViewData["Title"] = "Model templates"; }
+<h2>Model portfolio templates</h2>
+<p><small>Apply a template to create a new portfolio pre-seeded with target allocations.</small></p>
+
+@foreach (var t in Model)
+{
+    <article>
+        <header>
+            <strong>@t.Name</strong> <small>· @t.Risk risk</small>
+            <br /><small>@t.Description</small>
+        </header>
+        <details>
+            <summary>Allocations (@t.Allocations.Count)</summary>
+            <table>
+                <thead><tr><th>Symbol</th><th>Name</th><th>Class</th><th style="text-align:right;">Weight</th></tr></thead>
+                <tbody>
+                    @foreach (var a in t.Allocations)
+                    {
+                        <tr><td>@a.Symbol</td><td>@a.Name</td><td>@a.AssetClass</td><td style="text-align:right;">@a.WeightPercent.Pct()</td></tr>
+                    }
+                </tbody>
+            </table>
+        </details>
+        <form method="post" action="/Templates/Apply" style="margin-top:.5rem;">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="slug" value="@t.Slug" />
+            <div class="grid">
+                <label>Portfolio name <input name="portfolioName" value="@t.Name" required /></label>
+                <label>Base currency <input name="baseCurrency" value="USD" /></label>
+                <label>Initial cash deposit <input name="initialCashDeposit" type="number" step="any" /></label>
+            </div>
+            <button type="submit">Apply template</button>
+        </form>
+    </article>
+}
+@if (Model.Count == 0) { <p><em>No templates available.</em></p> }

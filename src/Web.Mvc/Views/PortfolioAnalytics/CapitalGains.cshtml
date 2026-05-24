@@ -1,0 +1,38 @@
+@model CapitalGainsDto
+@{
+    ViewData["Title"] = "Capital gains";
+    var pid = (Guid)ViewBag.PortfolioId;
+    var year = ViewBag.Year as int?;
+}
+<h2>Capital gains · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+<form method="get" action="/Portfolios/@pid/CapitalGains" style="display:flex;gap:.5rem;align-items:end;">
+    <label>Year <input type="number" name="year" value="@year" min="2000" max="2100" placeholder="(all)" /></label>
+    <button type="submit">Apply</button>
+</form>
+
+@if (Model is null) { <p><em>No data.</em></p> return; }
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem;margin:1rem 0;">
+    <article><small>Year</small><h4>@(Model.Year == 0 ? "All" : Model.Year.ToString())</h4></article>
+    <article><small>Short-term</small><h4 class="@Model.ShortTermGain.SignClass()">@Model.ShortTermGain.Money("USD")</h4></article>
+    <article><small>Long-term</small><h4 class="@Model.LongTermGain.SignClass()">@Model.LongTermGain.Money("USD")</h4></article>
+    <article><small>Total</small><h4 class="@Model.TotalGain.SignClass()">@Model.TotalGain.Money("USD")</h4></article>
+</div>
+<h3>Realized lots</h3>
+<table>
+    <thead><tr><th>Symbol</th><th>Acquired</th><th>Sold</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Cost</th><th style="text-align:right;">Proceeds</th><th style="text-align:right;">Gain</th><th>Term</th></tr></thead>
+    <tbody>
+        @foreach (var l in Model.Lots)
+        {
+            <tr>
+                <td>@l.Symbol</td>
+                <td>@l.AcquiredAt.ToString("yyyy-MM-dd")</td>
+                <td>@l.SoldAt.ToString("yyyy-MM-dd")</td>
+                <td style="text-align:right;">@l.Quantity.Num(4)</td>
+                <td style="text-align:right;">@l.CostBasis.Money("USD")</td>
+                <td style="text-align:right;">@l.Proceeds.Money("USD")</td>
+                <td style="text-align:right;" class="@l.Gain.SignClass()">@l.Gain.Money("USD")</td>
+                <td>@(l.IsLongTerm ? "Long" : "Short")</td>
+            </tr>
+        }
+    </tbody>
+</table>

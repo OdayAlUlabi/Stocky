@@ -1,0 +1,34 @@
+@model CreateTransactionRequest
+@{
+    ViewData["Title"] = "New transaction";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>New transaction</h2>
+<form method="post" action="/Portfolios/@pid/Transactions/Create" style="max-width:560px;">
+    @Html.AntiForgeryToken()
+    <label>Type
+        <select name="Type">
+            @foreach (var t in new[] { "Buy","Sell","Deposit","Withdrawal","Dividend","Fee","Interest","Split","Transfer" })
+            {
+                <option value="@t" selected="@(Model.Type == t)">@t</option>
+            }
+        </select>
+    </label>
+    <label>Symbol <input name="Symbol" value="@Model.Symbol" /></label>
+    <div class="grid">
+        <label>Quantity <input name="Quantity" value="@Model.Quantity" type="number" step="any" /></label>
+        <label>Price <input name="Price" value="@Model.Price" type="number" step="any" /></label>
+        <label>Fee <input name="Fee" value="@Model.Fee" type="number" step="any" /></label>
+    </div>
+    <div class="grid">
+        <label>Currency <input name="Currency" value="@Model.Currency" maxlength="8" /></label>
+        <label>Executed at <input name="ExecutedAt" value="@Model.ExecutedAt.ToString("yyyy-MM-ddTHH:mm")" type="datetime-local" /></label>
+    </div>
+    <label>Notes <input name="Notes" value="@Model.Notes" /></label>
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <small style="color:var(--pico-color-red-500)">@string.Join(", ", ViewData.ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage))</small>
+    }
+    <button type="submit">Save</button>
+    <a href="/Portfolios/@pid/Transactions" role="button" class="secondary outline">Cancel</a>
+</form>

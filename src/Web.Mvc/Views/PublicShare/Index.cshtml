@@ -1,0 +1,75 @@
+@model SharedPortfolioDto
+@{
+    Layout = null;
+    ViewData["Title"] = $"Shared portfolio · {Model.PortfolioName}";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@picocss/pico@2/css/pico.min.css" />
+</head>
+<body>
+<main class="container">
+    <header style="display:flex;justify-content:space-between;align-items:baseline;">
+        <h2>@Model.PortfolioName <small>(read-only)</small></h2>
+        <small>Generated @Model.GeneratedAt.ToString("yyyy-MM-dd HH:mm 'UTC'")</small>
+    </header>
+
+    <article>
+        <header><strong>Total market value</strong></header>
+        <h3>@Model.TotalMarketValue.Money(Model.BaseCurrency)</h3>
+        @if (Model.IncludesCostBasis && Model.TotalUnrealizedPnL.HasValue)
+        {
+            <p>Unrealized P&amp;L: <span class="@Model.TotalUnrealizedPnL.Value.SignClass()">@Model.TotalUnrealizedPnL.Value.Money(Model.BaseCurrency)</span></p>
+        }
+    </article>
+
+    <h3>Holdings</h3>
+    <table>
+        <thead><tr><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Market value</th>
+        @if (Model.IncludesCostBasis) { <th style="text-align:right;">Avg cost</th><th style="text-align:right;">Unrealized</th> }
+        </tr></thead>
+        <tbody>
+            @foreach (var h in Model.Holdings)
+            {
+                <tr>
+                    <td>@h.Symbol</td>
+                    <td style="text-align:right;">@h.Quantity.Num(4)</td>
+                    <td style="text-align:right;">@(h.LatestPrice?.Money(Model.BaseCurrency) ?? "—")</td>
+                    <td style="text-align:right;">@(h.MarketValue?.Money(Model.BaseCurrency) ?? "—")</td>
+                    @if (Model.IncludesCostBasis)
+                    {
+                        <td style="text-align:right;">@(h.AverageCost?.Money(Model.BaseCurrency) ?? "—")</td>
+                        <td style="text-align:right;" class="@((h.UnrealizedPnL ?? 0m).SignClass())">@(h.UnrealizedPnL?.Money(Model.BaseCurrency) ?? "—")</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Model.IncludesTransactions && Model.Transactions is { Count: > 0 })
+    {
+        <h3>Transactions</h3>
+        <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th></tr></thead>
+            <tbody>
+                @foreach (var t in Model.Transactions)
+                {
+                    <tr>
+                        <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
+                        <td>@t.Type</td>
+                        <td>@t.Symbol</td>
+                        <td style="text-align:right;">@t.Quantity.Num(4)</td>
+                        <td style="text-align:right;">@t.Price.Money(Model.BaseCurrency)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</main>
+</body>
+</html>

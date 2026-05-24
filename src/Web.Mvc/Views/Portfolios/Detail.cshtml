@@ -1,0 +1,52 @@
+@model List<HoldingDto>
+@{
+    var p = ViewBag.Portfolio as PortfolioDto;
+    var perf = ViewBag.Performance as PortfolioPerformanceDto;
+    ViewData["Title"] = p?.Name ?? "Portfolio";
+}
+
+<header style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:.5rem;">
+    <h2>@p?.Name</h2>
+    <nav>
+        <a href="/Portfolios/Edit/@p?.Id">Edit</a> ·
+        <a href="/Portfolios/@p?.Id/Holdings">Holdings</a> ·
+        <a href="/Portfolios/@p?.Id/Performance">Performance</a> ·
+        <a href="/Portfolios/@p?.Id/History">History</a> ·
+        <a href="/Portfolios/@p?.Id/Allocation">Allocation</a> ·
+        <a href="/Portfolios/@p?.Id/Analytics">Analytics</a> ·
+        <a href="/Portfolios/@p?.Id/Risk">Risk</a> ·
+        <a href="/Portfolios/@p?.Id/Rebalance">Rebalance</a> ·
+        <a href="/Portfolios/@p?.Id/CapitalGains">Capital Gains</a> ·
+        <a href="/Portfolios/@p?.Id/Reports">Reports</a> ·
+        <a href="/Portfolios/@p?.Id/Transactions">Transactions</a> ·
+        <a href="/Cash?portfolioId=@p?.Id">Cash</a>
+    </nav>
+</header>
+
+@if (perf is not null)
+{
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;">
+        <article><small>Market value</small><h4>@perf.MarketValue.Money(perf.Currency)</h4></article>
+        <article><small>Cost basis</small><h4>@perf.CostBasis.Money(perf.Currency)</h4></article>
+        <article><small>Unrealized P&amp;L</small><h4 class="@perf.UnrealizedPnL.SignClass()">@perf.UnrealizedPnL.Money(perf.Currency) (@perf.UnrealizedPnLPercent.Pct())</h4></article>
+        <article><small>Cash</small><h4>@perf.CashBalance.Money(perf.Currency)</h4></article>
+    </div>
+}
+
+<h3>Holdings</h3>
+<table>
+    <thead><tr><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Avg cost</th><th style="text-align:right;">Last</th><th style="text-align:right;">Value</th></tr></thead>
+    <tbody>
+        @foreach (var h in Model)
+        {
+            <tr>
+                <td><a href="/Portfolios/@p?.Id/Positions/@h.Symbol">@h.Symbol</a></td>
+                <td style="text-align:right;">@h.Quantity.Num(4)</td>
+                <td style="text-align:right;">@h.AverageCost.Money(p?.BaseCurrency ?? "USD")</td>
+                <td style="text-align:right;">@(h.LatestPrice?.Money(p?.BaseCurrency ?? "USD") ?? "—")</td>
+                <td style="text-align:right;">@(h.MarketValue?.Money(p?.BaseCurrency ?? "USD") ?? "—")</td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="5"><em>No holdings.</em></td></tr> }
+    </tbody>
+</table>

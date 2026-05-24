@@ -1,0 +1,37 @@
+@model CorrelationDto
+@{
+    ViewData["Title"] = "Correlation";
+    var pid = (Guid)ViewBag.PortfolioId;
+    var days = (int)ViewBag.Days;
+}
+<h2>Correlation · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+<form method="get" action="/Portfolios/@pid/Correlation" style="display:flex;gap:.5rem;align-items:end;">
+    <label>Window (days) <input type="number" name="days" value="@days" min="14" max="3650" /></label>
+    <button type="submit">Apply</button>
+</form>
+
+@if (Model is null || Model.Symbols.Count == 0) { <p><em>No data.</em></p> return; }
+<small>@Model.From → @Model.To</small>
+
+<table>
+    <thead>
+        <tr>
+            <th></th>
+            @foreach (var s in Model.Symbols) { <th>@s</th> }
+        </tr>
+    </thead>
+    <tbody>
+        @for (int i = 0; i < Model.Symbols.Count; i++)
+        {
+            <tr>
+                <th>@Model.Symbols[i]</th>
+                @for (int j = 0; j < Model.Symbols.Count; j++)
+                {
+                    var v = Model.Matrix[i][j];
+                    var bg = v > 0 ? $"background:rgba(0,200,0,{Math.Abs((double)v) * 0.3})" : $"background:rgba(200,0,0,{Math.Abs((double)v) * 0.3})";
+                    <td style="text-align:right;@bg">@v.Num(2)</td>
+                }
+            </tr>
+        }
+    </tbody>
+</table>

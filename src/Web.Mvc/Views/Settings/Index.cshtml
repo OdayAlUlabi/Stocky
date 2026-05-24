@@ -1,0 +1,23 @@
+@model UserSettingsDto
+@{ ViewData["Title"] = "Settings"; }
+<h2>Settings</h2>
+<form method="post" action="/Settings" style="max-width:560px;">
+    @Html.AntiForgeryToken()
+    <div class="grid">
+        <label>Display currency <input name="DisplayCurrency" value="@Model.DisplayCurrency" maxlength="8" required /></label>
+        <label>Theme
+            <select name="Theme">
+                @foreach (var t in new[] { "system","light","dark" })
+                {
+                    <option value="@t" selected="@(Model.Theme == t)">@t</option>
+                }
+            </select>
+        </label>
+    </div>
+    <label>Locale <input name="Locale" value="@Model.Locale" /></label>
+    <fieldset>
+        <label><input type="checkbox" name="EmailAlerts" value="true" @(Model.EmailAlerts ? "checked" : "") /> Email alerts</label>
+        <label><input type="checkbox" name="WeeklyDigest" value="true" @(Model.WeeklyDigest ? "checked" : "") /> Weekly digest</label>
+    </fieldset>
+    <button type="submit">Save</button>
+</form>

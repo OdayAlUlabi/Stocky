@@ -1,0 +1,31 @@
+@model WashSaleReportDto
+@{
+    ViewData["Title"] = "Wash sales";
+    var pid = (Guid)ViewBag.PortfolioId;
+    var year = ViewBag.Year as int?;
+}
+<h2>Wash sales · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+<form method="get" action="/Portfolios/@pid/WashSales" style="display:flex;gap:.5rem;align-items:end;">
+    <label>Year <input type="number" name="year" value="@year" min="2000" max="2100" placeholder="(all)" /></label>
+    <button type="submit">Apply</button>
+</form>
+
+@if (Model is null) { <p><em>No data.</em></p> return; }
+<p>Year: <strong>@Model.Year</strong> · Total loss: <strong>@Model.TotalLoss.Money("USD")</strong> · Disallowed: <strong class="neg">@Model.DisallowedLoss.Money("USD")</strong></p>
+<table>
+    <thead><tr><th>Symbol</th><th>Sold</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Lot loss</th><th style="text-align:right;">Disallowed</th><th style="text-align:right;">Allowed</th></tr></thead>
+    <tbody>
+        @foreach (var a in Model.Adjustments)
+        {
+            <tr>
+                <td>@a.Symbol</td>
+                <td>@a.SoldAt.ToString("yyyy-MM-dd")</td>
+                <td style="text-align:right;">@a.LotQuantity.Num(4)</td>
+                <td style="text-align:right;" class="neg">@a.LotLoss.Money("USD")</td>
+                <td style="text-align:right;" class="neg">@a.DisallowedLoss.Money("USD")</td>
+                <td style="text-align:right;">@a.AllowedLoss.Money("USD")</td>
+            </tr>
+        }
+        @if (Model.Adjustments.Count == 0) { <tr><td colspan="6"><em>No wash sales.</em></td></tr> }
+    </tbody>
+</table>

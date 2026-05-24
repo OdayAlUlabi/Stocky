@@ -1,0 +1,55 @@
+@model PositionDetailDto
+@{
+    ViewData["Title"] = Model?.Symbol ?? "Position";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>@Model.Symbol · <small>@Model.Name · <a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;margin:1rem 0;">
+    <article><small>Asset class</small><h4>@Model.AssetClass</h4></article>
+    <article><small>Sector</small><h4>@(Model.Sector ?? "—")</h4></article>
+    <article><small>Quantity</small><h4>@Model.Quantity.Num(4)</h4></article>
+    <article><small>Avg cost</small><h4>@Model.AverageCost.Money(Model.Currency)</h4></article>
+    <article><small>Last</small><h4>@(Model.LatestPrice?.Money(Model.Currency) ?? "—")</h4></article>
+    <article><small>Market value</small><h4>@(Model.MarketValue?.Money(Model.Currency) ?? "—")</h4></article>
+    <article><small>Unrealized P&amp;L</small><h4 class="@Model.UnrealizedPnL.SignClass()">@Model.UnrealizedPnL.Money(Model.Currency) (@Model.UnrealizedPnLPercent.Pct())</h4></article>
+    <article><small>Realized P&amp;L</small><h4 class="@Model.RealizedPnL.SignClass()">@Model.RealizedPnL.Money(Model.Currency)</h4></article>
+    <article><small>Dividends</small><h4>@Model.DividendsReceived.Money(Model.Currency)</h4></article>
+</div>
+
+<details open>
+    <summary><strong>Tax lots</strong></summary>
+    <table>
+        <thead><tr><th>Opened</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Remaining</th><th style="text-align:right;">Cost/share</th><th style="text-align:right;">Basis</th></tr></thead>
+        <tbody>
+            @foreach (var l in Model.Lots)
+            {
+                <tr>
+                    <td>@l.OpenedAt.ToString("yyyy-MM-dd")</td>
+                    <td style="text-align:right;">@l.Quantity.Num(4)</td>
+                    <td style="text-align:right;">@l.RemainingQuantity.Num(4)</td>
+                    <td style="text-align:right;">@l.CostPerShare.Money(Model.Currency)</td>
+                    <td style="text-align:right;">@l.CostBasis.Money(Model.Currency)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<details>
+    <summary><strong>Transactions</strong></summary>
+    <table>
+        <thead><tr><th>Date</th><th>Type</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th></tr></thead>
+        <tbody>
+            @foreach (var t in Model.Transactions)
+            {
+                <tr>
+                    <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
+                    <td>@t.Type</td>
+                    <td style="text-align:right;">@t.Quantity.Num(4)</td>
+                    <td style="text-align:right;">@t.Price.Money(t.Currency)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>

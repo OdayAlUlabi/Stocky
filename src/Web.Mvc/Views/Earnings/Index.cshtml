@@ -1,0 +1,30 @@
+@model List<EarningsEventDto>
+@{
+    ViewData["Title"] = "Earnings calendar";
+    var from = ViewBag.From as DateOnly?;
+    var to = ViewBag.To as DateOnly?;
+}
+<h2>Earnings calendar</h2>
+<form method="get" action="/Earnings" style="display:flex;gap:.5rem;align-items:end;">
+    <label>From <input type="date" name="from" value="@(from?.ToString("yyyy-MM-dd"))" /></label>
+    <label>To <input type="date" name="to" value="@(to?.ToString("yyyy-MM-dd"))" /></label>
+    <button type="submit">Filter</button>
+</form>
+<table>
+    <thead><tr><th>Date</th><th>Time</th><th>Symbol</th><th style="text-align:right;">EPS est</th><th style="text-align:right;">EPS actual</th><th style="text-align:right;">Rev est</th><th style="text-align:right;">Rev actual</th></tr></thead>
+    <tbody>
+        @foreach (var e in Model)
+        {
+            <tr>
+                <td>@e.Date</td>
+                <td>@e.Time</td>
+                <td>@e.Symbol</td>
+                <td style="text-align:right;">@(e.EpsEstimate?.Num(2) ?? "—")</td>
+                <td style="text-align:right;">@(e.EpsActual?.Num(2) ?? "—")</td>
+                <td style="text-align:right;">@(e.RevenueEstimate?.Num(0) ?? "—")</td>
+                <td style="text-align:right;">@(e.RevenueActual?.Num(0) ?? "—")</td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="7"><em>No earnings in window.</em></td></tr> }
+    </tbody>
+</table>

@@ -1,0 +1,57 @@
+@model List<AlertDto>
+@{
+    ViewData["Title"] = "Alerts";
+    var status = ViewBag.Status as string;
+}
+<header style="display:flex;justify-content:space-between;align-items:baseline;">
+    <h2>Alerts</h2>
+    <div>
+        <a href="/Alerts/Create" role="button">+ New</a>
+        <a href="/Alerts/History" role="button" class="secondary">History</a>
+    </div>
+</header>
+
+<form method="get" action="/Alerts" style="display:flex;gap:.5rem;align-items:end;">
+    <label>Status
+        <select name="status" onchange="this.form.submit()">
+            <option value="">All</option>
+            @foreach (var s in new[] { "Active","Triggered","Snoozed","Disabled" })
+            {
+                <option value="@s" selected="@(status == s)">@s</option>
+            }
+        </select>
+    </label>
+</form>
+
+<table>
+    <thead><tr><th>Symbol</th><th>Type</th><th>Condition</th><th style="text-align:right;">Threshold</th><th>Status</th><th>Channels</th><th>Triggered</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var a in Model)
+        {
+            <tr>
+                <td>@a.Symbol</td>
+                <td>@a.Type</td>
+                <td>@a.Condition</td>
+                <td style="text-align:right;">@a.Threshold.Num(4)</td>
+                <td>@a.Status</td>
+                <td>@a.Channels</td>
+                <td>@(a.TriggeredAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                <td>
+                    <a href="/Alerts/Edit/@a.Id">Edit</a> ·
+                    <form method="post" action="/Alerts/Delete/@a.Id" style="display:inline;" onsubmit="return confirm('Delete?');">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                    </form>
+                    @if (a.Status == "Triggered" || a.Status == "Snoozed")
+                    {
+                        <form method="post" action="/Alerts/Reactivate/@a.Id" style="display:inline;">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">Reactivate</button>
+                        </form>
+                    }
+                </td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="8"><em>No alerts.</em></td></tr> }
+    </tbody>
+</table>

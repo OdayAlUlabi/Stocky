@@ -1,0 +1,52 @@
+@model List<WatchlistDto>
+@{ ViewData["Title"] = "Watchlists"; }
+
+<h2>Watchlists</h2>
+
+<form method="post" action="/Watchlist/Create" style="display:flex;gap:.5rem;align-items:end;max-width:480px;">
+    @Html.AntiForgeryToken()
+    <label style="flex:1;">New watchlist <input name="name" required maxlength="120" /></label>
+    <button type="submit">Create</button>
+</form>
+
+@foreach (var w in Model)
+{
+    <article>
+        <header style="display:flex;justify-content:space-between;align-items:baseline;">
+            <strong>@w.Name</strong>
+            <form method="post" action="/Watchlist/Delete/@w.Id" style="display:inline;" onsubmit="return confirm('Delete @w.Name?');">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">Delete watchlist</button>
+            </form>
+        </header>
+        <table>
+            <thead><tr><th>Symbol</th><th style="text-align:right;">Last</th><th style="text-align:right;">Change</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var it in w.Items)
+                {
+                    <tr>
+                        <td>@it.Symbol</td>
+                        <td style="text-align:right;">@(it.LatestPrice?.Money("USD") ?? "—")</td>
+                        <td style="text-align:right;" class="@(it.ChangePercent?.SignClass())">@(it.ChangePercent?.Pct() ?? "—")</td>
+                        <td>
+                            <form method="post" action="/Watchlist/RemoveItem" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@w.Id" />
+                                <input type="hidden" name="itemId" value="@it.Id" />
+                                <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                @if (w.Items.Count == 0) { <tr><td colspan="4"><em>Empty.</em></td></tr> }
+            </tbody>
+        </table>
+        <form method="post" action="/Watchlist/AddItem" style="display:flex;gap:.5rem;align-items:end;">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@w.Id" />
+            <label style="flex:1;">Add symbol <input name="symbol" placeholder="AAPL" /></label>
+            <button type="submit">Add</button>
+        </form>
+    </article>
+}
+@if (Model.Count == 0) { <p><em>No watchlists yet.</em></p> }

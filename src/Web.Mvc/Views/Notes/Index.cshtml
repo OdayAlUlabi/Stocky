@@ -1,0 +1,49 @@
+@model List<PositionNoteDto>
+@{
+    ViewData["Title"] = "Notes";
+    var symbol = ViewBag.Symbol as string;
+    var pid = ViewBag.PortfolioId as Guid?;
+}
+<h2>Position notes</h2>
+
+<form method="get" action="/Notes" style="display:flex;gap:.5rem;align-items:end;">
+    <label>Symbol <input name="symbol" value="@symbol" /></label>
+    <label>Portfolio ID <input name="portfolioId" value="@pid" /></label>
+    <button type="submit">Filter</button>
+</form>
+
+<h3>Add note</h3>
+<form method="post" action="/Notes/Create" style="max-width:680px;">
+    @Html.AntiForgeryToken()
+    <div class="grid">
+        <label>Symbol <input name="symbol" value="@symbol" required /></label>
+        <label>Portfolio ID <input name="portfolioId" value="@pid" /></label>
+    </div>
+    <label>Note <textarea name="body" rows="3" required></textarea></label>
+    <button type="submit">Add</button>
+</form>
+
+<h3>Notes</h3>
+@foreach (var n in Model)
+{
+    <article>
+        <header style="display:flex;justify-content:space-between;">
+            <strong>@n.Symbol</strong>
+            <small>@n.UpdatedAt.ToString("yyyy-MM-dd HH:mm")</small>
+        </header>
+        <form method="post" action="/Notes/Edit/@n.Id">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnSymbol" value="@symbol" />
+            <input type="hidden" name="returnPortfolioId" value="@pid" />
+            <textarea name="body" rows="3">@n.Body</textarea>
+            <button type="submit">Save</button>
+        </form>
+        <form method="post" action="/Notes/Delete/@n.Id" onsubmit="return confirm('Delete note?');" style="margin-top:.25rem;">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="returnSymbol" value="@symbol" />
+            <input type="hidden" name="returnPortfolioId" value="@pid" />
+            <button type="submit" class="secondary outline" style="padding:.1rem .5rem;">Delete</button>
+        </form>
+    </article>
+}
+@if (Model.Count == 0) { <p><em>No notes.</em></p> }

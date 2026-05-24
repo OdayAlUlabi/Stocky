@@ -1,0 +1,25 @@
+@model UpdatePortfolioRequest
+@{
+    ViewData["Title"] = "Edit portfolio";
+    var id = (Guid)ViewBag.Id;
+}
+
+<h2>Edit portfolio</h2>
+<form method="post" action="/Portfolios/Edit/@id" style="max-width:520px;">
+    @Html.AntiForgeryToken()
+    <label>Name <input name="Name" value="@Model.Name" required maxlength="120" /></label>
+    <label>Base currency <input name="BaseCurrency" value="@Model.BaseCurrency" required maxlength="8" /></label>
+    <label>Cost basis
+        <select name="CostBasisMethod">
+            <option value="FIFO" selected="@(Model.CostBasisMethod == "FIFO")">FIFO</option>
+            <option value="LIFO" selected="@(Model.CostBasisMethod == "LIFO")">LIFO</option>
+            <option value="Average" selected="@(Model.CostBasisMethod == "Average")">Average</option>
+        </select>
+    </label>
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <small style="color:var(--pico-color-red-500)">@string.Join(", ", ViewData.ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage))</small>
+    }
+    <button type="submit">Save</button>
+    <a href="/Portfolios/Detail/@id" role="button" class="secondary outline">Cancel</a>
+</form>

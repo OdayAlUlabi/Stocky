@@ -1,0 +1,47 @@
+@model RebalanceReportDto
+@{
+    ViewData["Title"] = "Rebalance";
+    var pid = (Guid)ViewBag.PortfolioId;
+    var targets = ViewBag.Targets as List<RebalanceTargetDto> ?? new();
+}
+<h2>Rebalance · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+@if (Model is null) { <p><em>No data.</em></p> return; }
+<p>Total value: <strong>@Model.TotalValue.Money(Model.Currency)</strong> · Target weight sum: <strong>@Model.TargetWeightSumPercent.Pct()</strong></p>
+
+<h3>Suggestions</h3>
+<table>
+    <thead><tr><th>Symbol</th><th style="text-align:right;">Current %</th><th style="text-align:right;">Target %</th><th style="text-align:right;">Drift</th><th style="text-align:right;">Trade</th><th>Action</th></tr></thead>
+    <tbody>
+        @foreach (var s in Model.Suggestions)
+        {
+            <tr>
+                <td>@s.Symbol</td>
+                <td style="text-align:right;">@s.CurrentWeightPercent.Pct()</td>
+                <td style="text-align:right;">@s.TargetWeightPercent.Pct()</td>
+                <td style="text-align:right;" class="@s.DriftPercent.SignClass()">@s.DriftPercent.Pct()</td>
+                <td style="text-align:right;" class="@s.TradeValue.SignClass()">@s.TradeValue.Money(Model.Currency)</td>
+                <td>@s.Action</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<h3>Targets</h3>
+<form method="post" action="/Portfolios/@pid/Rebalance/SetTargets">
+    @Html.AntiForgeryToken()
+    <table>
+        <thead><tr><th>Symbol</th><th style="text-align:right;">Weight %</th></tr></thead>
+        <tbody id="targets-rows">
+            @for (int i = 0; i < Math.Max(targets.Count, 1); i++)
+            {
+                var t = i < targets.Count ? targets[i] : new RebalanceTargetDto("", 0);
+                <tr>
+                    <td><input name="targets[@i].Symbol" value="@t.Symbol" /></td>
+                    <td><input name="targets[@i].TargetWeightPercent" value="@t.TargetWeightPercent" type="number" step="0.01" /></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <button type="submit">Save targets</button>
+    <small>(Tip: edit targets above. Empty rows are ignored.)</small>
+</form>

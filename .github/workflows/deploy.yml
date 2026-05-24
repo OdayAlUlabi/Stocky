@@ -22,6 +22,7 @@ env:
   ACR_LOGIN_SERVER:      ${{ vars.ACR_LOGIN_SERVER }}
   API_APP_NAME:          ${{ vars.API_APP_NAME }}
   WEB_APP_NAME:          ${{ vars.WEB_APP_NAME }}
+  WEB_MVC_APP_NAME:      ${{ vars.WEB_MVC_APP_NAME }}
   MIGRATOR_JOB_NAME:     ${{ vars.MIGRATOR_JOB_NAME }}
   PUBLIC_FQDN:           ${{ vars.PUBLIC_FQDN }}
   VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
@@ -122,6 +123,37 @@ jobs:
             .
           docker push "$ACR_LOGIN_SERVER/stocky-web:$IMAGE_TAG"
           docker push "$ACR_LOGIN_SERVER/stocky-web:cache"
+
+  # ── New server-rendered MVC app (Stocky.Web.Mvc). Lives alongside the legacy
+  #    nginx SPA (`stocky-web`) until the manual App Gateway cutover in
+  #    docs/non-spa-rearchitecture.md §9.
+  build-web-mvc:
+    runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login (OIDC)
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Build + push web-mvc image
+        run: |
+          DOCKER_BUILDKIT=1 docker build \
+            --cache-from "$ACR_LOGIN_SERVER/stocky-web-mvc:cache" \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            -f src/Web.Mvc/Dockerfile \
+            -t "$ACR_LOGIN_SERVER/stocky-web-mvc:$IMAGE_TAG" \
+            -t "$ACR_LOGIN_SERVER/stocky-web-mvc:cache" \
+            .
+          docker push "$ACR_LOGIN_SERVER/stocky-web-mvc:$IMAGE_TAG"
+          docker push "$ACR_LOGIN_SERVER/stocky-web-mvc:cache"
 
   # ── Migration: waits only for the api image ───────────────────────────────────
   migrate:
@@ -260,9 +292,58 @@ jobs:
             --target-port 8080 \
             --transport http
 
+  # ── Web.Mvc: shares the API's SQL identity, so wait for migrations to land
+  #    before starting it (it opens a DbContext on first request).
+  deploy-web-mvc:
+    needs: [build-web-mvc, migrate]
+    runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Update web-mvc container app
+        if: ${{ env.WEB_MVC_APP_NAME != '' }}
+        run: |
+          WEB_MVC_MI=$(az identity show \
+            --name "id-stocky-prod-api" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query id -o tsv)
+          az containerapp registry set \
+            --name "$WEB_MVC_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --server "$ACR_LOGIN_SERVER" \
+            --identity "$WEB_MVC_MI"
+          az containerapp update \
+            --name "$WEB_MVC_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$ACR_LOGIN_SERVER/stocky-web-mvc:$IMAGE_TAG" \
+            --set-env-vars \
+              "AllowedOrigins__0=https://${PUBLIC_FQDN}" \
+              "Authentication__Google__ClientId=${VITE_GOOGLE_CLIENT_ID}"
+          az containerapp ingress update \
+            --name "$WEB_MVC_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --target-port 8080 \
+            --transport http
+
+      - name: Skip (WEB_MVC_APP_NAME not set)
+        if: ${{ env.WEB_MVC_APP_NAME == '' }}
+        run: |
+          echo "WEB_MVC_APP_NAME repo variable is unset — skipping web-mvc deploy."
+          echo "Run the next infra bicep deployment to create ca-stocky-prod-web-mvc,"
+          echo "then set repo Variables: WEB_MVC_APP_NAME=ca-stocky-prod-web-mvc"
+
   # ── Smoke test: waits for both deploys ────────────────────────────────────────
   smoke-test:
-    needs: [deploy-api, deploy-web]
+    needs: [deploy-api, deploy-web, deploy-web-mvc]
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
     timeout-minutes: 5
     steps:

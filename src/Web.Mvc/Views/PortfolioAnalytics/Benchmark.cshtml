@@ -1,0 +1,32 @@
+@model BenchmarkComparisonDto
+@{
+    ViewData["Title"] = "Benchmark";
+    var pid = (Guid)ViewBag.PortfolioId;
+    var sym = ViewBag.Symbol as string;
+}
+<h2>Benchmark · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+<form method="get" action="/Portfolios/@pid/Benchmark" style="display:flex;gap:.5rem;align-items:end;">
+    <label>Symbol <input name="symbol" value="@sym" placeholder="SPY" /></label>
+    <button type="submit">Compare</button>
+</form>
+
+@if (Model is null) { <p><em>No data.</em></p> return; }
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem;margin:1rem 0;">
+    <article><small>Portfolio return</small><h4 class="@Model.PortfolioReturnPercent.SignClass()">@Model.PortfolioReturnPercent.Pct()</h4></article>
+    <article><small>Benchmark (@Model.BenchmarkLabel)</small><h4 class="@Model.BenchmarkReturnPercent.SignClass()">@Model.BenchmarkReturnPercent.Pct()</h4></article>
+    <article><small>Outperformance</small><h4 class="@Model.OutperformanceBps.SignClass()">@Model.OutperformanceBps.Num(0) bps</h4></article>
+    <article><small>Alpha</small><h4>@Model.Alpha.Pct()</h4></article>
+    <article><small>Beta</small><h4>@Model.Beta.Num(2)</h4></article>
+</div>
+<details>
+    <summary>Series (@Model.Series.Count points)</summary>
+    <table>
+        <thead><tr><th>Date</th><th style="text-align:right;">Portfolio</th><th style="text-align:right;">Benchmark</th><th style="text-align:right;">Outperf bps</th></tr></thead>
+        <tbody>
+            @foreach (var p in Model.Series.TakeLast(60))
+            {
+                <tr><td>@p.Date</td><td style="text-align:right;">@p.PortfolioEquity.Num(2)</td><td style="text-align:right;">@p.BenchmarkEquity.Num(2)</td><td style="text-align:right;" class="@p.OutperformanceBps.SignClass()">@p.OutperformanceBps.Num(0)</td></tr>
+            }
+        </tbody>
+    </table>
+</details>

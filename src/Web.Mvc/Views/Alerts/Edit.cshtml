@@ -1,0 +1,32 @@
+@model UpdateAlertRequest
+@{
+    ViewData["Title"] = "Edit alert";
+    var id = (Guid)ViewBag.Id;
+}
+<h2>Edit alert · @ViewBag.Symbol (@ViewBag.Type)</h2>
+<form method="post" action="/Alerts/Edit/@id" style="max-width:560px;">
+    @Html.AntiForgeryToken()
+    <div class="grid">
+        <label>Threshold <input name="Threshold" value="@Model.Threshold" type="number" step="any" /></label>
+        <label>Status
+            <select name="Status">
+                @foreach (var s in new[] { "Active","Triggered","Snoozed","Disabled" })
+                {
+                    <option value="@s" selected="@(Model.Status == s)">@s</option>
+                }
+            </select>
+        </label>
+    </div>
+    <details>
+        <summary>Advanced</summary>
+        <label>Indicator period <input name="IndicatorPeriod" value="@Model.IndicatorPeriod" type="number" /></label>
+        <label>Keyword filter <input name="KeywordFilter" value="@Model.KeywordFilter" /></label>
+        <label>Min sentiment <input name="MinSentiment" value="@Model.MinSentiment" type="number" step="any" /></label>
+        <label>Days before earnings <input name="DaysBeforeEarnings" value="@Model.DaysBeforeEarnings" type="number" /></label>
+        <label>Channels <input name="Channels" value="@Model.Channels" /></label>
+        <label>Webhook URL <input name="WebhookUrl" value="@Model.WebhookUrl" /></label>
+    </details>
+    <label>Note <input name="Note" value="@Model.Note" /></label>
+    <button type="submit">Save</button>
+    <a href="/Alerts" role="button" class="secondary outline">Cancel</a>
+</form>

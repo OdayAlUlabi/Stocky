@@ -6,4 +6,5 @@
   <Folder Name="/src/Api.Tests/">
     <Project Path="src/Api.Tests/Stocky.Api.Tests.csproj" />
   </Folder>
+  <Folder Name="/src/Web.Mvc/" />
 </Solution>

@@ -1,0 +1,31 @@
+@model List<AuditEntryDto>
+@{
+    ViewData["Title"] = "Audit log";
+    var take = (int)ViewBag.Take;
+    var resource = ViewBag.Resource as string;
+}
+<h2>Audit log</h2>
+<form method="get" action="/Admin/Audit" style="display:flex;gap:.5rem;align-items:end;">
+    <label>Take <input name="take" type="number" min="10" max="2000" value="@take" /></label>
+    <label>Resource <input name="resource" value="@resource" /></label>
+    <button type="submit">Filter</button>
+</form>
+<table>
+    <thead><tr><th>Timestamp</th><th>Action</th><th>Resource</th><th>Resource ID</th><th>Method</th><th>Path</th><th style="text-align:right;">Status</th><th>Client IP</th></tr></thead>
+    <tbody>
+        @foreach (var a in Model)
+        {
+            <tr>
+                <td>@a.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                <td>@a.Action</td>
+                <td>@a.Resource</td>
+                <td>@a.ResourceId</td>
+                <td>@a.Method</td>
+                <td><code>@a.Path</code></td>
+                <td style="text-align:right;">@a.StatusCode</td>
+                <td>@a.ClientIp</td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="8"><em>No audit entries.</em></td></tr> }
+    </tbody>
+</table>

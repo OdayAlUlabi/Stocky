@@ -1,0 +1,18 @@
+@model GoalCreateDto
+@{ ViewData["Title"] = "New goal"; }
+<h2>New goal</h2>
+<form method="post" action="/Goals/Create" style="max-width:560px;">
+    @Html.AntiForgeryToken()
+    <label>Name <input name="Name" value="@Model.Name" required /></label>
+    <div class="grid">
+        <label>Target value <input name="TargetValue" value="@Model.TargetValue" type="number" step="any" required /></label>
+        <label>Target date <input name="TargetDate" value="@Model.TargetDate.ToString("yyyy-MM-dd")" type="date" required /></label>
+    </div>
+    <div class="grid">
+        <label>Monthly contribution <input name="MonthlyContribution" value="@Model.MonthlyContribution" type="number" step="any" /></label>
+        <label>Expected return (decimal, e.g. 0.06) <input name="ExpectedReturn" value="@Model.ExpectedReturn" type="number" step="any" /></label>
+    </div>
+    <label>Portfolio ID (optional) <input name="PortfolioId" value="@Model.PortfolioId" /></label>
+    <button type="submit">Create</button>
+    <a href="/Goals" role="button" class="secondary outline">Cancel</a>
+</form>

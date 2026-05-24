@@ -1,0 +1,33 @@
+@model AllocationDto
+@{
+    ViewData["Title"] = "Allocation";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>Allocation · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+@if (Model is null) { <p><em>No data.</em></p> return; }
+<p>Total: <strong>@Model.TotalValue.Money(Model.Currency)</strong></p>
+
+@{
+    var groups = new (string label, IReadOnlyList<AllocationSliceDto> slices)[]
+    {
+        ("By asset class", Model.ByAsset),
+        ("By sector", Model.BySector),
+        ("By currency", Model.ByCurrency),
+        ("By symbol", Model.BySymbol),
+    };
+}
+@foreach (var g in groups)
+{
+    <details open>
+        <summary><strong>@g.label</strong></summary>
+        <table>
+            <thead><tr><th>Label</th><th style="text-align:right;">Value</th><th style="text-align:right;">%</th></tr></thead>
+            <tbody>
+                @foreach (var s in g.slices)
+                {
+                    <tr><td>@s.Label</td><td style="text-align:right;">@s.Value.Money(Model.Currency)</td><td style="text-align:right;">@s.Percent.Pct()</td></tr>
+                }
+            </tbody>
+        </table>
+    </details>
+}

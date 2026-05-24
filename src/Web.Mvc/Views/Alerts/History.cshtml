@@ -1,0 +1,21 @@
+@model List<AlertEventDto>
+@{ ViewData["Title"] = "Alert history"; }
+<h2>Alert history · <small><a href="/Alerts">Back</a></small></h2>
+<table>
+    <thead><tr><th>Triggered</th><th>Symbol</th><th>Type</th><th>Condition</th><th style="text-align:right;">Value</th><th>Channels</th><th>Message</th></tr></thead>
+    <tbody>
+        @foreach (var e in Model)
+        {
+            <tr>
+                <td>@e.TriggeredAt.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@e.Symbol</td>
+                <td>@e.Type</td>
+                <td>@e.Condition</td>
+                <td style="text-align:right;">@(e.TriggeredValue?.Num(4) ?? "—")</td>
+                <td>@e.Channels</td>
+                <td>@e.Message</td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="7"><em>No history.</em></td></tr> }
+    </tbody>
+</table>

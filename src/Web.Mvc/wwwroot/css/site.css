@@ -1,0 +1,4 @@
+body > main { padding: 1rem 2rem; }
+header nav { padding: 0 2rem; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.kpis article { margin: 0; }

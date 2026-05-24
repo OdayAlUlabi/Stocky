@@ -1,0 +1,22 @@
+@model List<HoldingDto>
+@{
+    ViewData["Title"] = "Holdings";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>Holdings · <small><a href="/Portfolios/Detail/@pid">Back to portfolio</a></small></h2>
+<table>
+    <thead><tr><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Avg cost</th><th style="text-align:right;">Last</th><th style="text-align:right;">Market value</th></tr></thead>
+    <tbody>
+        @foreach (var h in Model)
+        {
+            <tr>
+                <td><a href="/Portfolios/@pid/Positions/@h.Symbol">@h.Symbol</a></td>
+                <td style="text-align:right;">@h.Quantity.Num(4)</td>
+                <td style="text-align:right;">@h.AverageCost.Money("USD")</td>
+                <td style="text-align:right;">@(h.LatestPrice?.Money("USD") ?? "—")</td>
+                <td style="text-align:right;">@(h.MarketValue?.Money("USD") ?? "—")</td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="5"><em>No holdings.</em></td></tr> }
+    </tbody>
+</table>

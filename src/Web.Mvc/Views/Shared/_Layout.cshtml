@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] · Stocky</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@picocss/pico@@2/css/pico.classless.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><strong><a href="/" style="text-decoration:none;color:inherit">Stocky</a></strong></li>
+            </ul>
+            <ul>
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/Portfolios">Portfolios</a></li>
+                <li>
+                    <details role="list" dir="rtl">
+                        <summary aria-haspopup="listbox">Tools</summary>
+                        <ul role="listbox">
+                            <li><a href="/Watchlist">Watchlist</a></li>
+                            <li><a href="/Alerts">Alerts</a></li>
+                            <li><a href="/Screener">Screener</a></li>
+                            <li><a href="/News">News</a></li>
+                            <li><a href="/Earnings">Earnings</a></li>
+                            <li><a href="/Calendar/Economic">Economic Calendar</a></li>
+                            <li><a href="/Goals">Goals</a></li>
+                            <li><a href="/Templates">Templates</a></li>
+                            <li><a href="/Notes">Notes</a></li>
+                            <li><a href="/ReportSchedules">Reports</a></li>
+                            <li><a href="/Share">Share Tokens</a></li>
+                        </ul>
+                    </details>
+                </li>
+                <li>
+                    <details role="list" dir="rtl">
+                        <summary aria-haspopup="listbox">Account</summary>
+                        <ul role="listbox">
+                            <li><a href="/Settings">Settings</a></li>
+                            <li><a href="/ApiKeys">API Keys</a></li>
+                            <li><a href="/Admin/Audit">Audit Log</a></li>
+                        </ul>
+                    </details>
+                </li>
+                <li><partial name="_LoginPartial" /></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        @if (TempData["Status"] is string status && !string.IsNullOrWhiteSpace(status))
+        {
+            <article style="background:var(--pico-card-background-color);border-left:4px solid var(--pico-primary);padding:.5rem 1rem;">
+                <small>@status</small>
+            </article>
+        }
+        @RenderBody()
+    </main>
+    <footer>
+        <small>Stocky · server-rendered MVC</small>
+    </footer>
+    @* Real-time price ticks + chart bootstrap loaded lazily; pages that need
+       them include the corresponding <script> tags directly. *@
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

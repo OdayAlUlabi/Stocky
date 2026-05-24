@@ -1,0 +1,20 @@
+@model PortfolioHistoryDto
+@{
+    ViewData["Title"] = "Capital flow";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>Capital flow · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+@if (Model is null) { <p><em>No data.</em></p> return; }
+<table>
+    <thead><tr><th>Date</th><th>Type</th><th style="text-align:right;">Amount</th><th>Notes</th></tr></thead>
+    <tbody>
+        @foreach (var e in Model.Events.Where(x => x.Type is "Deposit" or "Withdrawal" or "Dividend" or "Fee" or "Interest"))
+        {
+            <tr>
+                <td>@e.Date</td><td>@e.Type</td>
+                <td style="text-align:right;" class="@e.Amount.SignClass()">@e.Amount.Money(Model.Currency)</td>
+                <td>@e.Notes</td>
+            </tr>
+        }
+    </tbody>
+</table>

@@ -8,6 +8,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Data.Common;
+using Stocky.Api;
 using Stocky.Api.Data;
 using Stocky.Api.Services;
 
@@ -198,7 +199,6 @@ authBuilder.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOp
     ApiKeyAuthenticationHandler.SchemeName, _ => { });
 
 builder.Services.AddAuthorization();
-builder.Services.AddScoped<ApiKeyService>();
 
 // M14 #91 — per-key rate limit: 60 req/min/key, 1000 req/min/IP fallback.
 builder.Services.AddRateLimiter(o =>
@@ -258,80 +258,18 @@ else
 }
 builder.Services.AddSingleton<IProviderCache, ProviderCache>();
 
-// Market data: prefer Alpaca when API credentials are configured, otherwise
-// fall back to the deterministic stub so dev still works without secrets.
-// Configure with:
-//   MarketData:Alpaca:ApiKeyId      (APCA-API-KEY-ID)
-//   MarketData:Alpaca:ApiSecret     (APCA-API-SECRET-KEY)
-//   MarketData:Alpaca:BaseUrl       (optional, default https://data.alpaca.markets/)
-var alpacaKeyId = builder.Configuration["MarketData:Alpaca:ApiKeyId"];
-var alpacaSecret = builder.Configuration["MarketData:Alpaca:ApiSecret"];
-builder.Services.AddSingleton<StubMarketDataProvider>();
-if (!string.IsNullOrWhiteSpace(alpacaKeyId) && !string.IsNullOrWhiteSpace(alpacaSecret))
-{
-    var alpacaBase = builder.Configuration["MarketData:Alpaca:BaseUrl"] ?? "https://data.alpaca.markets/";
-    builder.Services.AddHttpClient<AlpacaMarketDataProvider>(client =>
-    {
-        client.BaseAddress = new Uri(alpacaBase);
-        client.DefaultRequestHeaders.Add("APCA-API-KEY-ID", alpacaKeyId);
-        client.DefaultRequestHeaders.Add("APCA-API-SECRET-KEY", alpacaSecret);
-        client.Timeout = TimeSpan.FromSeconds(10);
-    });
-    builder.Services.AddScoped<IMarketDataProvider>(sp => sp.GetRequiredService<AlpacaMarketDataProvider>());
-}
-else
-{
-    builder.Services.AddScoped<IMarketDataProvider>(sp => sp.GetRequiredService<StubMarketDataProvider>());
-}
-builder.Services.AddScoped<AlertEvaluator>();
-builder.Services.AddScoped<TaxLotService>();
-builder.Services.AddScoped<PortfolioLedgerService>();
-builder.Services.AddScoped<PortfolioHistoryService>();
-builder.Services.AddScoped<PortfolioAnalyticsService>();
-builder.Services.AddScoped<WashSaleService>();
-builder.Services.AddScoped<RebalanceService>();
+// Domain services (market data, portfolio/analytics/alerts/reports/cash, SignalR
+// broadcasters, etc.) — shared with the Web.Mvc host. See
+// src/Api/StockyServicesExtensions.cs. Hosted background jobs and API-only
+// concerns (rate limiter, OpenAPI, CORS) stay in this file.
+builder.Services.AddStockyDomainServices(builder.Configuration);
+
 builder.Services.AddHostedService<QuoteRefresher>();
 builder.Services.AddHostedService<SnapshotJob>();
-
-// M8 — Data Providers & Real-Time
-builder.Services.AddScoped<IExtendedMarketDataProvider, StubExtendedMarketDataProvider>();
-builder.Services.AddSignalR();
-builder.Services.AddSingleton<PriceTickBroadcaster>();
-builder.Services.AddSingleton<PortfolioUpdatedBroadcaster>();
-
-// M9 — Advanced Analytics & Charts
-builder.Services.AddScoped<IAdvancedMarketDataProvider, StubAdvancedMarketDataProvider>();
-builder.Services.AddScoped<RiskMetricsService>();
-builder.Services.AddScoped<BenchmarkComparisonService>();
-builder.Services.AddScoped<BacktestService>();
-builder.Services.AddScoped<GoalsService>();
-builder.Services.AddSingleton<EarningsSurpriseService>();
-
-// M10 — Advanced Alerts
-builder.Services.AddSingleton<TechnicalIndicatorService>();
-builder.Services.AddScoped<IInsiderTradeProvider, StubInsiderTradeProvider>();
-builder.Services.AddScoped<IAlertChannel, InboxChannel>();
-builder.Services.AddScoped<IAlertChannel, EmailChannel>();
-builder.Services.AddScoped<IAlertChannel, PushChannel>();
-builder.Services.AddScoped<IAlertChannel, WebhookChannel>();
-builder.Services.AddHttpClient("stocky-webhook", c => c.Timeout = TimeSpan.FromSeconds(5));
-builder.Services.AddScoped<AlertDispatcher>();
-builder.Services.AddScoped<TechnicalAlertEvaluator>();
-builder.Services.AddScoped<EarningsAlertEvaluator>();
-builder.Services.AddScoped<NewsAlertEvaluator>();
-builder.Services.AddScoped<DriftAlertEvaluator>();
-builder.Services.AddScoped<InsiderAlertEvaluator>();
 builder.Services.AddHostedService<AlertSweepJob>();
-
-// M11 reporting & sharing
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ShareTokenService>();
-builder.Services.AddScoped<ReportRenderer>();
 builder.Services.AddHostedService<ReportScheduleJob>();
 
-// M14 platform & admin
-builder.Services.AddScoped<AuditLogger>();
-builder.Services.AddScoped<CashService>();
+builder.Services.AddHttpContextAccessor();
 
 var appInsightsConnection = builder.Configuration["ApplicationInsights:ConnectionString"]
     ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];

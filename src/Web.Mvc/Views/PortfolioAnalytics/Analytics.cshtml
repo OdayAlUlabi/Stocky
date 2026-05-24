@@ -1,0 +1,32 @@
+@model PortfolioAnalyticsDto
+@{
+    ViewData["Title"] = "Analytics";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>Analytics · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+@if (Model is null) { <p><em>No data.</em></p> return; }
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;margin:1rem 0;">
+    <article><small>TWRR</small><h4>@Model.Twrr.Pct()</h4></article>
+    <article><small>TWRR (annualised)</small><h4>@Model.TwrrAnnualised.Pct()</h4></article>
+    <article><small>MWRR</small><h4>@Model.Mwrr.Pct()</h4></article>
+    <article><small>Volatility</small><h4>@Model.Volatility.Pct()</h4></article>
+    <article><small>Sharpe</small><h4>@Model.Sharpe.Num(2)</h4></article>
+    <article><small>Beta (@Model.BenchmarkSymbol)</small><h4>@Model.Beta.Num(2)</h4></article>
+    <article><small>Max drawdown</small><h4 class="neg">@Model.MaxDrawdown.Pct() on @Model.MaxDrawdownDate</h4></article>
+    <article><small>Best day</small><h4 class="pos">@Model.BestDay.Pct() on @Model.BestDayDate</h4></article>
+    <article><small>Worst day</small><h4 class="neg">@Model.WorstDay.Pct() on @Model.WorstDayDate</h4></article>
+    <article><small>Dividend yield (TTM)</small><h4>@Model.DividendYield.Pct()</h4></article>
+    <article><small>Dividends (TTM)</small><h4>@Model.TtmDividends.Money(Model.Currency)</h4></article>
+</div>
+<details>
+    <summary>Drawdown series (@Model.DrawdownSeries.Count points)</summary>
+    <table>
+        <thead><tr><th>Date</th><th style="text-align:right;">Drawdown</th></tr></thead>
+        <tbody>
+            @foreach (var p in Model.DrawdownSeries.TakeLast(60))
+            {
+                <tr><td>@p.Date</td><td style="text-align:right;" class="neg">@p.DrawdownPercent.Pct()</td></tr>
+            }
+        </tbody>
+    </table>
+</details>

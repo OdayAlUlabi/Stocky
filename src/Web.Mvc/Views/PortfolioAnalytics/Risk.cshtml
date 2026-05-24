@@ -1,0 +1,20 @@
+@model RiskMetricsDto
+@{
+    ViewData["Title"] = "Risk";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>Risk · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+@if (Model is null) { <p><em>No data.</em></p> return; }
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;">
+    <article><small>Sharpe</small><h4>@Model.Sharpe.Num(2)</h4></article>
+    <article><small>Sortino</small><h4>@Model.Sortino.Num(2)</h4></article>
+    <article><small>Max drawdown</small><h4 class="neg">@Model.MaxDrawdown.Pct() on @Model.MaxDrawdownDate</h4></article>
+    <article><small>VaR 95</small><h4 class="neg">@Model.Var95.Pct()</h4></article>
+    <article><small>VaR 99</small><h4 class="neg">@Model.Var99.Pct()</h4></article>
+    <article><small>CVaR 95</small><h4 class="neg">@Model.Cvar95.Pct()</h4></article>
+    <article><small>Annualised vol</small><h4>@Model.AnnualisedVolatility.Pct()</h4></article>
+    <article><small>Downside vol</small><h4>@Model.DownsideVolatility.Pct()</h4></article>
+    <article><small>Beta (@Model.BenchmarkSymbol)</small><h4>@Model.Beta.Num(2)</h4></article>
+    <article><small>Alpha</small><h4>@Model.Alpha.Pct()</h4></article>
+</div>
+<small>@Model.From → @Model.To</small>

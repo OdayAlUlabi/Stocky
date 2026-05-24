@@ -1,0 +1,36 @@
+@model PerformanceDto
+@{
+    ViewData["Title"] = "Performance";
+    var pid = (Guid)ViewBag.PortfolioId;
+    var days = (int)ViewBag.Days;
+}
+<h2>Performance · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+<form method="get" action="/Portfolios/@pid/Performance" style="display:flex;gap:.5rem;align-items:end;">
+    <label>Window (days) <input type="number" name="days" value="@days" min="7" max="3650" /></label>
+    <button type="submit">Apply</button>
+</form>
+
+@if (Model is null) { <p><em>No data.</em></p> return; }
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;margin:1rem 0;">
+    <article><small>TWR</small><h4>@Model.TwrPercent.Pct()</h4></article>
+    <article><small>MWR</small><h4>@Model.MwrPercent.Pct()</h4></article>
+    <article><small>Best day</small><h4 class="@Model.Best1Day.SignClass()">@Model.Best1Day.Pct()</h4></article>
+    <article><small>Worst day</small><h4 class="@Model.Worst1Day.SignClass()">@Model.Worst1Day.Pct()</h4></article>
+</div>
+
+<table>
+    <thead><tr><th>Date</th><th style="text-align:right;">Value</th><th style="text-align:right;">Cost basis</th><th style="text-align:right;">TWR%</th></tr></thead>
+    <tbody>
+        @foreach (var p in Model.Series.TakeLast(60))
+        {
+            <tr>
+                <td>@p.Date.ToString("yyyy-MM-dd")</td>
+                <td style="text-align:right;">@p.Value.Money(Model.Currency)</td>
+                <td style="text-align:right;">@p.CostBasis.Money(Model.Currency)</td>
+                <td style="text-align:right;" class="@p.TwrPercent.SignClass()">@p.TwrPercent.Pct()</td>
+            </tr>
+        }
+    </tbody>
+</table>
+<small>Showing last 60 of @Model.Series.Count points.</small>

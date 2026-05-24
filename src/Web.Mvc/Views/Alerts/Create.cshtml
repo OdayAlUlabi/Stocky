@@ -1,0 +1,38 @@
+@model CreateAlertRequest
+@{ ViewData["Title"] = "New alert"; }
+<h2>New alert</h2>
+<form method="post" action="/Alerts/Create" style="max-width:560px;">
+    @Html.AntiForgeryToken()
+    <label>Symbol <input name="Symbol" value="@Model.Symbol" required /></label>
+    <label>Type
+        <select name="Type">
+            @foreach (var t in new[] { "Price","Indicator","News","Earnings","Insider" })
+            {
+                <option value="@t" selected="@(Model.Type == t)">@t</option>
+            }
+        </select>
+    </label>
+    <div class="grid">
+        <label>Condition
+            <select name="Condition">
+                @foreach (var c in new[] { "above","below","crossesAbove","crossesBelow" })
+                {
+                    <option value="@c" selected="@(Model.Condition == c)">@c</option>
+                }
+            </select>
+        </label>
+        <label>Threshold <input name="Threshold" value="@Model.Threshold" type="number" step="any" /></label>
+    </div>
+    <details>
+        <summary>Advanced</summary>
+        <label>Indicator period <input name="IndicatorPeriod" value="@Model.IndicatorPeriod" type="number" /></label>
+        <label>Keyword filter <input name="KeywordFilter" value="@Model.KeywordFilter" /></label>
+        <label>Min sentiment <input name="MinSentiment" value="@Model.MinSentiment" type="number" step="any" /></label>
+        <label>Days before earnings <input name="DaysBeforeEarnings" value="@Model.DaysBeforeEarnings" type="number" /></label>
+        <label>Channels <input name="Channels" value="@Model.Channels" placeholder="Inbox,Email,Webhook" /></label>
+        <label>Webhook URL <input name="WebhookUrl" value="@Model.WebhookUrl" /></label>
+    </details>
+    <label>Note <input name="Note" value="@Model.Note" /></label>
+    <button type="submit">Create</button>
+    <a href="/Alerts" role="button" class="secondary outline">Cancel</a>
+</form>

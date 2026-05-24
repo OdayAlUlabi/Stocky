@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Stocky.Web.Mvc</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Reuse the API project's domain, DbContext, DTOs, and services.
+      The MVC app is a *second* entry point that returns HTML; it must not
+      duplicate domain code. See docs/non-spa-rearchitecture.md §4.3.
+    -->
+    <ProjectReference Include="..\Api\Stocky.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

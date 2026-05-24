@@ -1,0 +1,29 @@
+@model PortfolioHistoryDto
+@{
+    ViewData["Title"] = "History";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>History · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+@if (Model is null) { <p><em>No data.</em></p> return; }
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;margin:1rem 0;">
+    <article><small>From</small><h4>@Model.From</h4></article>
+    <article><small>To</small><h4>@Model.To</h4></article>
+    <article><small>Net contributions</small><h4>@Model.NetContributions.Money(Model.Currency)</h4></article>
+    <article><small>Total equity</small><h4>@Model.TotalEquity.Money(Model.Currency)</h4></article>
+    <article><small>Total return</small><h4 class="@Model.TotalReturn.SignClass()">@Model.TotalReturn.Money(Model.Currency) (@Model.TotalReturnPercent.Pct())</h4></article>
+</div>
+<h3>Events</h3>
+<table>
+    <thead><tr><th>Date</th><th>Type</th><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Amount</th><th>Notes</th></tr></thead>
+    <tbody>
+        @foreach (var e in Model.Events)
+        {
+            <tr>
+                <td>@e.Date</td><td>@e.Type</td><td>@e.Symbol</td>
+                <td style="text-align:right;">@e.Quantity.Num(4)</td>
+                <td style="text-align:right;">@e.Amount.Money(Model.Currency)</td>
+                <td>@e.Notes</td>
+            </tr>
+        }
+    </tbody>
+</table>

@@ -1,0 +1,37 @@
+@model List<TransactionDto>
+@{
+    ViewData["Title"] = "Transactions";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<header style="display:flex;justify-content:space-between;align-items:baseline;">
+    <h2>Transactions · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+    <div>
+        <a href="/Portfolios/@pid/Transactions/Create" role="button">+ New</a>
+        <a href="/Portfolios/@pid/Transactions/Import" role="button" class="secondary">Import CSV</a>
+    </div>
+</header>
+<table>
+    <thead><tr><th>Date</th><th>Type</th><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Fee</th><th>Notes</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var t in Model)
+        {
+            <tr>
+                <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
+                <td>@t.Type</td>
+                <td>@t.Symbol</td>
+                <td style="text-align:right;">@t.Quantity.Num(4)</td>
+                <td style="text-align:right;">@t.Price.Money(t.Currency)</td>
+                <td style="text-align:right;">@t.Fee.Money(t.Currency)</td>
+                <td>@t.Notes</td>
+                <td>
+                    <a href="/Portfolios/@pid/Transactions/Edit/@t.Id">Edit</a> ·
+                    <form method="post" action="/Portfolios/@pid/Transactions/Delete/@t.Id" style="display:inline;" onsubmit="return confirm('Delete?');">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="8"><em>No transactions.</em></td></tr> }
+    </tbody>
+</table>

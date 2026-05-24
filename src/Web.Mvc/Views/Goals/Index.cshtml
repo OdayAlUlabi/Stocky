@@ -1,0 +1,30 @@
+@model List<GoalDto>
+@{ ViewData["Title"] = "Goals"; }
+<header style="display:flex;justify-content:space-between;align-items:baseline;">
+    <h2>Goals</h2>
+    <a href="/Goals/Create" role="button">+ New</a>
+</header>
+<table>
+    <thead><tr><th>Name</th><th style="text-align:right;">Target</th><th>Target date</th><th style="text-align:right;">Progress</th><th>On track?</th><th style="text-align:right;">Projected</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var g in Model)
+        {
+            <tr>
+                <td>@g.Name</td>
+                <td style="text-align:right;">@g.TargetValue.Money("USD")</td>
+                <td>@g.TargetDate</td>
+                <td style="text-align:right;">@g.ProgressPercent.Pct()</td>
+                <td>@(g.OnTrack ? "Yes" : "No")</td>
+                <td style="text-align:right;">@g.ProjectedFinalValue.Money("USD")</td>
+                <td>
+                    <a href="/Goals/Edit/@g.Id">Edit</a> ·
+                    <form method="post" action="/Goals/Delete/@g.Id" style="display:inline;" onsubmit="return confirm('Delete?');">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="7"><em>No goals.</em></td></tr> }
+    </tbody>
+</table>

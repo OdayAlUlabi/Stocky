@@ -1,0 +1,90 @@
+@model DashboardDto
+@{
+    ViewData["Title"] = "Dashboard";
+    var portfolios = ViewBag.Portfolios as List<PortfolioDto> ?? new();
+    var selected = ViewBag.SelectedPortfolioId as Guid?;
+}
+
+<header style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+    <h2 style="margin:0;">Dashboard</h2>
+    @if (portfolios.Count > 1)
+    {
+        <form method="get" action="/" style="margin:0;">
+            <select name="portfolioId" onchange="this.form.submit()">
+                <option value="">All portfolios</option>
+                @foreach (var p in portfolios)
+                {
+                    <option value="@p.Id" selected="@(selected == p.Id)">@p.Name</option>
+                }
+            </select>
+        </form>
+    }
+</header>
+
+@if (Model is null)
+{
+    <p>No data.</p>
+    return;
+}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin:1rem 0;">
+    <article><small>Total value</small><h3>@Model.TotalValue.Money(Model.Currency)</h3></article>
+    <article><small>Day P&amp;L</small><h3 class="@Model.DayPnL.SignClass()">@Model.DayPnL.Money(Model.Currency) (@Model.DayPnLPercent.Pct())</h3></article>
+    <article><small>Total return</small><h3 class="@Model.TotalReturn.SignClass()">@Model.TotalReturn.Money(Model.Currency) (@Model.TotalReturnPercent.Pct())</h3></article>
+    <article><small>Cash</small><h3>@Model.CashBalance.Money(Model.Currency)</h3></article>
+</div>
+
+<details open>
+    <summary><strong>Asset allocation</strong></summary>
+    <table>
+        <thead><tr><th>Class</th><th style="text-align:right;">Value</th><th style="text-align:right;">%</th></tr></thead>
+        <tbody>
+            @foreach (var s in Model.AssetClassAllocation)
+            {
+                <tr><td>@s.Label</td><td style="text-align:right;">@s.Value.Money(Model.Currency)</td><td style="text-align:right;">@s.Percent.Pct()</td></tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<details>
+    <summary><strong>Sector allocation</strong></summary>
+    <table>
+        <thead><tr><th>Sector</th><th style="text-align:right;">Value</th><th style="text-align:right;">%</th></tr></thead>
+        <tbody>
+            @foreach (var s in Model.SectorAllocation)
+            {
+                <tr><td>@s.Label</td><td style="text-align:right;">@s.Value.Money(Model.Currency)</td><td style="text-align:right;">@s.Percent.Pct()</td></tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+    <article>
+        <header><strong>Top gainers</strong></header>
+        <table>
+            <thead><tr><th>Symbol</th><th style="text-align:right;">Value</th><th style="text-align:right;">Day</th></tr></thead>
+            <tbody>
+                @foreach (var m in Model.TopGainers)
+                {
+                    <tr><td><a href="/Portfolios/@(Model.PortfolioId ?? Guid.Empty)/Positions/@m.Symbol">@m.Symbol</a></td><td style="text-align:right;">@m.MarketValue.Money(Model.Currency)</td><td style="text-align:right;" class="@m.DayChangePercent.SignClass()">@m.DayChangePercent.Pct()</td></tr>
+                }
+            </tbody>
+        </table>
+    </article>
+    <article>
+        <header><strong>Top losers</strong></header>
+        <table>
+            <thead><tr><th>Symbol</th><th style="text-align:right;">Value</th><th style="text-align:right;">Day</th></tr></thead>
+            <tbody>
+                @foreach (var m in Model.TopLosers)
+                {
+                    <tr><td><a href="/Portfolios/@(Model.PortfolioId ?? Guid.Empty)/Positions/@m.Symbol">@m.Symbol</a></td><td style="text-align:right;">@m.MarketValue.Money(Model.Currency)</td><td style="text-align:right;" class="@m.DayChangePercent.SignClass()">@m.DayChangePercent.Pct()</td></tr>
+                }
+            </tbody>
+        </table>
+    </article>
+</div>
+
+<footer><small>As of @Model.AsOf.ToString("yyyy-MM-dd HH:mm 'UTC'")</small></footer>

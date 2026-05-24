@@ -1,0 +1,19 @@
+@if (User?.Identity?.IsAuthenticated == true)
+{
+    <details role="list" style="display:inline-block;margin:0">
+        <summary aria-haspopup="listbox">@(User.Identity.Name ?? "Account")</summary>
+        <ul role="listbox">
+            <li><a href="/Account">Account settings</a></li>
+            <li>
+                <form asp-controller="Account" asp-action="Logout" method="post" style="margin:0">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="secondary" style="width:100%">Sign out</button>
+                </form>
+            </li>
+        </ul>
+    </details>
+}
+else
+{
+    <a href="/Account/Login" role="button" class="secondary">Sign in</a>
+}

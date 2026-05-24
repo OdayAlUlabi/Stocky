@@ -1,0 +1,67 @@
+@model List<CashTransactionDto>
+@{
+    ViewData["Title"] = "Cash";
+    var pid = (Guid)ViewBag.PortfolioId;
+    var balances = ViewBag.Balances as List<CashBalanceDto> ?? new();
+}
+<h2>Cash · <small><a href="/Portfolios/Detail/@pid">Back to portfolio</a></small></h2>
+
+<h3>Balances</h3>
+<table>
+    <thead><tr><th>Currency</th><th style="text-align:right;">Balance</th><th style="text-align:right;">Count</th></tr></thead>
+    <tbody>
+        @foreach (var b in balances)
+        {
+            <tr><td>@b.Currency</td><td style="text-align:right;">@b.Balance.Money(b.Currency)</td><td style="text-align:right;">@b.Count</td></tr>
+        }
+        @if (balances.Count == 0) { <tr><td colspan="3"><em>No balances.</em></td></tr> }
+    </tbody>
+</table>
+
+<h3>Add cash transaction</h3>
+<form method="post" action="/Cash/Create" style="max-width:560px;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="portfolioId" value="@pid" />
+    <div class="grid">
+        <label>Type
+            <select name="type">
+                @foreach (var t in new[] { "Deposit","Withdrawal","Fee","Dividend","Interest" })
+                {
+                    <option value="@t">@t</option>
+                }
+            </select>
+        </label>
+        <label>Amount <input name="amount" type="number" step="any" required /></label>
+        <label>Currency <input name="currency" value="USD" maxlength="8" /></label>
+    </div>
+    <div class="grid">
+        <label>Executed at <input name="executedAt" type="datetime-local" /></label>
+        <label>Notes <input name="notes" /></label>
+    </div>
+    <button type="submit">Save</button>
+</form>
+
+<h3>Transactions</h3>
+<table>
+    <thead><tr><th>Date</th><th>Type</th><th style="text-align:right;">Amount</th><th>Notes</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var t in Model)
+        {
+            <tr>
+                <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
+                <td>@t.Type</td>
+                <td style="text-align:right;" class="@t.Amount.SignClass()">@t.Amount.Money(t.Currency)</td>
+                <td>@t.Notes</td>
+                <td>
+                    <form method="post" action="/Cash/Delete" style="display:inline;" onsubmit="return confirm('Delete?');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="portfolioId" value="@pid" />
+                        <input type="hidden" name="id" value="@t.Id" />
+                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="5"><em>No cash transactions.</em></td></tr> }
+    </tbody>
+</table>

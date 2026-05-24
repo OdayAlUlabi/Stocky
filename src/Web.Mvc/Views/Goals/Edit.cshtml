@@ -1,0 +1,21 @@
+@model GoalCreateDto
+@{
+    ViewData["Title"] = "Edit goal";
+    var id = (Guid)ViewBag.Id;
+}
+<h2>Edit goal</h2>
+<form method="post" action="/Goals/Edit/@id" style="max-width:560px;">
+    @Html.AntiForgeryToken()
+    <label>Name <input name="Name" value="@Model.Name" required /></label>
+    <div class="grid">
+        <label>Target value <input name="TargetValue" value="@Model.TargetValue" type="number" step="any" required /></label>
+        <label>Target date <input name="TargetDate" value="@Model.TargetDate.ToString("yyyy-MM-dd")" type="date" required /></label>
+    </div>
+    <div class="grid">
+        <label>Monthly contribution <input name="MonthlyContribution" value="@Model.MonthlyContribution" type="number" step="any" /></label>
+        <label>Expected return <input name="ExpectedReturn" value="@Model.ExpectedReturn" type="number" step="any" /></label>
+    </div>
+    <label>Portfolio ID <input name="PortfolioId" value="@Model.PortfolioId" /></label>
+    <button type="submit">Save</button>
+    <a href="/Goals" role="button" class="secondary outline">Cancel</a>
+</form>

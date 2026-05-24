@@ -1,0 +1,41 @@
+@model ReportSummaryDto
+@{
+    ViewData["Title"] = "Reports";
+    var pid = (Guid)ViewBag.PortfolioId;
+    var dividends = ViewBag.Dividends as List<DividendRowDto> ?? new();
+    var year = ViewBag.Year as int?;
+}
+<h2>Reports · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+<form method="get" action="/Portfolios/@pid/Reports" style="display:flex;gap:.5rem;align-items:end;">
+    <label>From <input type="date" name="from" value="@(ViewBag.From as DateTimeOffset? != null ? ((DateTimeOffset)ViewBag.From).ToString("yyyy-MM-dd") : "")" /></label>
+    <label>To <input type="date" name="to" value="@(ViewBag.To as DateTimeOffset? != null ? ((DateTimeOffset)ViewBag.To).ToString("yyyy-MM-dd") : "")" /></label>
+    <label>Year <input type="number" name="year" value="@year" min="2000" max="2100" placeholder="(all)" /></label>
+    <button type="submit">Apply</button>
+</form>
+
+@if (Model is not null)
+{
+    <h3>Summary (@Model.From.ToString("yyyy-MM-dd") → @Model.To.ToString("yyyy-MM-dd"))</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;">
+        <article><small>Deposits</small><h4>@Model.TotalDeposits.Money(Model.Currency)</h4></article>
+        <article><small>Withdrawals</small><h4>@Model.TotalWithdrawals.Money(Model.Currency)</h4></article>
+        <article><small>Net contributions</small><h4>@Model.NetContributions.Money(Model.Currency)</h4></article>
+        <article><small>Market value</small><h4>@Model.MarketValue.Money(Model.Currency)</h4></article>
+        <article><small>Realized P&amp;L</small><h4 class="@Model.RealizedPnL.SignClass()">@Model.RealizedPnL.Money(Model.Currency)</h4></article>
+        <article><small>Unrealized P&amp;L</small><h4 class="@Model.UnrealizedPnL.SignClass()">@Model.UnrealizedPnL.Money(Model.Currency)</h4></article>
+        <article><small>Dividends</small><h4>@Model.Dividends.Money(Model.Currency)</h4></article>
+        <article><small>Fees</small><h4>@Model.Fees.Money(Model.Currency)</h4></article>
+    </div>
+}
+
+<h3>Dividends</h3>
+<table>
+    <thead><tr><th>Date</th><th>Symbol</th><th style="text-align:right;">Amount</th></tr></thead>
+    <tbody>
+        @foreach (var d in dividends)
+        {
+            <tr><td>@d.Date.ToString("yyyy-MM-dd")</td><td>@d.Symbol</td><td style="text-align:right;">@d.Amount.Money(d.Currency)</td></tr>
+        }
+        @if (dividends.Count == 0) { <tr><td colspan="3"><em>No dividends in selected window.</em></td></tr> }
+    </tbody>
+</table>

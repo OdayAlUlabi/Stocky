@@ -1,0 +1,22 @@
+@model CreatePortfolioRequest
+@{ ViewData["Title"] = "New portfolio"; }
+
+<h2>New portfolio</h2>
+<form method="post" action="/Portfolios/Create" style="max-width:520px;">
+    @Html.AntiForgeryToken()
+    <label>Name <input name="Name" value="@Model.Name" required maxlength="120" /></label>
+    <label>Base currency <input name="BaseCurrency" value="@Model.BaseCurrency" maxlength="8" /></label>
+    <label>Cost basis
+        <select name="CostBasisMethod">
+            <option value="FIFO" selected="@(Model.CostBasisMethod == "FIFO")">FIFO</option>
+            <option value="LIFO" selected="@(Model.CostBasisMethod == "LIFO")">LIFO</option>
+            <option value="Average" selected="@(Model.CostBasisMethod == "Average")">Average</option>
+        </select>
+    </label>
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <small style="color:var(--pico-color-red-500)">@string.Join(", ", ViewData.ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage))</small>
+    }
+    <button type="submit">Create</button>
+    <a href="/Portfolios" role="button" class="secondary outline">Cancel</a>
+</form>

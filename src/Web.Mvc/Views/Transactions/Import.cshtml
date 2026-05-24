@@ -1,0 +1,16 @@
+@{
+    ViewData["Title"] = "Import CSV";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>Import transactions (CSV)</h2>
+<form method="post" action="/Portfolios/@pid/Transactions/Import" enctype="multipart/form-data" style="max-width:520px;">
+    @Html.AntiForgeryToken()
+    <label>CSV file <input type="file" name="file" accept=".csv,text/csv" required /></label>
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <small style="color:var(--pico-color-red-500)">@string.Join(", ", ViewData.ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage))</small>
+    }
+    <button type="submit">Upload</button>
+    <a href="/Portfolios/@pid/Transactions" role="button" class="secondary outline">Cancel</a>
+</form>
+<small>Expected columns: <code>Symbol,Type,Quantity,Price,Fee,Currency,ExecutedAt,Notes</code></small>

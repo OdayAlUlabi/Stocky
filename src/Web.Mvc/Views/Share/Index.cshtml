@@ -1,0 +1,70 @@
+@model List<ShareTokenDto>
+@{
+    ViewData["Title"] = "Shared portfolios";
+    var newUrl = TempData["NewShareUrl"] as string;
+    var newToken = TempData["NewShareToken"] as string;
+}
+<h2>Share tokens</h2>
+
+@if (!string.IsNullOrEmpty(newToken))
+{
+    <article style="border:2px solid #fbbf24;">
+        <header><strong>New share link created</strong></header>
+        <p>Save this link now — the token will <strong>not</strong> be shown again.</p>
+        @if (!string.IsNullOrEmpty(newUrl))
+        {
+            <p><a href="@newUrl" target="_blank">@newUrl</a></p>
+        }
+        <pre style="white-space:pre-wrap;word-break:break-all;"><code>@newToken</code></pre>
+    </article>
+}
+
+<h3>Create share link</h3>
+<form method="post" action="/Share/Create" style="max-width:680px;">
+    @Html.AntiForgeryToken()
+    <div class="grid">
+        <label>Portfolio ID <input name="portfolioId" required /></label>
+        <label>Label (optional) <input name="label" /></label>
+    </div>
+    <div class="grid">
+        <label>Expires at <input name="expiresAt" type="datetime-local" /></label>
+        <label><input type="checkbox" name="includeTransactions" value="true" /> Include transactions</label>
+        <label><input type="checkbox" name="includeCostBasis" value="true" /> Include cost basis</label>
+    </div>
+    <button type="submit">Create share link</button>
+</form>
+
+<h3>Existing tokens</h3>
+<table>
+    <thead><tr><th>Label</th><th>Prefix</th><th>Portfolio</th><th>Created</th><th>Expires</th><th style="text-align:right;">Views</th><th>Active</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var s in Model)
+        {
+            <tr>
+                <td>@s.Label</td>
+                <td><code>@s.TokenPrefix…</code></td>
+                <td><code>@s.PortfolioId</code></td>
+                <td>@s.CreatedAt.ToString("yyyy-MM-dd")</td>
+                <td>@(s.ExpiresAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                <td style="text-align:right;">@s.ViewCount</td>
+                <td>@(s.IsActive ? "Yes" : "No")</td>
+                <td>
+                    @if (s.IsActive)
+                    {
+                        <form method="post" action="/Share/Revoke" style="display:inline;" onsubmit="return confirm('Revoke?');">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@s.Id" />
+                            <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">Revoke</button>
+                        </form>
+                    }
+                    <form method="post" action="/Share/Delete" style="display:inline;" onsubmit="return confirm('Delete?');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@s.Id" />
+                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        @if (Model.Count == 0) { <tr><td colspan="8"><em>No share tokens.</em></td></tr> }
+    </tbody>
+</table>
