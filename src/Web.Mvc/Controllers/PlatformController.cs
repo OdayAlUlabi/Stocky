@@ -7,15 +7,21 @@ using StockyApi = Stocky.Api.Controllers;
 namespace Stocky.Web.Mvc.Controllers;
 
 [Authorize]
+[Route("Portfolios/{portfolioId:guid}/Cash/{action=Index}/{id?}")]
 public class CashController : Controller
 {
     public async Task<IActionResult> Index(Guid portfolioId)
     {
+        var portfolio = await this.InvokeAsync<StockyApi.PortfoliosController, PortfolioDto>(
+            c => c.Get(portfolioId));
+        if (portfolio is null) return NotFound();
+
         var rows = await this.InvokeAsync<StockyApi.CashController, IEnumerable<CashTransactionDto>>(
             c => c.List(portfolioId)) ?? Array.Empty<CashTransactionDto>();
         var balances = await this.InvokeAsync<StockyApi.CashController, IEnumerable<CashBalanceDto>>(
             c => c.Balances(portfolioId)) ?? Array.Empty<CashBalanceDto>();
         ViewBag.PortfolioId = portfolioId;
+        ViewBag.Portfolio = portfolio;
         ViewBag.Balances = balances.ToList();
         return View(rows.ToList());
     }
@@ -34,6 +40,7 @@ public class CashController : Controller
     public async Task<IActionResult> Delete(Guid portfolioId, Guid id)
     {
         await this.InvokeRawAsync<StockyApi.CashController>(c => c.Delete(id));
+        TempData["Status"] = "Cash transaction deleted.";
         return RedirectToAction(nameof(Index), new { portfolioId });
     }
 }

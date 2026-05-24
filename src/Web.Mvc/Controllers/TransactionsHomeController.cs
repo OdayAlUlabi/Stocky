@@ -25,3 +25,23 @@ public class TransactionsHomeController : Controller
         return Redirect($"/Portfolios/{first.Id}/Transactions");
     }
 }
+
+[Authorize]
+[Route("Cash")]
+public class CashHomeController : Controller
+{
+    // GET /Cash  -> redirect to first portfolio's cash, or to /Portfolios if none.
+    [HttpGet("")]
+    public async Task<IActionResult> Index()
+    {
+        var list = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>();
+        var first = list.FirstOrDefault();
+        if (first is null)
+        {
+            TempData["Status"] = "Create a portfolio to start tracking cash.";
+            return Redirect("/Portfolios");
+        }
+        return Redirect($"/Portfolios/{first.Id}/Cash");
+    }
+}
