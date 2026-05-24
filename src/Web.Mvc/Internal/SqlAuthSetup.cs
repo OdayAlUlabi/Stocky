@@ -100,12 +100,16 @@ public static class SqlAuthSetup
             }
             catch (Exception ex) when (attempt < 12)
             {
-                Console.WriteLine($"Web.Mvc: SQL IMDS attempt {attempt}/12 failed: {ex.Message}. Retrying in 10s...");
+                Console.WriteLine($"Web.Mvc: SQL token attempt {attempt}/12 failed: {ex.GetType().Name}: {ex.Message}");
+                for (var inner = ex.InnerException; inner != null; inner = inner.InnerException)
+                {
+                    Console.WriteLine($"  inner: {inner.GetType().Name}: {inner.Message}");
+                }
                 await Task.Delay(10_000);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Web.Mvc: SQL IMDS warm-up exhausted: {ex.Message}. Starting anyway.");
+                Console.WriteLine($"Web.Mvc: SQL token warm-up exhausted: {ex}. Starting anyway.");
             }
         }
     }
