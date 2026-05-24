@@ -62,6 +62,7 @@ public static class StockyServicesExtensions
         services.AddScoped<Services.PortfolioAnalyticsService>();
         services.AddScoped<Services.WashSaleService>();
         services.AddScoped<Services.RebalanceService>();
+        services.AddScoped<Services.DataRefreshService>();
 
         // M8 — Data providers / real-time broadcasters (broadcasters used by API host;
         // MVC host registers them too so HoldingsController etc. can be invoked in-process).

@@ -1,7 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Stocky.Api.Data;
-using Stocky.Api.Domain;
-
 namespace Stocky.Api.Services;
 
 /// <summary>
@@ -59,43 +55,8 @@ public sealed class QuoteRefresher(
     private async Task RefreshOnceAsync(CancellationToken ct)
     {
         using var scope = services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<StockyDbContext>();
-        var provider = scope.ServiceProvider.GetRequiredService<IMarketDataProvider>();
-        var evaluator = scope.ServiceProvider.GetRequiredService<AlertEvaluator>();
-
-        var symbols = await db.Holdings.Select(h => h.Symbol)
-            .Union(db.WatchlistItems.Select(w => w.Symbol))
-            .Union(db.Transactions
-                .Where(t => t.Symbol != null && t.Symbol != "")
-                .Select(t => t.Symbol!))
-            .Distinct()
-            .ToListAsync(ct);
-        if (symbols.Count == 0) return;
-
-        var quotes = await provider.GetQuotesAsync(symbols, ct);
-        foreach (var q in quotes)
-        {
-            db.PriceQuotes.Add(new PriceQuote
-            {
-                Symbol = q.Symbol,
-                Price = q.Price,
-                Change = q.Change,
-                ChangePercent = q.ChangePercent,
-                AsOf = q.AsOf
-            });
-        }
-        await db.SaveChangesAsync(ct);
-        await evaluator.EvaluateAsync(quotes, ct);
-
-        // M8 #1 — fan-out real-time ticks to SignalR subscribers.
-        var broadcaster = scope.ServiceProvider.GetService<PriceTickBroadcaster>();
-        if (broadcaster is not null)
-        {
-            try { await broadcaster.BroadcastAsync(quotes, ct); }
-            catch (Exception ex) { logger.LogDebug(ex, "PriceTick broadcast failed"); }
-        }
-
-        logger.LogInformation("Refreshed {Count} quotes", quotes.Count);
+        var refresher = scope.ServiceProvider.GetRequiredService<DataRefreshService>();
+        await refresher.RefreshQuotesOnceAsync(ct);
     }
 
     /// <summary>
