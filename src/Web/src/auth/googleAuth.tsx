@@ -91,10 +91,14 @@ export function GoogleAuthProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore malformed token */ }
   }, [credential, setCredential]);
 
-  // Auto sign-out when any API call receives a 401 (expired or missing token).
+  // Auto sign-out when any API call receives a 401 with a token that was rejected.
+  // Ignore 401s from requests that had no token (e.g. race condition on login).
   useEffect(() => {
     if (!isAuthConfigured) return;
-    const handler = () => setCredential(null);
+    const handler = (e: Event) => {
+      const { hadToken } = (e as CustomEvent<{ hadToken: boolean }>).detail;
+      if (hadToken) setCredential(null);
+    };
     window.addEventListener('stocky:unauthorized', handler);
     return () => window.removeEventListener('stocky:unauthorized', handler);
   }, [setCredential]);
@@ -109,21 +113,12 @@ export function GoogleAuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-const PREWARM_MS = 5 * 60 * 1000; // start One Tap 5 min before expiry
-
-function getExpiry(token: string): number | null {
-  try {
-    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const p = JSON.parse(atob(base64)) as { exp?: number };
-    return typeof p.exp === 'number' ? p.exp * 1000 : null;
-  } catch { return null; }
-}
-
 /**
- * Fires Google One Tap:
- *  - immediately when there is no credential (after expiry or first load)
- *  - proactively 5 min before the current token expires, so a fresh token
- *    is ready before the old one runs out — the user never sees the login page.
+ * Silently fires Google One Tap when there is no credential (after expiry or
+ * first load). We intentionally do NOT pre-warm while a valid token exists —
+ * showing the One Tap dialog during an active session causes the user to dismiss
+ * it, which triggers Google's exponential cooldown and prevents the auto-select
+ * from working at the next expiry.
  */
 function SilentOneTap({
   credential,
@@ -132,31 +127,12 @@ function SilentOneTap({
   credential: string | null;
   setCredential: (c: string | null) => void;
 }) {
-  const [shouldPrompt, setShouldPrompt] = useState(() => {
-    if (!credential) return true;
-    const exp = getExpiry(credential);
-    return exp === null || Date.now() >= exp - PREWARM_MS;
-  });
-
-  useEffect(() => {
-    if (!credential) { setShouldPrompt(true); return; }
-    const exp = getExpiry(credential);
-    if (exp === null) return;
-    const now = Date.now();
-    if (now >= exp - PREWARM_MS) { setShouldPrompt(true); return; }
-    const t = setTimeout(() => setShouldPrompt(true), exp - now - PREWARM_MS);
-    return () => clearTimeout(t);
-  }, [credential]);
-
   useGoogleOneTapLogin({
     onSuccess: (res) => {
-      if (res.credential) {
-        setCredential(res.credential);
-        setShouldPrompt(false);
-      }
+      if (res.credential) setCredential(res.credential);
     },
     onError: () => {},
-    disabled: !isAuthConfigured || !shouldPrompt,
+    disabled: !isAuthConfigured || Boolean(credential),
     auto_select: true,
   });
   return null;
