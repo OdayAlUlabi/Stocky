@@ -4,7 +4,7 @@
     var take = (int)ViewBag.Take;
     var resource = ViewBag.Resource as string;
 }
-<h2>Audit log</h2>
+<div class="page-header"><h2><i class="bi bi-shield-check"></i> Audit log</h2></div>
 <form method="get" action="/Admin/Audit" style="display:flex;gap:.5rem;align-items:end;">
     <label>Take <input name="take" type="number" min="10" max="2000" value="@take" /></label>
     <label>Resource <input name="resource" value="@resource" /></label>

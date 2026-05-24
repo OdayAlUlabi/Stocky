@@ -4,7 +4,7 @@
     var pid = (Guid)ViewBag.PortfolioId;
     var id = (Guid)ViewBag.Id;
 }
-<h2>Edit transaction</h2>
+<div class="page-header"><h2><i class="bi bi-arrow-left-right"></i> Edit transaction</h2></div>
 <form method="post" action="/Portfolios/@pid/Transactions/Edit/@id" style="max-width:560px;">
     @Html.AntiForgeryToken()
     <label>Type
@@ -31,5 +31,5 @@
         <small style="color:var(--pico-color-red-500)">@string.Join(", ", ViewData.ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage))</small>
     }
     <button type="submit">Save</button>
-    <a href="/Portfolios/@pid/Transactions" role="button" class="secondary outline">Cancel</a>
+    <a href="/Portfolios/@pid/Transactions" class="btn btn-ghost">Cancel</a>
 </form>

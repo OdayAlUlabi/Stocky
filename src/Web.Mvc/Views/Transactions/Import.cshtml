@@ -11,6 +11,6 @@
         <small style="color:var(--pico-color-red-500)">@string.Join(", ", ViewData.ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage))</small>
     }
     <button type="submit">Upload</button>
-    <a href="/Portfolios/@pid/Transactions" role="button" class="secondary outline">Cancel</a>
+    <a href="/Portfolios/@pid/Transactions" class="btn btn-ghost">Cancel</a>
 </form>
 <small>Expected columns: <code>Symbol,Type,Quantity,Price,Fee,Currency,ExecutedAt,Notes</code></small>

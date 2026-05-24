@@ -1,6 +1,6 @@
 @model UserSettingsDto
 @{ ViewData["Title"] = "Settings"; }
-<h2>Settings</h2>
+<div class="page-header"><h2><i class="bi bi-gear"></i> Settings</h2></div>
 <form method="post" action="/Settings" style="max-width:560px;">
     @Html.AntiForgeryToken()
     <div class="grid">

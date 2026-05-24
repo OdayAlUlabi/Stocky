@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Screener";
 }
-<h2>Stock screener</h2>
+<div class="page-header"><h2><i class="bi bi-funnel"></i> Stock screener</h2></div>
 <form method="get" action="/Screener" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem;">
     <label>Query <input name="q" value="@(Context.Request.Query["q"])" placeholder="symbol or name" /></label>
     <label>Asset class <input name="assetClass" value="@(Context.Request.Query["assetClass"])" placeholder="Equity" /></label>

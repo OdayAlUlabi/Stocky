@@ -3,13 +3,12 @@
     ViewData["Title"] = "Alerts";
     var status = ViewBag.Status as string;
 }
-<header style="display:flex;justify-content:space-between;align-items:baseline;">
-    <h2>Alerts</h2>
-    <div>
-        <a href="/Alerts/Create" role="button">+ New</a>
-        <a href="/Alerts/History" role="button" class="secondary">History</a>
+<div class="page-header"><h2><i class="bi bi-bell"></i> Alerts</h2>
+    <div class="actions">
+        <a href="/Alerts/Create" class="btn btn-primary">+ New</a>
+        <a href="/Alerts/History" class="btn btn-ghost">History</a>
     </div>
-</header>
+</div>
 
 <form method="get" action="/Alerts" style="display:flex;gap:.5rem;align-items:end;">
     <label>Status
@@ -40,13 +39,13 @@
                     <a href="/Alerts/Edit/@a.Id">Edit</a> ·
                     <form method="post" action="/Alerts/Delete/@a.Id" style="display:inline;" onsubmit="return confirm('Delete?');">
                         @Html.AntiForgeryToken()
-                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                        <button type="submit" class="btn btn-ghost btn-sm">×</button>
                     </form>
                     @if (a.Status == "Triggered" || a.Status == "Snoozed")
                     {
                         <form method="post" action="/Alerts/Reactivate/@a.Id" style="display:inline;">
                             @Html.AntiForgeryToken()
-                            <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">Reactivate</button>
+                            <button type="submit" class="btn btn-ghost btn-sm">Reactivate</button>
                         </form>
                     }
                 </td>

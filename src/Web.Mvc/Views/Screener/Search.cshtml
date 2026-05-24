@@ -1,6 +1,6 @@
 @model List<InstrumentDto>
 @{ ViewData["Title"] = "Instrument search"; }
-<h2>Instrument search</h2>
+<div class="page-header"><h2><i class="bi bi-funnel"></i> Instrument search</h2></div>
 <form method="get" action="/Screener/Search" style="display:flex;gap:.5rem;align-items:end;">
     <label style="flex:1;">Query <input name="q" value="@(ViewBag.Query as string)" required /></label>
     <button type="submit">Search</button>

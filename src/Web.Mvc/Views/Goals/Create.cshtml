@@ -1,6 +1,6 @@
 @model GoalCreateDto
 @{ ViewData["Title"] = "New goal"; }
-<h2>New goal</h2>
+<div class="page-header"><h2><i class="bi bi-bullseye"></i> New goal</h2></div>
 <form method="post" action="/Goals/Create" style="max-width:560px;">
     @Html.AntiForgeryToken()
     <label>Name <input name="Name" value="@Model.Name" required /></label>
@@ -14,5 +14,5 @@
     </div>
     <label>Portfolio ID (optional) <input name="PortfolioId" value="@Model.PortfolioId" /></label>
     <button type="submit">Create</button>
-    <a href="/Goals" role="button" class="secondary outline">Cancel</a>
+    <a href="/Goals" class="btn btn-ghost">Cancel</a>
 </form>

@@ -1,6 +1,6 @@
 @model CreateAlertRequest
 @{ ViewData["Title"] = "New alert"; }
-<h2>New alert</h2>
+<div class="page-header"><h2><i class="bi bi-bell"></i> New alert</h2></div>
 <form method="post" action="/Alerts/Create" style="max-width:560px;">
     @Html.AntiForgeryToken()
     <label>Symbol <input name="Symbol" value="@Model.Symbol" required /></label>
@@ -34,5 +34,5 @@
     </details>
     <label>Note <input name="Note" value="@Model.Note" /></label>
     <button type="submit">Create</button>
-    <a href="/Alerts" role="button" class="secondary outline">Cancel</a>
+    <a href="/Alerts" class="btn btn-ghost">Cancel</a>
 </form>

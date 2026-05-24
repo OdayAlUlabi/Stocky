@@ -4,7 +4,7 @@
     var from = ViewBag.From as DateOnly?;
     var to = ViewBag.To as DateOnly?;
 }
-<h2>Economic calendar</h2>
+<div class="page-header"><h2><i class="bi bi-calendar3"></i> Economic calendar</h2></div>
 <form method="get" action="/Calendar/Economic" style="display:flex;gap:.5rem;align-items:end;">
     <label>From <input type="date" name="from" value="@(from?.ToString("yyyy-MM-dd"))" /></label>
     <label>To <input type="date" name="to" value="@(to?.ToString("yyyy-MM-dd"))" /></label>

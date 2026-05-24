@@ -1,6 +1,6 @@
 @model List<ReportScheduleDto>
 @{ ViewData["Title"] = "Report schedules"; }
-<h2>Scheduled reports</h2>
+<div class="page-header"><h2><i class="bi bi-file-earmark-text"></i> Scheduled reports</h2></div>
 
 <h3>Create schedule</h3>
 <form method="post" action="/ReportSchedules/Create" style="max-width:680px;">
@@ -59,12 +59,12 @@
                     <form method="post" action="/ReportSchedules/Run" style="display:inline;">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@s.Id" />
-                        <button type="submit" class="secondary" style="padding:.1rem .5rem;">Run now</button>
+                        <button type="submit" class="btn btn-ghost btn-sm">Run now</button>
                     </form>
                     <form method="post" action="/ReportSchedules/Delete" style="display:inline;" onsubmit="return confirm('Delete?');">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@s.Id" />
-                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                        <button type="submit" class="btn btn-ghost btn-sm">×</button>
                     </form>
                 </td>
             </tr>

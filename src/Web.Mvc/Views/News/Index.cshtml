@@ -4,7 +4,7 @@
     var sym = ViewBag.Symbols as string;
     var lim = (int)ViewBag.Limit;
 }
-<h2>News</h2>
+<div class="page-header"><h2><i class="bi bi-newspaper"></i> News</h2></div>
 <form method="get" action="/News" style="display:flex;gap:.5rem;align-items:end;">
     <label>Symbols (comma-separated) <input name="symbols" value="@sym" placeholder="AAPL,MSFT" /></label>
     <label>Limit <input name="limit" type="number" value="@lim" min="5" max="200" /></label>

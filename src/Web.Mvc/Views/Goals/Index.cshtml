@@ -1,9 +1,8 @@
 @model List<GoalDto>
 @{ ViewData["Title"] = "Goals"; }
-<header style="display:flex;justify-content:space-between;align-items:baseline;">
-    <h2>Goals</h2>
-    <a href="/Goals/Create" role="button">+ New</a>
-</header>
+<div class="page-header"><h2><i class="bi bi-bullseye"></i> Goals</h2>
+    <a href="/Goals/Create" class="btn btn-primary">+ New</a>
+</div>
 <table>
     <thead><tr><th>Name</th><th style="text-align:right;">Target</th><th>Target date</th><th style="text-align:right;">Progress</th><th>On track?</th><th style="text-align:right;">Projected</th><th></th></tr></thead>
     <tbody>
@@ -20,7 +19,7 @@
                     <a href="/Goals/Edit/@g.Id">Edit</a> ·
                     <form method="post" action="/Goals/Delete/@g.Id" style="display:inline;" onsubmit="return confirm('Delete?');">
                         @Html.AntiForgeryToken()
-                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                        <button type="submit" class="btn btn-ghost btn-sm">×</button>
                     </form>
                 </td>
             </tr>

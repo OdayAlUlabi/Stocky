@@ -4,7 +4,7 @@
     var symbol = ViewBag.Symbol as string;
     var pid = ViewBag.PortfolioId as Guid?;
 }
-<h2>Position notes</h2>
+<div class="page-header"><h2><i class="bi bi-journal-text"></i> Position notes</h2></div>
 
 <form method="get" action="/Notes" style="display:flex;gap:.5rem;align-items:end;">
     <label>Symbol <input name="symbol" value="@symbol" /></label>
@@ -42,7 +42,7 @@
             @Html.AntiForgeryToken()
             <input type="hidden" name="returnSymbol" value="@symbol" />
             <input type="hidden" name="returnPortfolioId" value="@pid" />
-            <button type="submit" class="secondary outline" style="padding:.1rem .5rem;">Delete</button>
+            <button type="submit" class="btn btn-ghost btn-sm">Delete</button>
         </form>
     </article>
 }

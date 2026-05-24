@@ -4,7 +4,7 @@
     var newUrl = TempData["NewShareUrl"] as string;
     var newToken = TempData["NewShareToken"] as string;
 }
-<h2>Share tokens</h2>
+<div class="page-header"><h2><i class="bi bi-share"></i> Share tokens</h2></div>
 
 @if (!string.IsNullOrEmpty(newToken))
 {
@@ -54,13 +54,13 @@
                         <form method="post" action="/Share/Revoke" style="display:inline;" onsubmit="return confirm('Revoke?');">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="id" value="@s.Id" />
-                            <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">Revoke</button>
+                            <button type="submit" class="btn btn-ghost btn-sm">Revoke</button>
                         </form>
                     }
                     <form method="post" action="/Share/Delete" style="display:inline;" onsubmit="return confirm('Delete?');">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="id" value="@s.Id" />
-                        <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">×</button>
+                        <button type="submit" class="btn btn-ghost btn-sm">×</button>
                     </form>
                 </td>
             </tr>

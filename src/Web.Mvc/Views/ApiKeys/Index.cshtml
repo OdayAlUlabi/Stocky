@@ -4,7 +4,7 @@
     var newName = TempData["NewKeyName"] as string;
     var newPlain = TempData["NewKeyPlaintext"] as string;
 }
-<h2>API keys</h2>
+<div class="page-header"><h2><i class="bi bi-key"></i> API keys</h2></div>
 
 @if (!string.IsNullOrEmpty(newPlain))
 {
@@ -46,7 +46,7 @@
                         <form method="post" action="/ApiKeys/Revoke" style="display:inline;" onsubmit="return confirm('Revoke?');">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="id" value="@k.Id" />
-                            <button type="submit" class="secondary outline" style="padding:.1rem .4rem;">Revoke</button>
+                            <button type="submit" class="btn btn-ghost btn-sm">Revoke</button>
                         </form>
                     }
                 </td>
