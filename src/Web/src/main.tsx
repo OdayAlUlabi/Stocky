@@ -4,9 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 import { MantineProvider, createTheme, localStorageColorSchemeManager } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { GoogleAuthProvider } from './auth/googleAuth';
 import { router } from './routes/router';
-import { ApiError } from './api/client';
 
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
@@ -22,32 +20,18 @@ const colorSchemeManager = localStorageColorSchemeManager({ key: 'stocky-color-s
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-      retry: (failureCount, error) => {
-        if (error instanceof ApiError && error.status === 401) return false;
-        return failureCount < 1;
-      }
-    },
-    mutations: {
-      retry: (failureCount, error) => {
-        if (error instanceof ApiError && error.status === 401) return false;
-        return failureCount < 1;
-      }
-    }
+    queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 },
+    mutations: { retry: 1 }
   }
 });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <GoogleAuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <MantineProvider theme={theme} defaultColorScheme="auto" colorSchemeManager={colorSchemeManager}>
-          <Notifications position="top-right" />
-          <RouterProvider router={router} />
-        </MantineProvider>
-      </QueryClientProvider>
-    </GoogleAuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <MantineProvider theme={theme} defaultColorScheme="auto" colorSchemeManager={colorSchemeManager}>
+        <Notifications position="top-right" />
+        <RouterProvider router={router} />
+      </MantineProvider>
+    </QueryClientProvider>
   </StrictMode>
 );

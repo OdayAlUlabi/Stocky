@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { request, ApiError } from '../api/client';
+import { request } from '../api/client';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,26 +33,6 @@ describe('request()', () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
-  });
-
-  it('sets Authorization header when token is provided', async () => {
-    fetchSpy.mockResolvedValue(makeResponse(200, { id: 1 }));
-
-    await request('/api/test', { token: 'my-token' });
-
-    const [, init] = fetchSpy.mock.calls[0];
-    const headers = init?.headers as Headers;
-    expect(headers.get('Authorization')).toBe('Bearer my-token');
-  });
-
-  it('omits Authorization header when no token', async () => {
-    fetchSpy.mockResolvedValue(makeResponse(200, { id: 1 }));
-
-    await request('/api/test');
-
-    const [, init] = fetchSpy.mock.calls[0];
-    const headers = init?.headers as Headers;
-    expect(headers.get('Authorization')).toBeNull();
   });
 
   it('sets Content-Type when body is provided', async () => {
@@ -92,44 +72,4 @@ describe('request()', () => {
     });
   });
 
-  it('dispatches stocky:unauthorized event on 401', async () => {
-    fetchSpy.mockResolvedValue(makeResponse(401, null));
-
-    const events: CustomEvent[] = [];
-    const handler = (e: Event) => events.push(e as CustomEvent);
-    window.addEventListener('stocky:unauthorized', handler);
-
-    await expect(request('/api/protected')).rejects.toBeInstanceOf(ApiError);
-
-    window.removeEventListener('stocky:unauthorized', handler);
-    expect(events).toHaveLength(1);
-  });
-
-  it('includes hadToken=true in event detail when token was sent', async () => {
-    fetchSpy.mockResolvedValue(makeResponse(401, null));
-
-    const events: CustomEvent[] = [];
-    const handler = (e: Event) => events.push(e as CustomEvent);
-    window.addEventListener('stocky:unauthorized', handler);
-
-    await expect(
-      request('/api/protected', { token: 'expired-token' })
-    ).rejects.toBeInstanceOf(ApiError);
-
-    window.removeEventListener('stocky:unauthorized', handler);
-    expect(events[0].detail).toMatchObject({ hadToken: true });
-  });
-
-  it('includes hadToken=false in event detail when no token was sent', async () => {
-    fetchSpy.mockResolvedValue(makeResponse(401, null));
-
-    const events: CustomEvent[] = [];
-    const handler = (e: Event) => events.push(e as CustomEvent);
-    window.addEventListener('stocky:unauthorized', handler);
-
-    await expect(request('/api/protected')).rejects.toBeInstanceOf(ApiError);
-
-    window.removeEventListener('stocky:unauthorized', handler);
-    expect(events[0].detail).toMatchObject({ hadToken: false });
-  });
 });

@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -12,7 +11,6 @@ namespace Stocky.Api.Controllers;
 /// UI works before a market-data provider is wired in.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/securities")]
 public class SecuritiesController(StockyDbContext db) : ControllerBase
 {

@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -11,7 +10,6 @@ namespace Stocky.Api.Controllers;
 /// SCR-040 user settings. Lazily creates a default row on first read.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/settings")]
 public class SettingsController(StockyDbContext db) : ControllerBase
 {

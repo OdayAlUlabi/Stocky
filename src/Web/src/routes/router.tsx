@@ -1,7 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { Shell } from './shell/Shell';
-import { RequireAuth } from '../auth/RequireAuth';
-import { Login } from './login/Login';
 import { Dashboard } from './dashboard/Dashboard';
 import { PortfolioList } from './portfolios/PortfolioList';
 import { PortfolioDetail } from './portfolios/PortfolioDetail';
@@ -35,11 +33,10 @@ import { AccountSettings } from './account/AccountSettings';
 import { ApiKeys } from './account/ApiKeys';
 
 export const router = createBrowserRouter([
-  { path: '/login', element: <Login /> },
   { path: '/share/:token', element: <PublicPortfolioView /> },
   {
     path: '/',
-    element: <RequireAuth><Shell /></RequireAuth>,
+    element: <Shell />,
     children: [
       { index: true, element: <Dashboard /> },
       { path: 'portfolios', element: <PortfolioList /> },

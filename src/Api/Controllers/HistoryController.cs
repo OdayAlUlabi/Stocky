@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stocky.Api.Data;
 using Stocky.Api.Dtos;
@@ -12,7 +11,6 @@ namespace Stocky.Api.Controllers;
 /// withdrawals) so the UI can overlay markers on the chart.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/history")]
 public class HistoryController(PortfolioHistoryService history) : ControllerBase
 {

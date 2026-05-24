@@ -3,7 +3,6 @@ using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Azure.Security.KeyVault.Secrets;
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -36,33 +35,43 @@ if (!string.IsNullOrWhiteSpace(connectionString) && !migrateOnly)
     var spTenantId = builder.Configuration["Sql:TenantId"];
     var kvUri = builder.Configuration["KeyVaultUri"];
 
+    var certBase64 = builder.Configuration["Sql:CertBase64"];
+
     TokenCredential sqlCredential;
     if (!string.IsNullOrWhiteSpace(spClientId) && !string.IsNullOrWhiteSpace(spTenantId)
-        && !string.IsNullOrWhiteSpace(kvUri))
+        && (!string.IsNullOrWhiteSpace(certBase64) || !string.IsNullOrWhiteSpace(kvUri)))
     {
-        // Use managed identity to fetch the SP cert from Key Vault, then authenticate
-        // to SQL as the service principal — eliminates IMDS dependency for SQL tokens.
-        // Retry: the ACA IMDS proxy can be unavailable for several seconds at container
-        // cold-start, causing ManagedIdentityCredential to throw on the first attempt.
-        TokenCredential kvCredential = string.IsNullOrWhiteSpace(azureClientId)
-            ? new DefaultAzureCredential()
-            : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(azureClientId));
-        var secretClient = new SecretClient(new Uri(kvUri), kvCredential);
-        KeyVaultSecret certSecret = null!;
-        for (var attempt = 1; attempt <= 10; attempt++)
+        byte[] certBytes;
+        if (!string.IsNullOrWhiteSpace(certBase64))
         {
-            try
-            {
-                certSecret = await secretClient.GetSecretAsync("stocky-api-sql-cert");
-                break;
-            }
-            catch (Exception ex) when (attempt < 10)
-            {
-                Console.WriteLine($"KV/IMDS attempt {attempt}/10 failed: {ex.Message}. Retrying in 10s...");
-                await Task.Delay(10_000);
-            }
+            // Fast path: cert injected as Container Apps secret env var — no IMDS, no KV call.
+            Console.WriteLine("SQL auth: loading SP cert from Sql__CertBase64 env var (no IMDS).");
+            certBytes = Convert.FromBase64String(certBase64);
         }
-        var certBytes = Convert.FromBase64String(certSecret.Value);
+        else
+        {
+            // Fallback: fetch cert from Key Vault via managed identity (requires IMDS warm-up).
+            Console.WriteLine("SQL auth: fetching SP cert from Key Vault.");
+            TokenCredential kvCredential = string.IsNullOrWhiteSpace(azureClientId)
+                ? new DefaultAzureCredential()
+                : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(azureClientId));
+            var secretClient = new SecretClient(new Uri(kvUri!), kvCredential);
+            KeyVaultSecret certSecret = null!;
+            for (var attempt = 1; attempt <= 10; attempt++)
+            {
+                try
+                {
+                    certSecret = await secretClient.GetSecretAsync("stocky-api-sql-cert");
+                    break;
+                }
+                catch (Exception ex) when (attempt < 10)
+                {
+                    Console.WriteLine($"KV/IMDS attempt {attempt}/10 failed: {ex.Message}. Retrying in 10s...");
+                    await Task.Delay(10_000);
+                }
+            }
+            certBytes = Convert.FromBase64String(certSecret.Value);
+        }
         var certificate = X509CertificateLoader.LoadPkcs12(
             certBytes, (string?)null,
             X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
@@ -182,58 +191,7 @@ if (migrateOnly)
     return;
 }
 
-var googleClientId = builder.Configuration["Google:ClientId"];
-
-// Fail loudly in non-Development if Google client id is missing. The previous behaviour
-// silently registered a no-op JwtBearer that rejected every token, which surfaced as
-// blanket 401s on a deployed environment. Refusing to start is far easier to diagnose.
-if (string.IsNullOrWhiteSpace(googleClientId) && !builder.Environment.IsDevelopment())
-{
-    throw new InvalidOperationException(
-        "Google:ClientId is not configured. Set the Google__ClientId env var (or Google:ClientId config) " +
-        "to the Google OAuth Web client id used by the SPA. Refusing to start in a non-Development environment.");
-}
-
-var authBuilder = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
-if (!string.IsNullOrWhiteSpace(googleClientId))
-{
-    authBuilder.AddJwtBearer(options =>
-    {
-        options.Authority = "https://accounts.google.com";
-        options.Audience = googleClientId;
-        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuers = ["accounts.google.com", "https://accounts.google.com"],
-            ValidateAudience = true,
-            ValidAudience = googleClientId,
-            ValidateLifetime = true,
-            RequireSignedTokens = true,
-            RequireExpirationTime = true,
-            ClockSkew = TimeSpan.FromMinutes(2)
-        };
-        // Surface validation failures into App Insights so future 401s are diagnosable
-        // without code changes (audience mismatch, expired, signature, etc.).
-        options.Events = new JwtBearerEvents
-        {
-            OnAuthenticationFailed = ctx =>
-            {
-                var logger = ctx.HttpContext.RequestServices
-                    .GetRequiredService<ILoggerFactory>()
-                    .CreateLogger("Stocky.Auth.JwtBearer");
-                logger.LogWarning(ctx.Exception,
-                    "JWT bearer authentication failed: {Message}", ctx.Exception?.Message);
-                return Task.CompletedTask;
-            }
-        };
-    });
-}
-else
-{
-    // Development only: no-op bearer so UseAuthentication() resolves the default scheme.
-    // The dev-bypass middleware further down injects a synthetic user for unauthenticated calls.
-    authBuilder.AddJwtBearer(_ => { });
-}
+var authBuilder = builder.Services.AddAuthentication();
 // M14 #91 — API-key bearer scheme (sk_*) for /v1/public endpoints
 authBuilder.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
     ApiKeyAuthenticationHandler.SchemeName, _ => { });
@@ -429,35 +387,8 @@ app.UseCors(CorsPolicy);
 // App Insights customDimensions can be filtered per user/portfolio/symbol.
 app.UseMiddleware<TelemetryEnricherMiddleware>();
 
-// Always run authentication so the ApiKey scheme can authorize /v1/public requests
-// even when Entra is not configured.
+// Always run authentication so the ApiKey scheme can authorize /v1/public requests.
 app.UseAuthentication();
-
-// Dev-only auth bypass: when Google OAuth isn't configured AND the request didn't already
-// authenticate via an API key, inject a synthetic user so the UI is browsable.
-// Defence-in-depth: in addition to IsDevelopment(), require an explicit opt-in flag
-// (Auth:AllowDevBypass=true) so a mis-set ASPNETCORE_ENVIRONMENT can never grant anonymous
-// access in production. Also refuse to wire the bypass if running in Production.
-var allowDevBypass = app.Configuration.GetValue<bool>("Auth:AllowDevBypass");
-if (app.Environment.IsDevelopment()
-    && !app.Environment.IsProduction()
-    && allowDevBypass
-    && string.IsNullOrWhiteSpace(googleClientId))
-{
-    app.Use(async (ctx, next) =>
-    {
-        if (ctx.User?.Identity?.IsAuthenticated != true)
-        {
-            var identity = new System.Security.Claims.ClaimsIdentity(new[]
-            {
-                new System.Security.Claims.Claim("oid", "00000000-0000-0000-0000-000000000001"),
-                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "Local Dev User")
-            }, "DevBypass");
-            ctx.User = new System.Security.Claims.ClaimsPrincipal(identity);
-        }
-        await next();
-    });
-}
 app.UseAuthorization();
 app.UseRateLimiter();
 app.MapControllers();

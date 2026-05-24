@@ -27,6 +27,10 @@ param googleClientId string
 param appiConnectionString string
 @description('App Gateway public FQDN used for CORS AllowedOrigins.')
 param publicHostname string
+@description('Entra service principal client id for SQL auth (Path A — no IMDS).')
+param sqlSpClientId string
+@description('Key Vault URI for fetching the SQL SP certificate.')
+param kvUri string
 @description('Image tag (sha) — placeholder allowed so CI updates it later.')
 param imageTag string = 'placeholder'
 
@@ -53,6 +57,15 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
   properties: {
     managedEnvironmentId: envId
     configuration: {
+      secrets: [
+        {
+          // ACA platform fetches this from KV via private endpoint — the container
+          // never calls IMDS for KV auth. Value is the base64-encoded PFX of the SQL SP cert.
+          name: 'sql-cert-base64'
+          keyVaultUrl: '${kvUri}secrets/stocky-api-sql-cert'
+          identity: apiIdentityId
+        }
+      ]
       ingress: {
         external: true
         targetPort: isBootstrap ? 80 : 8080
@@ -79,6 +92,11 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'ApplicationInsightsAgent_EXTENSION_VERSION', value: '~3' }
             { name: 'Google__ClientId', value: googleClientId }
             { name: 'AZURE_CLIENT_ID', value: apiIdentityClientId }
+            // Path A: SP cert injected by ACA platform from KV — no IMDS from container.
+            { name: 'Sql__CertBase64', secretRef: 'sql-cert-base64' }
+            { name: 'Sql__SpClientId', value: sqlSpClientId }
+            { name: 'Sql__TenantId', value: tenant().tenantId }
+            { name: 'KeyVaultUri', value: kvUri }
             // Dedicated SQL service account — separate from the general workload identity (apiId).
             // Program.cs prefers Sql__ManagedIdentityClientId over AZURE_CLIENT_ID for SQL tokens.
             { name: 'Sql__ManagedIdentityClientId', value: apiSqlIdentityClientId }

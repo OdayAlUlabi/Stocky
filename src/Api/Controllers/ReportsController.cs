@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -11,7 +10,6 @@ namespace Stocky.Api.Controllers;
 /// SCR-008 Reports — high-level money flows over a date window.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/reports")]
 public class ReportsController(StockyDbContext db) : ControllerBase
 {

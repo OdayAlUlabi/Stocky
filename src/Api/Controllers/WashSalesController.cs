@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -11,7 +10,6 @@ namespace Stocky.Api.Controllers;
 /// IRS §1091 wash-sale report. Companion to /capital-gains. Year defaults to UTC now.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/wash-sales")]
 public class WashSalesController(StockyDbContext db, WashSaleService service) : ControllerBase
 {

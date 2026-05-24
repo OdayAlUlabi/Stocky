@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -13,7 +12,6 @@ namespace Stocky.Api.Controllers;
 /// "symbol,type,quantity,price,fee,currency,executedAt,notes".
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/transactions/import")]
 public class TransactionImportController(StockyDbContext db, TaxLotService taxLots, PortfolioLedgerService ledger) : ControllerBase
 {

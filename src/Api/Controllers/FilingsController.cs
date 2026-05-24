@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -9,7 +8,6 @@ namespace Stocky.Api.Controllers;
 
 /// <summary>M8 #4 — SEC EDGAR filings feed.</summary>
 [ApiController]
-[Authorize]
 [Route("api/filings")]
 public class FilingsController(IExtendedMarketDataProvider provider, StockyDbContext db) : ControllerBase
 {

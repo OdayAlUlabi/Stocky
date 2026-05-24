@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -12,7 +11,6 @@ namespace Stocky.Api.Controllers;
 /// Lightweight Charts component on the Position Detail page.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/quotes/{symbol}/bars")]
 public class BarsController(IAdvancedMarketDataProvider advanced) : ControllerBase
 {
@@ -37,7 +35,6 @@ public class BarsController(IAdvancedMarketDataProvider advanced) : ControllerBa
 /// M9 #22. Analyst-rating consensus + price-target distribution for a symbol.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/analyst-ratings/{symbol}")]
 public class AnalystRatingsController(IAdvancedMarketDataProvider advanced) : ControllerBase
 {
@@ -54,7 +51,6 @@ public class AnalystRatingsController(IAdvancedMarketDataProvider advanced) : Co
 /// M9 #23. Extended risk-metrics endpoint for a portfolio.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/risk")]
 public class RiskController(RiskMetricsService risk) : ControllerBase
 {
@@ -71,7 +67,6 @@ public class RiskController(RiskMetricsService risk) : ControllerBase
 /// M9 #103. Benchmark comparison vs a single ticker or a weighted blend.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/benchmark")]
 public class BenchmarkController(BenchmarkComparisonService svc, StockyDbContext db) : ControllerBase
 {
@@ -119,7 +114,6 @@ public class BenchmarkController(BenchmarkComparisonService svc, StockyDbContext
 /// periodic rebalancing to target weights.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/backtest")]
 public class BacktestController(BacktestService svc) : ControllerBase
 {
@@ -143,7 +137,6 @@ public class BacktestController(BacktestService svc) : ControllerBase
 /// M9 #104. Goals CRUD + projection.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/goals")]
 public class GoalsController(GoalsService svc) : ControllerBase
 {
@@ -188,7 +181,6 @@ public class GoalsController(GoalsService svc) : ControllerBase
 /// per-ticker drilldown on the new earnings calendar page.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/earnings/{symbol}/surprises")]
 public class EarningsSurpriseController(EarningsSurpriseService svc) : ControllerBase
 {
@@ -202,7 +194,6 @@ public class EarningsSurpriseController(EarningsSurpriseService svc) : Controlle
 /// holdings, a single watchlist, or all upcoming events.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/calendar/earnings")]
 public class EarningsCalendarController(StockyDbContext db, IMarketDataProvider provider) : ControllerBase
 {

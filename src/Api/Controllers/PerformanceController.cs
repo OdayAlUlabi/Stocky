@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -14,7 +13,6 @@ namespace Stocky.Api.Controllers;
 /// derived from the transaction ledger (BUY = +contribution, SELL = -withdrawal).
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/performance-series")]
 public class PerformanceController(StockyDbContext db) : ControllerBase
 {

@@ -5,7 +5,6 @@ import {
   IconChartPie,
   IconBriefcase,
   IconStar,
-  IconLogout,
   IconBell,
   IconReportAnalytics,
   IconNews,
@@ -24,7 +23,6 @@ import {
   IconMoon
 } from '@tabler/icons-react';
 import { NavLink as RouterNavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { useGoogleAuth, isAuthConfigured } from '../../auth/googleAuth';
 import { usePortfolios, useSettings, useUpdateSettings } from '../../api/hooks';
 
 interface NavItem {
@@ -66,7 +64,6 @@ const portfolioItems: { to: (id: string) => string; label: string; icon: typeof 
 
 export function Shell() {
   const [opened, { toggle }] = useDisclosure();
-  const { user, isAuthenticated: isAuthed, signOut } = useGoogleAuth();
   const navigate = useNavigate();
   const params = useParams();
   const { data: portfolios } = usePortfolios();
@@ -127,22 +124,16 @@ export function Shell() {
                   <Avatar
                     radius="xl"
                     size="sm"
-                    src={user?.picture}
                     color="blue"
                   >
-                    {(user?.name ?? 'U').slice(0, 1).toUpperCase()}
+                    S
                   </Avatar>
-                  <Text size="sm" visibleFrom="sm">{user?.name ?? user?.email ?? 'Guest'}</Text>
+                  <Text size="sm" visibleFrom="sm">Stocky</Text>
                 </Group>
               </UnstyledButton>
             </Menu.Target>
             <Menu.Dropdown>
               <Menu.Item onClick={() => navigate('/settings')}>Settings</Menu.Item>
-              {isAuthConfigured && isAuthed ? (
-                <Menu.Item leftSection={<IconLogout size={16} />} onClick={signOut}>Sign out</Menu.Item>
-              ) : (
-                <Menu.Item onClick={() => navigate('/login')}>Sign in</Menu.Item>
-              )}
             </Menu.Dropdown>
           </Menu>
         </Group>

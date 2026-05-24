@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -12,7 +11,6 @@ namespace Stocky.Api.Controllers;
 // M14 #114 — Cash management (deposits, withdrawals, fees, dividends)
 // =====================================================================
 [ApiController]
-[Authorize]
 [Route("api/cash")]
 public class CashController(StockyDbContext db, CashService cash, AuditLogger audit) : ControllerBase
 {
@@ -93,7 +91,6 @@ public class CashController(StockyDbContext db, CashService cash, AuditLogger au
 // M14 #115 — Position notes & journaling
 // =====================================================================
 [ApiController]
-[Authorize]
 [Route("api/position-notes")]
 public class PositionNotesController(StockyDbContext db, AuditLogger audit) : ControllerBase
 {
@@ -167,7 +164,6 @@ public class PositionNotesController(StockyDbContext db, AuditLogger audit) : Co
 // M14 #112 — Audit log (read-only)
 // =====================================================================
 [ApiController]
-[Authorize]
 [Route("api/audit")]
 public class AuditController(StockyDbContext db) : ControllerBase
 {
@@ -186,7 +182,6 @@ public class AuditController(StockyDbContext db) : ControllerBase
 // M14 #116 — Model portfolio templates
 // =====================================================================
 [ApiController]
-[Authorize]
 [Route("api/model-templates")]
 public class ModelTemplatesController(StockyDbContext db, AuditLogger audit) : ControllerBase
 {
@@ -264,7 +259,6 @@ public class ModelTemplatesController(StockyDbContext db, AuditLogger audit) : C
 // M14 #111 — GDPR data export and account deletion
 // =====================================================================
 [ApiController]
-[Authorize]
 [Route("api/account")]
 public class AccountController(StockyDbContext db, AuditLogger audit) : ControllerBase
 {

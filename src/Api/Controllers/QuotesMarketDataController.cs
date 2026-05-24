@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stocky.Api.Dtos;
 using Stocky.Api.Services;
@@ -10,7 +9,6 @@ namespace Stocky.Api.Controllers;
 /// hanging off /api/quotes/{symbol}.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/quotes")]
 public class QuotesMarketDataController(IExtendedMarketDataProvider provider) : ControllerBase
 {

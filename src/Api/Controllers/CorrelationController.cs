@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -14,7 +13,6 @@ namespace Stocky.Api.Controllers;
 /// pairwise correlations because they all move with US tech).
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/correlation")]
 public class CorrelationController(StockyDbContext db, IMarketDataProvider market) : ControllerBase
 {

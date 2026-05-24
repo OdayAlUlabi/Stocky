@@ -236,6 +236,8 @@ module apps 'modules/containerApps.bicep' = {
     googleClientId: googleClientId
     appiConnectionString: obs.outputs.appiConnectionString
     publicHostname: 'stocky.${location}.cloudapp.azure.com'
+    sqlSpClientId: 'c5a4c107-a912-4d72-b513-513ced854386'
+    kvUri: kv.outputs.kvUri
     imageTag: imageTag
   }
   dependsOn: [ rbac ]

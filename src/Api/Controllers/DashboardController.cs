@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -13,7 +12,6 @@ namespace Stocky.Api.Controllers;
 /// Single call returns KPIs, allocations, top movers, and a value history series.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/[controller]")]
 public class DashboardController(StockyDbContext db, PortfolioLedgerService ledger) : ControllerBase
 {

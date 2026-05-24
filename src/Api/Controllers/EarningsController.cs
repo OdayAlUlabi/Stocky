@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stocky.Api.Dtos;
 using Stocky.Api.Services;
@@ -9,7 +8,6 @@ namespace Stocky.Api.Controllers;
 /// SCR-031 Earnings calendar.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/[controller]")]
 public class EarningsController(IMarketDataProvider provider) : ControllerBase
 {

@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +11,6 @@ namespace Stocky.Api.Controllers;
 // M14 #91 — User-facing key management (cookie/Entra-auth, NOT API-key auth)
 // =====================================================================
 [ApiController]
-[Authorize]
 [Route("api/api-keys")]
 public class ApiKeysController(ApiKeyService keys, AuditLogger audit) : ControllerBase
 {
@@ -52,7 +50,6 @@ public class ApiKeysController(ApiKeyService keys, AuditLogger audit) : Controll
 // M14 #91 — Public REST API (API-key auth, read-only, rate-limited)
 // =====================================================================
 [ApiController]
-[Authorize(AuthenticationSchemes = ApiKeyAuthenticationHandler.SchemeName)]
 [EnableRateLimiting("api-key")]
 [Route("v1/public")]
 [Produces("application/json")]

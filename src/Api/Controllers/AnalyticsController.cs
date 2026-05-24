@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stocky.Api.Data;
 using Stocky.Api.Dtos;
@@ -11,7 +10,6 @@ namespace Stocky.Api.Controllers;
 /// Built on top of <see cref="PortfolioHistoryService"/> so figures stay consistent with the equity curve.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/analytics")]
 public class AnalyticsController(PortfolioAnalyticsService analytics) : ControllerBase
 {

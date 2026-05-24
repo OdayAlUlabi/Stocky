@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -12,7 +11,6 @@ namespace Stocky.Api.Controllers;
 /// transaction history for that symbol, and a price history series.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/positions/{symbol}")]
 public class PositionDetailController(StockyDbContext db) : ControllerBase
 {

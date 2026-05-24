@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -12,7 +11,6 @@ namespace Stocky.Api.Controllers;
 /// TaxLotService. Year filter defaults to the current calendar year.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/capital-gains")]
 public class CapitalGainsController(StockyDbContext db) : ControllerBase
 {

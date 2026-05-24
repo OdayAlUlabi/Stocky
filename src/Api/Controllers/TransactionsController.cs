@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -9,7 +8,6 @@ using Stocky.Api.Services;
 namespace Stocky.Api.Controllers;
 
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/transactions")]
 public class TransactionsController(StockyDbContext db, TaxLotService taxLots, PortfolioLedgerService ledger, PortfolioUpdatedBroadcaster portfolioStream) : ControllerBase
 {

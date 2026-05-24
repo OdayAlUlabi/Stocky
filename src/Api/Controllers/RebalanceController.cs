@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stocky.Api.Data;
 using Stocky.Api.Dtos;
@@ -11,7 +10,6 @@ namespace Stocky.Api.Controllers;
 /// restore them. Companion to /allocation.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/rebalance")]
 public class RebalanceController(RebalanceService service) : ControllerBase
 {

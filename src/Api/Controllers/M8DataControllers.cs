@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stocky.Api.Dtos;
 using Stocky.Api.Services;
@@ -7,7 +6,6 @@ namespace Stocky.Api.Controllers;
 
 /// <summary>M8 #5 — Insider trades feed (Form 4 etc).</summary>
 [ApiController]
-[Authorize]
 [Route("api/insider-trades")]
 public class InsiderTradesController(IExtendedMarketDataProvider provider) : ControllerBase
 {
@@ -23,7 +21,6 @@ public class InsiderTradesController(IExtendedMarketDataProvider provider) : Con
 
 /// <summary>M8 #6 — Short interest snapshot and history.</summary>
 [ApiController]
-[Authorize]
 [Route("api/short-interest")]
 public class ShortInterestController(IExtendedMarketDataProvider provider) : ControllerBase
 {
@@ -38,7 +35,6 @@ public class ShortInterestController(IExtendedMarketDataProvider provider) : Con
 
 /// <summary>M8 #7 — Economic calendar (FRED + Finnhub).</summary>
 [ApiController]
-[Authorize]
 [Route("api/calendar/economic")]
 public class EconomicCalendarController(IExtendedMarketDataProvider provider) : ControllerBase
 {
@@ -56,7 +52,6 @@ public class EconomicCalendarController(IExtendedMarketDataProvider provider) : 
 
 /// <summary>M8 #8 — Options flow / unusual options activity.</summary>
 [ApiController]
-[Authorize]
 [Route("api/options-flow")]
 public class OptionsFlowController(IExtendedMarketDataProvider provider) : ControllerBase
 {

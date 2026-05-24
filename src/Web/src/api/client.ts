@@ -13,7 +13,6 @@ export class ApiError extends Error {
 export interface RequestOptions {
   method?: string;
   body?: unknown;
-  token?: string;
   query?: Record<string, string | number | boolean | undefined | null>;
 }
 
@@ -31,7 +30,6 @@ function qs(query?: RequestOptions['query']) {
 export async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers = new Headers();
   if (opts.body !== undefined) headers.set('Content-Type', 'application/json');
-  if (opts.token) headers.set('Authorization', `Bearer ${opts.token}`);
 
   const res = await fetch(`${config.apiBaseUrl}${path}${qs(opts.query)}`, {
     method: opts.method ?? 'GET',
@@ -48,14 +46,6 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
       : (body && typeof body === 'object' && 'title' in (body as Record<string, unknown>)
         ? String((body as Record<string, unknown>).title)
         : `${res.status} ${res.statusText}`);
-    // Re-auth on any 401: token may be missing, expired, signed by a different
-    // tenant, or rejected by the API for any reason. Dispatch a single event so
-    // the auth provider can clear the credential and prompt for re-login.
-    if (res.status === 401) {
-      window.dispatchEvent(new CustomEvent('stocky:unauthorized', {
-        detail: { hadToken: Boolean(opts.token) }
-      }));
-    }
     throw new ApiError(res.status, body, message);
   }
   if (res.status === 204) return undefined as T;

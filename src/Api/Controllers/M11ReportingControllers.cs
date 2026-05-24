@@ -12,7 +12,6 @@ namespace Stocky.Api.Controllers;
 // ===================== M11 #54 — Share tokens =====================
 
 [ApiController]
-[Authorize]
 [Route("api/share-tokens")]
 public class ShareTokensController(StockyDbContext db, ShareTokenService tokens, IHttpContextAccessor http) : ControllerBase
 {
@@ -146,7 +145,6 @@ public class PublicShareController(StockyDbContext db, ShareTokenService tokens)
 // ===================== M11 #55 — Scheduled exports =====================
 
 [ApiController]
-[Authorize]
 [Route("api/report-schedules")]
 public class ReportSchedulesController(StockyDbContext db, ReportRenderer renderer) : ControllerBase
 {
@@ -271,7 +269,6 @@ public class ReportSchedulesController(StockyDbContext db, ReportRenderer render
 }
 
 [ApiController]
-[Authorize]
 [Route("api/report-deliveries")]
 public class ReportDeliveriesController(StockyDbContext db, ReportRenderer renderer) : ControllerBase
 {

@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Stocky.Api.Domain;
 using Stocky.Api.Dtos;
@@ -8,7 +7,6 @@ namespace Stocky.Api.Controllers;
 
 /// <summary>M10 #51 — alert-side insider event feed + cluster summary. Separate from M8 /api/insider-trades.</summary>
 [ApiController]
-[Authorize]
 [Route("api/insider-events")]
 public class InsiderEventsController(IInsiderTradeProvider provider) : ControllerBase
 {

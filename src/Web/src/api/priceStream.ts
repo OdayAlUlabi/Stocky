@@ -2,7 +2,6 @@ import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } fro
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { config } from '../config';
-import { useApiToken } from '../auth/useApiToken';
 import type { PriceTickDto } from './types';
 
 /// M8 #1 — subscribe to the /hubs/prices SignalR hub and invalidate the
@@ -10,13 +9,11 @@ import type { PriceTickDto } from './types';
 let connection: HubConnection | null = null;
 const subscribed = new Map<string, number>(); // symbol → refcount
 
-async function ensureConnection(getToken: () => Promise<string | undefined>) {
+async function ensureConnection() {
   if (connection && connection.state === HubConnectionState.Connected) return connection;
   if (!connection) {
     connection = new HubConnectionBuilder()
-      .withUrl(`${config.apiBaseUrl}/hubs/prices`, {
-        accessTokenFactory: async () => (await getToken()) ?? ''
-      })
+      .withUrl(`${config.apiBaseUrl}/hubs/prices`)
       .withAutomaticReconnect()
       .configureLogging(LogLevel.Warning)
       .build();
@@ -28,7 +25,6 @@ async function ensureConnection(getToken: () => Promise<string | undefined>) {
 }
 
 export function usePriceTicks(symbols: string[], onTick?: (t: PriceTickDto) => void) {
-  const getToken = useApiToken();
   const qc = useQueryClient();
   const handlerRef = useRef(onTick);
   handlerRef.current = onTick;
@@ -44,7 +40,7 @@ export function usePriceTicks(symbols: string[], onTick?: (t: PriceTickDto) => v
     };
 
     (async () => {
-      const conn = await ensureConnection(getToken);
+      const conn = await ensureConnection();
       if (cancelled) return;
       conn.off('price', onPrice);
       conn.on('price', onPrice);
@@ -64,7 +60,7 @@ export function usePriceTicks(symbols: string[], onTick?: (t: PriceTickDto) => v
         connection.invoke('Unsubscribe', toDrop).catch(() => { /* noop */ });
       }
     };
-  }, [symbols.join(','), getToken, qc]);
+  }, [symbols.join(','), qc]);
 }
 
 /// M14 #92 — subscribe to a portfolio group on the same /hubs/prices hub.
@@ -74,7 +70,6 @@ export function usePriceTicks(symbols: string[], onTick?: (t: PriceTickDto) => v
 const portfolioSubscribed = new Map<string, number>();
 
 export function usePortfolioStream(portfolioId: string | undefined) {
-  const getToken = useApiToken();
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -93,7 +88,7 @@ export function usePortfolioStream(portfolioId: string | undefined) {
     };
 
     (async () => {
-      const conn = await ensureConnection(getToken);
+      const conn = await ensureConnection();
       if (cancelled) return;
       conn.off('portfolioUpdated', onUpdate);
       conn.on('portfolioUpdated', onUpdate);
@@ -113,5 +108,5 @@ export function usePortfolioStream(portfolioId: string | undefined) {
         portfolioSubscribed.set(portfolioId, n);
       }
     };
-  }, [portfolioId, getToken, qc]);
+  }, [portfolioId, qc]);
 }

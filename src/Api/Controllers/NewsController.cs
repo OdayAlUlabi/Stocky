@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -12,7 +11,6 @@ namespace Stocky.Api.Controllers;
 /// (stub by default) and supports optional symbol filtering.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/[controller]")]
 public class NewsController(IMarketDataProvider provider, StockyDbContext db) : ControllerBase
 {

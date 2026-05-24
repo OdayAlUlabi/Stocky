@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -8,7 +7,6 @@ using Stocky.Api.Dtos;
 namespace Stocky.Api.Controllers;
 
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/holdings")]
 public class HoldingsController(StockyDbContext db) : ControllerBase
 {

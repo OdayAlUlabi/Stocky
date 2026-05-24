@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api.Data;
@@ -10,7 +9,6 @@ namespace Stocky.Api.Controllers;
 /// SCR-010 — multi-pivot allocation: asset class, sector, currency, symbol.
 /// </summary>
 [ApiController]
-[Authorize]
 [Route("api/portfolios/{portfolioId:guid}/allocation")]
 public class AllocationController(StockyDbContext db) : ControllerBase
 {
