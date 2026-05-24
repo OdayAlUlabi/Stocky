@@ -31,6 +31,10 @@ public class AlertsController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateAlertRequest req)
     {
+        if (string.IsNullOrWhiteSpace(req.Symbol))
+            ModelState.AddModelError(nameof(req.Symbol), "Symbol is required.");
+        if (string.IsNullOrWhiteSpace(req.Type))
+            ModelState.AddModelError(nameof(req.Type), "Type is required.");
         if (!ModelState.IsValid) return View(req);
         await this.InvokeAsync<StockyApi.AlertsController, AlertDto>(c => c.Create(req));
         TempData["Status"] = "Alert created.";

@@ -10,19 +10,23 @@ namespace Stocky.Web.Mvc.Controllers;
 [Route("Transactions")]
 public class TransactionsHomeController : Controller
 {
-    // GET /Transactions  -> redirect to first portfolio's transactions, or to /Portfolios if none.
+    // GET /Transactions  -> if 1 portfolio, jump straight in; if many, show a chooser; if none, prompt to create one.
     [HttpGet("")]
     public async Task<IActionResult> Index()
     {
-        var list = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
-            c => c.List()) ?? Array.Empty<PortfolioDto>();
-        var first = list.FirstOrDefault();
-        if (first is null)
+        var list = (await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>()).ToList();
+        if (list.Count == 0)
         {
             TempData["Status"] = "Create a portfolio to start adding transactions.";
             return Redirect("/Portfolios");
         }
-        return Redirect($"/Portfolios/{first.Id}/Transactions");
+        if (list.Count == 1) return Redirect($"/Portfolios/{list[0].Id}/Transactions");
+        ViewBag.Portfolios = list;
+        ViewBag.Kind = "Transactions";
+        ViewBag.PathTemplate = "/Portfolios/{0}/Transactions";
+        ViewBag.Icon = "bi-arrow-left-right";
+        return View("~/Views/Shared/PortfolioChooser.cshtml");
     }
 }
 
@@ -30,19 +34,22 @@ public class TransactionsHomeController : Controller
 [Route("Cash")]
 public class CashHomeController : Controller
 {
-    // GET /Cash  -> redirect to first portfolio's cash, or to /Portfolios if none.
     [HttpGet("")]
     public async Task<IActionResult> Index()
     {
-        var list = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
-            c => c.List()) ?? Array.Empty<PortfolioDto>();
-        var first = list.FirstOrDefault();
-        if (first is null)
+        var list = (await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>()).ToList();
+        if (list.Count == 0)
         {
             TempData["Status"] = "Create a portfolio to start tracking cash.";
             return Redirect("/Portfolios");
         }
-        return Redirect($"/Portfolios/{first.Id}/Cash");
+        if (list.Count == 1) return Redirect($"/Portfolios/{list[0].Id}/Cash");
+        ViewBag.Portfolios = list;
+        ViewBag.Kind = "Cash";
+        ViewBag.PathTemplate = "/Portfolios/{0}/Cash";
+        ViewBag.Icon = "bi-cash-coin";
+        return View("~/Views/Shared/PortfolioChooser.cshtml");
     }
 }
 

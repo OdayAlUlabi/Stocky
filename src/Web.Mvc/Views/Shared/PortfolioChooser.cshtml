@@ -1,0 +1,35 @@
+@{
+    var portfolios = ViewBag.Portfolios as List<PortfolioDto> ?? new List<PortfolioDto>();
+    var kind = (string)ViewBag.Kind;
+    var tmpl = (string)ViewBag.PathTemplate;
+    var icon = (string?)ViewBag.Icon ?? "bi-briefcase";
+    ViewData["Title"] = $"Choose a portfolio · {kind}";
+}
+
+<div class="page-header">
+    <h2><i class="bi @icon"></i> @kind</h2>
+</div>
+
+<p class="text-muted">Pick a portfolio to manage its @kind.ToLowerInvariant().</p>
+
+<div class="grid-2" style="margin-top:1rem;">
+    @foreach (var p in portfolios)
+    {
+        var url = string.Format(tmpl, p.Id);
+        <a href="@url" class="card" style="display:block;padding:1rem;text-decoration:none;color:inherit;border:1px solid var(--border);border-radius:.75rem;background:var(--bg-elev);transition:border-color .15s ease;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;">
+                <div>
+                    <div style="font-weight:600;font-size:1.05rem;">@p.Name</div>
+                    <div class="text-muted" style="font-size:.85rem;margin-top:.15rem;">
+                        <i class="bi bi-coin"></i> @p.BaseCurrency
+                    </div>
+                </div>
+                <i class="bi bi-arrow-right" style="font-size:1.25rem;color:var(--primary);"></i>
+            </div>
+        </a>
+    }
+</div>
+
+<div style="margin-top:1.5rem;">
+    <a href="/Portfolios" class="btn btn-ghost btn-sm"><i class="bi bi-briefcase"></i> Manage portfolios</a>
+</div>

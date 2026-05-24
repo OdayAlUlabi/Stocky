@@ -10,7 +10,7 @@
     <article><small>Sector</small><h4>@(Model.Sector ?? "—")</h4></article>
     <article><small>Quantity</small><h4>@Model.Quantity.Num(4)</h4></article>
     <article><small>Avg cost</small><h4>@Model.AverageCost.Money(Model.Currency)</h4></article>
-    <article><small>Last</small><h4>@(Model.LatestPrice?.Money(Model.Currency) ?? "—")</h4></article>
+    <article><small>Last</small><h4><span data-price-symbol="@Model.Symbol" data-price-currency="@Model.Currency">@(Model.LatestPrice?.Money(Model.Currency) ?? "—")</span></h4></article>
     <article><small>Market value</small><h4>@(Model.MarketValue?.Money(Model.Currency) ?? "—")</h4></article>
     <article><small>Unrealized P&amp;L</small><h4 class="@Model.UnrealizedPnL.SignClass()">@Model.UnrealizedPnL.Money(Model.Currency) (@Model.UnrealizedPnLPercent.Pct())</h4></article>
     <article><small>Realized P&amp;L</small><h4 class="@Model.RealizedPnL.SignClass()">@Model.RealizedPnL.Money(Model.Currency)</h4></article>

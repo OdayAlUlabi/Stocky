@@ -41,6 +41,10 @@ public class PortfoliosController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreatePortfolioRequest req)
     {
+        if (string.IsNullOrWhiteSpace(req.Name))
+            ModelState.AddModelError(nameof(req.Name), "Name is required.");
+        if (string.IsNullOrWhiteSpace(req.BaseCurrency))
+            ModelState.AddModelError(nameof(req.BaseCurrency), "Base currency is required.");
         if (!ModelState.IsValid) return View(req);
         var created = await this.InvokeAsync<StockyApi.PortfoliosController, PortfolioDto>(
             c => c.Create(req));
@@ -66,6 +70,10 @@ public class PortfoliosController : Controller
     public async Task<IActionResult> Edit(Guid id, UpdatePortfolioRequest req,
         [FromServices] Stocky.Api.Services.TaxLotService taxLots)
     {
+        if (string.IsNullOrWhiteSpace(req.Name))
+            ModelState.AddModelError(nameof(req.Name), "Name is required.");
+        if (string.IsNullOrWhiteSpace(req.BaseCurrency))
+            ModelState.AddModelError(nameof(req.BaseCurrency), "Base currency is required.");
         if (!ModelState.IsValid) { ViewBag.Id = id; return View(req); }
         var updated = await this.InvokeAsync<StockyApi.PortfoliosController, PortfolioDto>(
             c => c.Update(id, req, taxLots));

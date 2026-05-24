@@ -6,6 +6,7 @@
 <div class="page-header"><h2><i class="bi bi-bell"></i> Edit alert · @ViewBag.Symbol (@ViewBag.Type)</h2></div>
 <form method="post" action="/Alerts/Edit/@id" style="max-width:560px;">
     @Html.AntiForgeryToken()
+    <div asp-validation-summary="All" class="flash error"></div>
     <div class="grid">
         <label>Threshold <input name="Threshold" value="@Model.Threshold" type="number" step="any" /></label>
         <label>Status

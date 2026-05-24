@@ -3,6 +3,7 @@
 <div class="page-header"><h2><i class="bi bi-gear"></i> Settings</h2></div>
 <form method="post" action="/Settings" style="max-width:560px;">
     @Html.AntiForgeryToken()
+    <div asp-validation-summary="All" class="flash error"></div>
     <div class="grid">
         <label>Display currency <input name="DisplayCurrency" value="@Model.DisplayCurrency" maxlength="8" required /></label>
         <label>Theme

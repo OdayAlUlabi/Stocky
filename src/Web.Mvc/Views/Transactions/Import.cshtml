@@ -1,8 +1,18 @@
 @{
-    ViewData["Title"] = "Import CSV";
     var pid = (Guid)ViewBag.PortfolioId;
+    var portfolio = ViewBag.Portfolio as PortfolioDto;
+    ViewData["Title"] = (portfolio?.Name ?? "Portfolio") + " · Import CSV";
+    ViewBag.PickerPathTemplate = "/Portfolios/{0}/Transactions/Import";
 }
-<h2>Import transactions (CSV)</h2>
+<div class="page-header">
+    <h2>
+        <i class="bi bi-upload"></i> Import transactions (CSV)
+        @await Html.PartialAsync("_PortfolioPicker")
+    </h2>
+    <div class="actions">
+        <a href="/Portfolios/@pid/Transactions" class="btn btn-ghost btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+    </div>
+</div>
 <form method="post" action="/Portfolios/@pid/Transactions/Import" enctype="multipart/form-data" style="max-width:520px;">
     @Html.AntiForgeryToken()
     <label>CSV file <input type="file" name="file" accept=".csv,text/csv" required /></label>

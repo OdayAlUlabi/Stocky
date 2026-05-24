@@ -41,7 +41,7 @@ public class CashController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(Guid portfolioId, Guid id)
     {
-        await this.InvokeRawAsync<StockyApi.CashController>(c => c.Delete(id));
+        await this.InvokeRawAsync<StockyApi.CashController>(c => c.Delete(id, portfolioId));
         TempData["Status"] = "Cash transaction deleted.";
         return RedirectToAction(nameof(Index), new { portfolioId });
     }
@@ -102,6 +102,10 @@ public class GoalsController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(GoalCreateDto dto, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(dto.Name))
+            ModelState.AddModelError(nameof(dto.Name), "Name is required.");
+        if (dto.TargetValue <= 0)
+            ModelState.AddModelError(nameof(dto.TargetValue), "Target value must be greater than zero.");
         if (!ModelState.IsValid) return View(dto);
         await this.InvokeAsync<StockyApi.GoalsController, GoalDto>(c => c.Create(dto, ct));
         TempData["Status"] = "Goal created.";
@@ -120,6 +124,11 @@ public class GoalsController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(Guid id, GoalCreateDto dto, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(dto.Name))
+            ModelState.AddModelError(nameof(dto.Name), "Name is required.");
+        if (dto.TargetValue <= 0)
+            ModelState.AddModelError(nameof(dto.TargetValue), "Target value must be greater than zero.");
+        if (!ModelState.IsValid) { ViewBag.Id = id; return View(dto); }
         await this.InvokeAsync<StockyApi.GoalsController, GoalDto>(c => c.Update(id, dto, ct));
         return RedirectToAction(nameof(Index));
     }

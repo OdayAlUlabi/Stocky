@@ -136,9 +136,18 @@
                 @foreach (var m in Model.TopGainers)
                 {
                     <tr>
-                        <td><a href="/Portfolios/@(Model.PortfolioId ?? Guid.Empty)/Positions/@m.Symbol"><strong>@m.Symbol</strong></a></td>
-                        <td style="text-align:right;">@m.MarketValue.Money(Model.Currency)</td>
-                        <td style="text-align:right;"><span class="badge-up"><i class="bi bi-caret-up-fill"></i>@m.DayChangePercent.Pct()</span></td>
+                        <td>
+                            @if (Model.PortfolioId is Guid pgid)
+                            {
+                                <a href="/Portfolios/@pgid/Positions/@m.Symbol"><strong>@m.Symbol</strong></a>
+                            }
+                            else
+                            {
+                                <strong>@m.Symbol</strong>
+                            }
+                        </td>
+                        <td style="text-align:right;"><span data-price-symbol="@m.Symbol" data-price-currency="@Model.Currency">@m.MarketValue.Money(Model.Currency)</span></td>
+                        <td style="text-align:right;"><span class="badge-up"><i class="bi bi-caret-up-fill"></i><span data-price-symbol="@m.Symbol" data-price-kind="pct">@m.DayChangePercent.Pct()</span></span></td>
                     </tr>
                 }
             </tbody>
@@ -156,9 +165,18 @@
                 @foreach (var m in Model.TopLosers)
                 {
                     <tr>
-                        <td><a href="/Portfolios/@(Model.PortfolioId ?? Guid.Empty)/Positions/@m.Symbol"><strong>@m.Symbol</strong></a></td>
-                        <td style="text-align:right;">@m.MarketValue.Money(Model.Currency)</td>
-                        <td style="text-align:right;"><span class="badge-down"><i class="bi bi-caret-down-fill"></i>@m.DayChangePercent.Pct()</span></td>
+                        <td>
+                            @if (Model.PortfolioId is Guid plid)
+                            {
+                                <a href="/Portfolios/@plid/Positions/@m.Symbol"><strong>@m.Symbol</strong></a>
+                            }
+                            else
+                            {
+                                <strong>@m.Symbol</strong>
+                            }
+                        </td>
+                        <td style="text-align:right;"><span data-price-symbol="@m.Symbol" data-price-currency="@Model.Currency">@m.MarketValue.Money(Model.Currency)</span></td>
+                        <td style="text-align:right;"><span class="badge-down"><i class="bi bi-caret-down-fill"></i><span data-price-symbol="@m.Symbol" data-price-kind="pct">@m.DayChangePercent.Pct()</span></span></td>
                     </tr>
                 }
             </tbody>
@@ -178,7 +196,7 @@
 }
 
 @section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <partial name="_ChartScripts" />
     <script>
         (function () {
             const palette = ['#5b9dff','#16c784','#f0b90b','#ea3943','#a78bfa','#22d3ee','#fb7185','#84cc16','#f97316','#06b6d4'];

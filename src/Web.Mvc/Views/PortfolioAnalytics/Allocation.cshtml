@@ -8,26 +8,60 @@
 <p>Total: <strong>@Model.TotalValue.Money(Model.Currency)</strong></p>
 
 @{
-    var groups = new (string label, IReadOnlyList<AllocationSliceDto> slices)[]
+    var groups = new (string key, string label, IReadOnlyList<AllocationSliceDto> slices)[]
     {
-        ("By asset class", Model.ByAsset),
-        ("By sector", Model.BySector),
-        ("By currency", Model.ByCurrency),
-        ("By symbol", Model.BySymbol),
+        ("asset",    "By asset class", Model.ByAsset),
+        ("sector",   "By sector",      Model.BySector),
+        ("currency", "By currency",    Model.ByCurrency),
+        ("symbol",   "By symbol",      Model.BySymbol),
     };
 }
-@foreach (var g in groups)
-{
-    <details open>
-        <summary><strong>@g.label</strong></summary>
-        <table>
-            <thead><tr><th>Label</th><th style="text-align:right;">Value</th><th style="text-align:right;">%</th></tr></thead>
-            <tbody>
-                @foreach (var s in g.slices)
-                {
-                    <tr><td>@s.Label</td><td style="text-align:right;">@s.Value.Money(Model.Currency)</td><td style="text-align:right;">@s.Percent.Pct()</td></tr>
-                }
-            </tbody>
-        </table>
-    </details>
+
+<div class="grid-2">
+    @foreach (var g in groups)
+    {
+        <article>
+            <header><span><i class="bi bi-pie-chart"></i> @g.label</span><small class="text-muted">@g.slices.Count</small></header>
+            <div style="display:grid;grid-template-columns:160px 1fr;gap:1rem;align-items:center;">
+                <canvas id="alloc-@g.key" width="160" height="160"></canvas>
+                <table>
+                    <tbody>
+                        @foreach (var s in g.slices.Take(8))
+                        {
+                            <tr>
+                                <td>@s.Label</td>
+                                <td style="text-align:right;">@s.Value.Money(Model.Currency)</td>
+                                <td style="text-align:right;" class="text-muted">@s.Percent.Pct()</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    }
+</div>
+
+@section Scripts {
+    <partial name="_ChartScripts" />
+    <script>
+        (function () {
+            if (!window.Chart) return;
+            var palette = ['#5b9dff','#16c784','#f0b90b','#ea3943','#a78bfa','#22d3ee','#fb7185','#84cc16','#f97316','#06b6d4'];
+            var groups = {
+                'alloc-asset':    { labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ByAsset.Select(a => a.Label))),    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ByAsset.Select(a => a.Value))) },
+                'alloc-sector':   { labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BySector.Select(a => a.Label))),   data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BySector.Select(a => a.Value))) },
+                'alloc-currency': { labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ByCurrency.Select(a => a.Label))), data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ByCurrency.Select(a => a.Value))) },
+                'alloc-symbol':   { labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BySymbol.Take(10).Select(a => a.Label))), data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BySymbol.Take(10).Select(a => a.Value))) }
+            };
+            Object.keys(groups).forEach(function (id) {
+                var c = document.getElementById(id);
+                if (!c) return;
+                new Chart(c, {
+                    type: 'doughnut',
+                    data: { labels: groups[id].labels, datasets: [{ data: groups[id].data, backgroundColor: palette, borderColor: '#131c2e', borderWidth: 2 }] },
+                    options: { responsive: false, plugins: { legend: { display: false } }, cutout: '60%' }
+                });
+            });
+        })();
+    </script>
 }

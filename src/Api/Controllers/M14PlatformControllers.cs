@@ -65,12 +65,13 @@ public class CashController(StockyDbContext db, CashService cash, AuditLogger au
     }
 
     [HttpDelete("transactions/{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromQuery] Guid? portfolioId = null)
     {
         var ownerId = User.GetOwnerId();
         var tx = await db.Transactions.Include(t => t.Portfolio)
             .FirstOrDefaultAsync(t => t.Id == id && t.Portfolio.OwnerId == ownerId);
         if (tx is null) return NotFound();
+        if (portfolioId is not null && tx.PortfolioId != portfolioId.Value) return NotFound();
         db.Transactions.Remove(tx);
         await db.SaveChangesAsync();
         await audit.WriteAsync(ownerId, "delete", "CashTransaction", id.ToString(), statusCode: StatusCodes.Status204NoContent);

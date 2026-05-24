@@ -22,22 +22,42 @@ public class TransactionsController : Controller
         return View(rows.ToList());
     }
 
-    [HttpGet]
-    public IActionResult Create(Guid portfolioId)
+    private static readonly string[] _txTypes = ["Buy", "Sell", "Deposit", "Withdrawal", "Dividend", "Fee", "Interest", "Split", "Transfer"];
+    private static readonly HashSet<string> _symbolRequired = new(StringComparer.OrdinalIgnoreCase) { "Buy", "Sell", "Dividend", "Split" };
+    private static readonly HashSet<string> _quantityRequired = new(StringComparer.OrdinalIgnoreCase) { "Buy", "Sell", "Split" };
+
+    private void ValidateTransaction(CreateTransactionRequest req)
     {
-        ViewBag.PortfolioId = portfolioId;
+        if (string.IsNullOrWhiteSpace(req.Type) || Array.IndexOf(_txTypes, req.Type) < 0)
+            ModelState.AddModelError(nameof(req.Type), "Type is invalid.");
+        else
+        {
+            if (_symbolRequired.Contains(req.Type) && string.IsNullOrWhiteSpace(req.Symbol))
+                ModelState.AddModelError(nameof(req.Symbol), $"Symbol is required for {req.Type}.");
+            if (_quantityRequired.Contains(req.Type) && req.Quantity <= 0)
+                ModelState.AddModelError(nameof(req.Quantity), "Quantity must be greater than zero.");
+        }
+        if (string.IsNullOrWhiteSpace(req.Currency))
+            ModelState.AddModelError(nameof(req.Currency), "Currency is required.");
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Create(Guid portfolioId)
+    {
+        await LoadPortfolioContext(portfolioId);
         return View(new CreateTransactionRequest(null, "Buy", 0, 0, 0, "USD", DateTimeOffset.UtcNow, null));
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(Guid portfolioId, CreateTransactionRequest req)
     {
-        if (!ModelState.IsValid) { ViewBag.PortfolioId = portfolioId; return View(req); }
+        ValidateTransaction(req);
+        if (!ModelState.IsValid) { await LoadPortfolioContext(portfolioId); return View(req); }
         var created = await this.InvokeAsync<StockyApi.TransactionsController, TransactionDto>(
             c => c.Create(portfolioId, req));
         if (created is null)
         {
-            ViewBag.PortfolioId = portfolioId;
+            await LoadPortfolioContext(portfolioId);
             ModelState.AddModelError("", "Could not create transaction.");
             return View(req);
         }
@@ -52,7 +72,7 @@ public class TransactionsController : Controller
             c => c.List(portfolioId)) ?? Array.Empty<TransactionDto>();
         var t = rows.FirstOrDefault(r => r.Id == id);
         if (t is null) return NotFound();
-        ViewBag.PortfolioId = portfolioId;
+        await LoadPortfolioContext(portfolioId);
         ViewBag.Id = id;
         return View(new CreateTransactionRequest(t.Symbol, t.Type, t.Quantity, t.Price, t.Fee, t.Currency, t.ExecutedAt, t.Notes));
     }
@@ -60,12 +80,13 @@ public class TransactionsController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(Guid portfolioId, Guid id, CreateTransactionRequest req)
     {
-        if (!ModelState.IsValid) { ViewBag.PortfolioId = portfolioId; ViewBag.Id = id; return View(req); }
+        ValidateTransaction(req);
+        if (!ModelState.IsValid) { await LoadPortfolioContext(portfolioId); ViewBag.Id = id; return View(req); }
         var updated = await this.InvokeAsync<StockyApi.TransactionsController, TransactionDto>(
             c => c.Update(portfolioId, id, req));
         if (updated is null)
         {
-            ViewBag.PortfolioId = portfolioId; ViewBag.Id = id;
+            await LoadPortfolioContext(portfolioId); ViewBag.Id = id;
             ModelState.AddModelError("", "Update failed.");
             return View(req);
         }
@@ -82,9 +103,9 @@ public class TransactionsController : Controller
     }
 
     [HttpGet]
-    public IActionResult Import(Guid portfolioId)
+    public async Task<IActionResult> Import(Guid portfolioId)
     {
-        ViewBag.PortfolioId = portfolioId;
+        await LoadPortfolioContext(portfolioId);
         return View();
     }
 
@@ -95,7 +116,7 @@ public class TransactionsController : Controller
         if (file is null || file.Length == 0)
         {
             ModelState.AddModelError("", "Choose a CSV file to upload.");
-            ViewBag.PortfolioId = portfolioId;
+            await LoadPortfolioContext(portfolioId);
             return View();
         }
         var result = await this.InvokeAsync<StockyApi.TransactionImportController, ImportResultDto>(
@@ -104,5 +125,14 @@ public class TransactionsController : Controller
             ? "Import failed."
             : $"Imported {result.Imported}, skipped {result.Skipped}.";
         return RedirectToAction(nameof(Index), new { portfolioId });
+    }
+
+    private async Task LoadPortfolioContext(Guid portfolioId)
+    {
+        var portfolios = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>();
+        ViewBag.PortfolioId = portfolioId;
+        ViewBag.Portfolios = portfolios.ToList();
+        ViewBag.Portfolio = portfolios.FirstOrDefault(p => p.Id == portfolioId);
     }
 }

@@ -57,7 +57,8 @@
                 <a class="@nav("/Alerts", "/alerts")" href="/Alerts"><i class="bi bi-bell"></i>Alerts</a>
                 <a class="@nav("/News", "/news")" href="/News"><i class="bi bi-newspaper"></i>News</a>
                 <a class="@nav("/Earnings", "/earnings")" href="/Earnings"><i class="bi bi-calendar-event"></i>Earnings</a>
-                <a class="@nav("/Calendar/Economic", "/calendar")" href="/Calendar/Economic"><i class="bi bi-calendar3"></i>Economic</a>
+                <a class="@nav("/Calendar/Earnings", "/calendar/earnings")" href="/Calendar/Earnings"><i class="bi bi-calendar2-event"></i>Earnings (mine)</a>
+                <a class="@nav("/Calendar/Economic", "/calendar/economic")" href="/Calendar/Economic"><i class="bi bi-calendar3"></i>Economic</a>
             </div>
 
             <div class="nav-group">
@@ -107,6 +108,9 @@
         </footer>
     </div>
 </div>
+<partial name="_TickerAutocomplete" />
+<script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@8.0.7/dist/browser/signalr.min.js"></script>
+<script src="~/js/prices-hub.js" asp-append-version="true" defer></script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

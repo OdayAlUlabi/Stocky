@@ -69,7 +69,7 @@
         <form method="post" action="/Watchlist/AddItem" style="display:flex;gap:.5rem;align-items:end;margin-top:.85rem;">
             @Html.AntiForgeryToken()
             <input type="hidden" name="id" value="@w.Id" />
-            <label style="flex:1;">Add symbol <input name="symbol" placeholder="AAPL" /></label>
+            <label style="flex:1;">Add symbol <input name="symbol" placeholder="AAPL" list="tickers" required /></label>
             <button type="submit" class="btn btn-ghost"><i class="bi bi-plus-lg"></i> Add</button>
         </form>
     </article>

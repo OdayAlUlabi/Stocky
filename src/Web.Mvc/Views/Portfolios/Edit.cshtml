@@ -7,7 +7,8 @@
 <div class="page-header"><h2><i class="bi bi-briefcase"></i> Edit portfolio</h2></div>
 <form method="post" action="/Portfolios/Edit/@id" style="max-width:520px;">
     @Html.AntiForgeryToken()
-    <label>Name <input name="Name" value="@Model.Name" required maxlength="120" /></label>
+    <div asp-validation-summary="All" class="flash error"></div>
+    <label>Name <input name="Name" value="@Model.Name" required maxlength="120" /><span asp-validation-for="Name" class="text-danger"></span></label>
     <label>Base currency <input name="BaseCurrency" value="@Model.BaseCurrency" required maxlength="8" /></label>
     <label>Cost basis
         <select name="CostBasisMethod">
@@ -16,10 +17,6 @@
             <option value="Average" selected="@(Model.CostBasisMethod == "Average")">Average</option>
         </select>
     </label>
-    @if (!ViewData.ModelState.IsValid)
-    {
-        <small style="color:var(--pico-color-red-500)">@string.Join(", ", ViewData.ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage))</small>
-    }
     <button type="submit">Save</button>
     <a href="/Portfolios/Detail/@id" class="btn btn-ghost">Cancel</a>
 </form>

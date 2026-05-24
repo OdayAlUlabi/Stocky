@@ -43,6 +43,39 @@ public class CalendarController : Controller
         ViewBag.To = to;
         return View(rows.ToList());
     }
+
+    // /Calendar/Earnings — scoped to the user's holdings or a single watchlist
+    // (the SPA's M9 #95 calendar). The legacy /Earnings page still shows the
+    // market-wide window from the unscoped EarningsController.
+    public async Task<IActionResult> Earnings(DateOnly? from, DateOnly? to,
+        string scope = "holdings", Guid? watchlistId = null, CancellationToken ct = default)
+    {
+        var rows = await this.InvokeAsync<StockyApi.EarningsCalendarController, IEnumerable<EarningsEventDto>>(
+            c => c.Get(from, to, scope, watchlistId, ct)) ?? Array.Empty<EarningsEventDto>();
+        ViewBag.From = from;
+        ViewBag.To = to;
+        ViewBag.Scope = scope;
+        ViewBag.WatchlistId = watchlistId;
+        return View(rows.ToList());
+    }
+}
+
+/// <summary>
+/// Browser-callable proxy that backs the shared <c>&lt;datalist id="tickers"&gt;</c>
+/// ticker autocomplete. Forwards to the in-process <see cref="StockyApi.SecuritiesController.Search"/>
+/// so the MVC origin doesn't have to be cross-routed to <c>/api/**</c>.
+/// </summary>
+[Authorize]
+[Route("Securities")]
+public class SecuritiesProxyController : Controller
+{
+    [HttpGet("Search")]
+    public async Task<IActionResult> Search(string? q, int limit = 10)
+    {
+        var rows = await this.InvokeAsync<StockyApi.SecuritiesController, IEnumerable<InstrumentDto>>(
+            c => c.Search(q, limit)) ?? Array.Empty<InstrumentDto>();
+        return Json(rows.Select(r => new { symbol = r.Symbol, name = r.Name, exchange = r.Exchange }));
+    }
 }
 
 [Authorize]

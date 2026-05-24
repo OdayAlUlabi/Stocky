@@ -7,7 +7,7 @@
 <div class="page-header"><h2><i class="bi bi-journal-text"></i> Position notes</h2></div>
 
 <form method="get" action="/Notes" style="display:flex;gap:.5rem;align-items:end;">
-    <label>Symbol <input name="symbol" value="@symbol" /></label>
+    <label>Symbol <input name="symbol" value="@symbol" list="tickers" /></label>
     <label>Portfolio ID <input name="portfolioId" value="@pid" /></label>
     <button type="submit">Filter</button>
 </form>
@@ -16,7 +16,7 @@
 <form method="post" action="/Notes/Create" style="max-width:680px;">
     @Html.AntiForgeryToken()
     <div class="grid">
-        <label>Symbol <input name="symbol" value="@symbol" required /></label>
+        <label>Symbol <input name="symbol" value="@symbol" required list="tickers" /></label>
         <label>Portfolio ID <input name="portfolioId" value="@pid" /></label>
     </div>
     <label>Note <textarea name="body" rows="3" required></textarea></label>

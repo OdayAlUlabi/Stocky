@@ -3,7 +3,8 @@
 <div class="page-header"><h2><i class="bi bi-bell"></i> New alert</h2></div>
 <form method="post" action="/Alerts/Create" style="max-width:560px;">
     @Html.AntiForgeryToken()
-    <label>Symbol <input name="Symbol" value="@Model.Symbol" required /></label>
+    <div asp-validation-summary="All" class="flash error"></div>
+    <label>Symbol <input name="Symbol" value="@Model.Symbol" required list="tickers" /></label>
     <label>Type
         <select name="Type">
             @foreach (var t in new[] { "Price","Indicator","News","Earnings","Insider" })
