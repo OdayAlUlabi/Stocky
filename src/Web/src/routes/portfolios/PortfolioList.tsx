@@ -70,7 +70,7 @@ export function PortfolioList() {
 
       <Modal opened={opened} onClose={close} title="New portfolio" centered>
         <Stack>
-          <TextInput label="Name" placeholder="Long-term" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
+          <TextInput label="Name" placeholder="Long-term" value={name} onChange={(e) => setName(e.currentTarget.value)} maxLength={120} required />
           <TextInput label="Base currency" value={ccy} onChange={(e) => setCcy(e.currentTarget.value)} maxLength={3} />
           <Group justify="flex-end">
             <Button variant="default" onClick={close}>Cancel</Button>

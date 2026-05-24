@@ -114,7 +114,7 @@ export function TradeDrawer({ portfolioId, opened, onClose, editing, defaultCurr
         <TextInput label="Currency" value={currency} onChange={(e) => setCurrency(e.currentTarget.value.toUpperCase())} maxLength={3} />
         <DateTimePicker label="Executed at" value={executedAt} onChange={(v) => setExecutedAt(v ? new Date(v) : null)} clearable={false} />
         <Textarea label="Notes" value={notes} onChange={(e) => setNotes(e.currentTarget.value)} autosize minRows={2} />
-        {error && <ApiErrorAlert error={error} title="Trade failed" />}
+        {error ? <ApiErrorAlert error={error} title="Trade failed" /> : null}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button onClick={submit} loading={busy}>{editing ? 'Save' : 'Add trade'}</Button>

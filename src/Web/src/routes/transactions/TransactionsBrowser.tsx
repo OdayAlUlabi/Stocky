@@ -44,7 +44,7 @@ export function TransactionsBrowser() {
         </FileButton>
       </Group>
       {importResult && <Alert color="teal">{importResult}</Alert>}
-      {importError && <ApiErrorAlert error={importError} title="Import failed" />}
+      {importError ? <ApiErrorAlert error={importError} title="Import failed" /> : null}
       <Card withBorder>
         {isLoading ? <Loader /> : !txs || txs.length === 0 ? (
           <EmptyState title="No transactions" description="Buy or sell something to populate this view, or import a CSV file with headers: symbol,type,quantity,price,fee,currency,executedAt,notes" />

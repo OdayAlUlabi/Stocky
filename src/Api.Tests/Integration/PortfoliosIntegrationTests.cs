@@ -50,6 +50,18 @@ public class PortfoliosIntegrationTests(StockyApiFactory factory) : IClassFixtur
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Post_Returns400ValidationProblem_WhenNameTooLong()
+    {
+        var response = await _client.PostAsJsonAsync("/api/portfolios",
+            new { name = new string('A', 121), baseCurrency = "USD" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Name", body);
+        Assert.Contains("120", body);
+    }
+
     // ── Read ─────────────────────────────────────────────────────────────────
 
     [Fact]

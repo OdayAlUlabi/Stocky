@@ -3,6 +3,7 @@ using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Azure.Security.KeyVault.Secrets;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -235,6 +236,7 @@ builder.Services.AddRateLimiter(o =>
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
+builder.Services.AddProblemDetails();
 builder.Services.AddMemoryCache();
 
 // Distributed cache: prefer Redis when Cache:RedisConnectionString is set,
@@ -358,6 +360,24 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+app.UseExceptionHandler(exceptionHandlerApp =>
+{
+    exceptionHandlerApp.Run(async context =>
+    {
+        var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+        var detail = app.Environment.IsDevelopment() ? exception?.Message : null;
+        var problem = Results.Problem(
+            statusCode: StatusCodes.Status500InternalServerError,
+            title: "Unhandled server error",
+            detail: detail,
+            extensions: new Dictionary<string, object?>
+            {
+                ["traceId"] = context.TraceIdentifier
+            });
+        await problem.ExecuteAsync(context);
+    });
+});
 
 if (app.Environment.IsDevelopment())
 {

@@ -52,8 +52,8 @@ public class PortfoliosController(StockyDbContext db, PortfolioLedgerService led
         var p = new Portfolio
         {
             OwnerId = ownerId,
-            Name = request.Name,
-            BaseCurrency = string.IsNullOrWhiteSpace(request.BaseCurrency) ? "USD" : request.BaseCurrency,
+            Name = request.Name.Trim(),
+            BaseCurrency = string.IsNullOrWhiteSpace(request.BaseCurrency) ? "USD" : request.BaseCurrency.Trim().ToUpperInvariant(),
             CostBasisMethod = TryParseMethod(request.CostBasisMethod, out var m) ? m : CostBasisMethod.Fifo,
         };
         db.Portfolios.Add(p);
@@ -68,8 +68,8 @@ public class PortfoliosController(StockyDbContext db, PortfolioLedgerService led
         var ownerId = User.GetOwnerId();
         var p = await db.Portfolios.FirstOrDefaultAsync(x => x.Id == id && x.OwnerId == ownerId);
         if (p is null) return NotFound();
-        p.Name = request.Name;
-        p.BaseCurrency = request.BaseCurrency;
+        p.Name = request.Name.Trim();
+        p.BaseCurrency = request.BaseCurrency.Trim().ToUpperInvariant();
         var methodChanged = false;
         if (TryParseMethod(request.CostBasisMethod, out var m) && m != p.CostBasisMethod)
         {

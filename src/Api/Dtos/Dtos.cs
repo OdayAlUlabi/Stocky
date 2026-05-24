@@ -1,8 +1,16 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Stocky.Api.Dtos;
 
 public record PortfolioDto(Guid Id, string Name, string BaseCurrency, DateTimeOffset CreatedAt, decimal CashBalance = 0m, string CostBasisMethod = "Fifo");
-public record CreatePortfolioRequest(string Name, string BaseCurrency = "USD", string? CostBasisMethod = null);
-public record UpdatePortfolioRequest(string Name, string BaseCurrency, string? CostBasisMethod = null);
+public record CreatePortfolioRequest(
+    [param: Required, StringLength(120, MinimumLength = 1)] string Name,
+    [param: StringLength(8)] string BaseCurrency = "USD",
+    string? CostBasisMethod = null);
+public record UpdatePortfolioRequest(
+    [param: Required, StringLength(120, MinimumLength = 1)] string Name,
+    [param: Required, StringLength(8)] string BaseCurrency,
+    string? CostBasisMethod = null);
 
 public record HoldingDto(Guid Id, string Symbol, decimal Quantity, decimal AverageCost, decimal? LatestPrice, decimal? MarketValue);
 
