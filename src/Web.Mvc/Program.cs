@@ -99,8 +99,8 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-// Anonymous health probe so ACA liveness/readiness can succeed without auth.
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
-    .AllowAnonymous();
+// Note: ACA liveness/readiness `/health` is served by
+// Stocky.Api.Controllers.HealthController (loaded via the Api project
+// reference). A duplicate MapGet here causes AmbiguousMatchException.
 
 app.Run();
