@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Azure Developer CLI
+.azure
+
+# .NET build outputs
+**/bin/
+**/obj/
+
+# Node modules (each image build runs npm ci from package.json)
+**/node_modules/
+
+# Test results and coverage
+**/TestResults/
+**/coverage/
+
+# Editor and OS
+.vs/
+.vscode/
+**/.DS_Store
+**/Thumbs.db
+
+# Docs (not needed in container images)
+docs/
+*.md
+
+# Infra (not needed in container images)
+infra/
+
+# e2e tests
+tests/

@@ -29,6 +29,9 @@ var connectionString = builder.Configuration.GetConnectionString("Sql")
 if (!string.IsNullOrWhiteSpace(connectionString) && !migrateOnly)
 {
     var azureClientId = builder.Configuration["AZURE_CLIENT_ID"];
+    // Prefer the dedicated SQL service account MI over the general workload MI.
+    // Sql__ManagedIdentityClientId is set in containerApps.bicep to apiSqlIdentityClientId.
+    var sqlMiClientId = builder.Configuration["Sql:ManagedIdentityClientId"] ?? azureClientId;
     var spClientId = builder.Configuration["Sql:SpClientId"];
     var spTenantId = builder.Configuration["Sql:TenantId"];
     var kvUri = builder.Configuration["KeyVaultUri"];
@@ -67,9 +70,9 @@ if (!string.IsNullOrWhiteSpace(connectionString) && !migrateOnly)
     }
     else
     {
-        sqlCredential = string.IsNullOrWhiteSpace(azureClientId)
+        sqlCredential = string.IsNullOrWhiteSpace(sqlMiClientId)
             ? new DefaultAzureCredential()
-            : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(azureClientId));
+            : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(sqlMiClientId));
     }
     builder.Services.AddSingleton<TokenCredential>(sqlCredential);
     builder.Services.AddSingleton<SqlTokenInterceptor>();

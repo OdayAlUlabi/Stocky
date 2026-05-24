@@ -235,7 +235,7 @@ module apps 'modules/containerApps.bicep' = {
     sqlDbName: sql.outputs.dbName
     googleClientId: googleClientId
     appiConnectionString: obs.outputs.appiConnectionString
-    publicHostname: 'placeholder.local' // CI updates AllowedOrigins to the AppGw FQDN after first deploy
+    publicHostname: 'stocky.${location}.cloudapp.azure.com'
     imageTag: imageTag
   }
   dependsOn: [ rbac ]

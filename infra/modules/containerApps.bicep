@@ -78,8 +78,11 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appiConnectionString }
             { name: 'ApplicationInsightsAgent_EXTENSION_VERSION', value: '~3' }
             { name: 'Google__ClientId', value: googleClientId }
-            { name: 'AZURE_CLIENT_ID', value: apiSqlIdentityClientId }
-            { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDbName};Authentication=Active Directory Managed Identity;User Id=${apiSqlIdentityClientId};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
+            { name: 'AZURE_CLIENT_ID', value: apiIdentityClientId }
+            // Dedicated SQL service account — separate from the general workload identity (apiId).
+            // Program.cs prefers Sql__ManagedIdentityClientId over AZURE_CLIENT_ID for SQL tokens.
+            { name: 'Sql__ManagedIdentityClientId', value: apiSqlIdentityClientId }
+            { name: 'ConnectionStrings__Sql', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDbName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
             { name: 'AllowedOrigins__0', value: 'https://${publicHostname}' }
             // PORT is read by the bootstrap helloworld image; the real ASP.NET
             // image ignores it (it honours ASPNETCORE_URLS instead).

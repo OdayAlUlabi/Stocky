@@ -25,7 +25,6 @@ env:
   MIGRATOR_JOB_NAME:     ${{ vars.MIGRATOR_JOB_NAME }}
   PUBLIC_FQDN:           ${{ vars.PUBLIC_FQDN }}
   VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-  GOOGLE_CLIENT_ID:      ${{ secrets.GOOGLE_CLIENT_ID }}
   IMAGE_TAG:             ${{ github.sha }}
   # Override to '["self-hosted","linux","stocky"]' (JSON array as a single string)
   # via repo Variable RUNS_ON_DEPLOY once the in-VNet runner is online. Defaults
@@ -50,8 +49,8 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: ACR login
-        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login "$ACR_LOGIN_SERVER" -u "$ACR_NAME" --password-stdin
+      - name: ACR login (OIDC)
+        run: az acr login --name "$ACR_NAME"
 
       - name: Build + push runner image
         run: |
@@ -79,8 +78,8 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: ACR login
-        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login "$ACR_LOGIN_SERVER" -u "$ACR_NAME" --password-stdin
+      - name: ACR login (OIDC)
+        run: az acr login --name "$ACR_NAME"
 
       - name: Build + push api image
         run: |
@@ -107,8 +106,8 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: ACR login
-        run: echo "${{ secrets.ACR_PASSWORD }}" | docker login "$ACR_LOGIN_SERVER" -u "$ACR_NAME" --password-stdin
+      - name: ACR login (OIDC)
+        run: az acr login --name "$ACR_NAME"
 
       - name: Build + push web image
         run: |
@@ -143,10 +142,10 @@ jobs:
       - name: Run migrator job and wait
         run: |
           set -euo pipefail
-          MIGRATOR_MI=$(az containerapp job show \
-            --name "$MIGRATOR_JOB_NAME" \
+          MIGRATOR_MI=$(az identity show \
+            --name "id-stocky-prod-migrator" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "identity.userAssignedIdentities | keys(@) | [0]" -o tsv)
+            --query id -o tsv)
           az containerapp job registry set \
             --name "$MIGRATOR_JOB_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -204,10 +203,10 @@ jobs:
 
       - name: Update api container app
         run: |
-          API_MI=$(az containerapp show \
-            --name "$API_APP_NAME" \
+          API_MI=$(az identity show \
+            --name "id-stocky-prod-api" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "identity.userAssignedIdentities | keys(@) | [0]" -o tsv)
+            --query id -o tsv)
           az containerapp registry set \
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -219,7 +218,7 @@ jobs:
             --image "$ACR_LOGIN_SERVER/stocky-api:$IMAGE_TAG" \
             --set-env-vars \
               "AllowedOrigins__0=https://${PUBLIC_FQDN}" \
-              "Google__ClientId=${GOOGLE_CLIENT_ID}"
+              "Google__ClientId=${VITE_GOOGLE_CLIENT_ID}"
           az containerapp ingress update \
             --name "$API_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -242,10 +241,10 @@ jobs:
 
       - name: Update web container app
         run: |
-          WEB_MI=$(az containerapp show \
-            --name "$WEB_APP_NAME" \
+          WEB_MI=$(az identity show \
+            --name "id-stocky-prod-api" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "identity.userAssignedIdentities | keys(@) | [0]" -o tsv)
+            --query id -o tsv)
           az containerapp registry set \
             --name "$WEB_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
