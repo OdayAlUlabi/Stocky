@@ -158,8 +158,9 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
       {
         name: 'https-web'
         properties: {
-          port: 80
-          protocol: 'Http'
+          // ACA env has allowInsecure=false; talk to the internal ingress on 443 (same as api).
+          port: 443
+          protocol: 'Https'
           pickHostNameFromBackendAddress: true
           requestTimeout: 60
           probe: { id: resourceId('Microsoft.Network/applicationGateways/probes', agwName, 'probe-web') }
@@ -183,7 +184,7 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
       {
         name: 'probe-web'
         properties: {
-          protocol: 'Http'
+          protocol: 'Https'
           path: '/'
           host: webBackendFqdn
           interval: 30
