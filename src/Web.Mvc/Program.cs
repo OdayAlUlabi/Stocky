@@ -36,11 +36,22 @@ builder.Services.AddDistributedMemoryCache();
 // -----------------------------------------------------------------------------
 var connectionString = builder.Configuration.GetConnectionString("Sql")
     ?? builder.Configuration["Sql:ConnectionString"];
-builder.Services.AddDbContext<Stocky.Api.Data.StockyDbContext>(options =>
+
+// SQL auth via DbConnectionInterceptor (same wiring as src/Api/Program.cs).
+// Connection string in prod has no User ID / Authentication — token is
+// injected per-connection by SqlTokenInterceptor (with MSAL caching) so EF
+// Core's retry storms don't hammer the ACA IMDS proxy.
+SqlAuthSetup.Register(builder, connectionString);
+
+builder.Services.AddDbContext<Stocky.Api.Data.StockyDbContext>((sp, options) =>
 {
     if (!string.IsNullOrWhiteSpace(connectionString))
     {
-        options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure());
+        var connStr = SqlAuthSetup.StripAuthFromConnectionString(connectionString);
+        options.UseSqlServer(connStr, sql => sql.EnableRetryOnFailure());
+        var interceptor = sp.GetService<SqlTokenInterceptor>();
+        if (interceptor != null)
+            options.AddInterceptors(interceptor);
     }
     else
     {
@@ -51,6 +62,9 @@ builder.Services.AddDbContext<Stocky.Api.Data.StockyDbContext>(options =>
 builder.Services.AddStockyDomainServices(builder.Configuration);
 
 var app = builder.Build();
+
+// Warm up SQL credential before serving traffic (ACA IMDS cold-start mitigation).
+await SqlAuthSetup.WarmupAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
