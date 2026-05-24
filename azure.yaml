@@ -26,6 +26,7 @@ hooks:
         echo "  ACR_LOGIN_SERVER      = $(azd env get-value ACR_LOGIN_SERVER)"
         echo "  API_APP_NAME          = $(azd env get-value API_APP_NAME)"
         echo "  WEB_APP_NAME          = $(azd env get-value WEB_APP_NAME)"
+        echo "  WEB_MVC_APP_NAME      = $(azd env get-value WEB_MVC_APP_NAME)"
         echo "  MIGRATOR_JOB_NAME     = $(azd env get-value MIGRATOR_JOB_NAME)"
         echo "  PUBLIC_IP             = $(azd env get-value PUBLIC_IP)"
     windows:
@@ -33,6 +34,6 @@ hooks:
       run: |
         Write-Host "Infrastructure provisioned."
         Write-Host "Configure these GitHub repo Variables:"
-        @('CICD_CLIENT_ID','CICD_TENANT_ID','CICD_SUBSCRIPTION_ID','AZURE_RESOURCE_GROUP','ACR_NAME','ACR_LOGIN_SERVER','API_APP_NAME','WEB_APP_NAME','MIGRATOR_JOB_NAME','PUBLIC_IP') |
+        @('CICD_CLIENT_ID','CICD_TENANT_ID','CICD_SUBSCRIPTION_ID','AZURE_RESOURCE_GROUP','ACR_NAME','ACR_LOGIN_SERVER','API_APP_NAME','WEB_APP_NAME','WEB_MVC_APP_NAME','MIGRATOR_JOB_NAME','PUBLIC_IP') |
           ForEach-Object { Write-Host ("  {0} = {1}" -f $_, (azd env get-value $_)) }
 

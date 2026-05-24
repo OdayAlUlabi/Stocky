@@ -1,0 +1,80 @@
+location: swedencentral
+identity:
+  type: UserAssigned
+  userAssignedIdentities:
+    /subscriptions/0e4ce08c-f474-47e3-ad32-1df4f48822ea/resourcegroups/rg-stocky-prod-sweden/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-stocky-prod-api: {}
+    /subscriptions/0e4ce08c-f474-47e3-ad32-1df4f48822ea/resourcegroups/rg-stocky-prod-sweden/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-stocky-prod-api-sql: {}
+tags:
+  azd-service-name: web-mvc
+  azd-env-name: prod
+properties:
+  managedEnvironmentId: /subscriptions/0e4ce08c-f474-47e3-ad32-1df4f48822ea/resourceGroups/rg-stocky-prod-sweden/providers/Microsoft.App/managedEnvironments/cae-stocky-prod
+  configuration:
+    secrets:
+      - name: sql-cert-base64
+        keyVaultUrl: https://kv-stocky-prod-vxu4d7cz6.vault.azure.net/secrets/stocky-api-sql-cert
+        identity: /subscriptions/0e4ce08c-f474-47e3-ad32-1df4f48822ea/resourcegroups/rg-stocky-prod-sweden/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-stocky-prod-api
+    ingress:
+      external: true
+      targetPort: 8080
+      transport: auto
+      allowInsecure: false
+    registries:
+      - server: crstockyprodvxu4d7cz6l4no.azurecr.io
+        identity: /subscriptions/0e4ce08c-f474-47e3-ad32-1df4f48822ea/resourcegroups/rg-stocky-prod-sweden/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-stocky-prod-api
+  template:
+    containers:
+      - name: web-mvc
+        image: crstockyprodvxu4d7cz6l4no.azurecr.io/stocky-web-mvc:e6187827df96bd2e13e1e62df1c571c7783aaf80
+        resources:
+          cpu: 0.5
+          memory: 1Gi
+        env:
+          - name: ASPNETCORE_URLS
+            value: http://+:8080
+          - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+            value: "true"
+          - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+            value: InstrumentationKey=54623d66-2aa5-46fd-9c85-223513883d76;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/;LiveEndpoint=https://swedencentral.livediagnostics.monitor.azure.com/;ApplicationId=e7ce4bf0-6795-44cd-9f1a-ce5fe8474208
+          - name: ApplicationInsightsAgent_EXTENSION_VERSION
+            value: "~3"
+          - name: AZURE_CLIENT_ID
+            value: eda9e2d3-999c-405d-8417-8815795f3be6
+          - name: Sql__CertBase64
+            secretRef: sql-cert-base64
+          - name: Sql__SpClientId
+            value: eda9e2d3-999c-405d-8417-8815795f3be6
+          - name: Sql__TenantId
+            value: 63f2f054-5d3a-4474-bce8-1622889d974a
+          - name: KeyVaultUri
+            value: https://kv-stocky-prod-vxu4d7cz6.vault.azure.net/
+          - name: Sql__ManagedIdentityClientId
+            value: b3133ae5-63f3-450e-ac67-0158a6ae07a9
+          - name: ConnectionStrings__Sql
+            value: Server=tcp:sql-stocky-prod-vxu4d7cz.database.windows.net,1433;Database=sqldb-stocky-prod;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
+          - name: AllowedOrigins__0
+            value: https://stocky.swedencentral.cloudapp.azure.com
+          - name: PORT
+            value: "8080"
+        probes:
+          - type: Liveness
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 30
+            initialDelaySeconds: 15
+          - type: Readiness
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 10
+            initialDelaySeconds: 30
+            failureThreshold: 10
+    scale:
+      minReplicas: 1
+      maxReplicas: 5
+      rules:
+        - name: http
+          http:
+            metadata:
+              concurrentRequests: "50"
