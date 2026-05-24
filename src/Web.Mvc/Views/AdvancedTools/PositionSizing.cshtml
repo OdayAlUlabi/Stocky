@@ -1,0 +1,46 @@
+@{
+    ViewData["Title"] = "Position Sizing";
+    var form = (PositionSizingRequest)ViewBag.Form;
+    var result = (PositionSizingResultDto?)ViewBag.Result;
+}
+<h2>Position Sizing</h2>
+<p class="text-muted">Calculates suggested share count using three methods: fixed-fractional (risk per trade vs stop), half-Kelly, and volatility-targeting. Recommendation = smallest non-zero method.</p>
+
+<form method="post" action="/Tools/PositionSizingRun" class="filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin-bottom:1rem;">
+    @Html.AntiForgeryToken()
+    <label>Account size <input type="number" name="AccountSize" step="100" value="@form.AccountSize" /></label>
+    <label>Entry price <input type="number" name="EntryPrice" step="0.01" value="@form.EntryPrice" /></label>
+    <label>Stop-loss <input type="number" name="StopLossPrice" step="0.01" value="@form.StopLossPrice" /></label>
+    <label>Risk per trade <input type="number" name="RiskPerTradePercent" step="0.005" value="@form.RiskPerTradePercent" /></label>
+    <label>Win rate <input type="number" name="WinRate" step="0.05" value="@(form.WinRate ?? 0)" /></label>
+    <label>Avg win $ <input type="number" name="AvgWinDollars" step="10" value="@(form.AvgWinDollars ?? 0)" /></label>
+    <label>Avg loss $ <input type="number" name="AvgLossDollars" step="10" value="@(form.AvgLossDollars ?? 0)" /></label>
+    <label>Asset volatility <input type="number" name="AssetVolatilityPercent" step="0.01" value="@(form.AssetVolatilityPercent ?? 0)" /></label>
+    <label>Target volatility <input type="number" name="TargetVolatilityPercent" step="0.01" value="@(form.TargetVolatilityPercent ?? 0)" /></label>
+    <button type="submit" class="btn primary" style="align-self:end;"><i class="bi bi-rulers"></i> Compute</button>
+</form>
+
+@if (result is null) { <p><em>Enter parameters and click <strong>Compute</strong>.</em></p> return; }
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.5rem;">
+    <article>
+        <small>Fixed-fractional (@result.RiskPerTradeDollars.Money() at risk)</small>
+        <h4>@result.FixedFractionalShares shares</h4>
+        <small>@result.FixedFractionalNotional.Money() notional</small>
+    </article>
+    <article>
+        <small>Half-Kelly (f* = @result.KellyFraction.ToString("P2", System.Globalization.CultureInfo.InvariantCulture))</small>
+        <h4>@result.KellyShares shares</h4>
+        <small>@result.KellyNotional.Money() notional</small>
+    </article>
+    <article>
+        <small>Vol-target</small>
+        <h4>@result.VolTargetShares shares</h4>
+        <small>@result.VolTargetNotional.Money() notional</small>
+    </article>
+    <article class="pos-card">
+        <small>Recommended (@result.RecommendedMethod)</small>
+        <h4>@result.RecommendedShares shares</h4>
+        <small>@result.Rationale</small>
+    </article>
+</div>

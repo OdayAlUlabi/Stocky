@@ -1,0 +1,76 @@
+@{
+    ViewData["Title"] = "Stress Test";
+    var pid = (Guid)ViewBag.PortfolioId;
+    var scenarios = (List<StressScenarioDto>)ViewBag.Scenarios;
+    var result = (StressTestResultDto?)ViewBag.Result;
+    var selected = (string?)ViewBag.SelectedScenarioId ?? scenarios.FirstOrDefault()?.Id;
+}
+<h2>Stress Test · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+
+<form method="post" action="/Portfolios/@pid/StressTest/Run" class="filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin-bottom:1rem;">
+    @Html.AntiForgeryToken()
+    <label style="grid-column: 1 / -1;">Scenario
+        <select name="scenarioId" id="scenarioSelect">
+            @foreach (var s in scenarios)
+            {
+                <option value="@s.Id" selected="@(s.Id == selected)">@s.Name</option>
+            }
+            <option value="custom" selected="@(selected == "custom")">Custom shock</option>
+        </select>
+    </label>
+    <label>Equity Δ <input type="number" name="equityShock" step="0.01" placeholder="-0.20" /></label>
+    <label>Rates Δ <input type="number" name="ratesShock" step="0.005" placeholder="+0.02" /></label>
+    <label>USD Δ <input type="number" name="usdShock" step="0.01" placeholder="+0.10" /></label>
+    <label>Oil Δ <input type="number" name="oilShock" step="0.05" placeholder="-0.40" /></label>
+    <label>VIX Δ <input type="number" name="vixShock" step="0.5" placeholder="+2.00" /></label>
+    <button type="submit" class="btn primary" style="align-self:end;"><i class="bi bi-lightning"></i> Run stress test</button>
+</form>
+
+<details style="margin-bottom:1rem;">
+    <summary>Preset scenarios</summary>
+    <table>
+        <thead><tr><th>Id</th><th>Name</th><th>Description</th><th>Equity</th><th>Rates</th><th>USD</th><th>Oil</th><th>VIX</th></tr></thead>
+        <tbody>
+            @foreach (var s in scenarios)
+            {
+                <tr>
+                    <td><code>@s.Id</code></td>
+                    <td>@s.Name</td>
+                    <td>@s.Description</td>
+                    <td>@s.Shock.EquityShock.ToString("P1", System.Globalization.CultureInfo.InvariantCulture)</td>
+                    <td>@s.Shock.RatesShock.ToString("P1", System.Globalization.CultureInfo.InvariantCulture)</td>
+                    <td>@s.Shock.UsdShock.ToString("P1", System.Globalization.CultureInfo.InvariantCulture)</td>
+                    <td>@s.Shock.OilShock.ToString("P1", System.Globalization.CultureInfo.InvariantCulture)</td>
+                    <td>@s.Shock.VixShock</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+@if (result is null) { <p><em>Pick a scenario and run the stress test.</em></p> return; }
+
+<h3>@result.ScenarioName</h3>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.5rem;">
+    <article><small>Portfolio value (before)</small><h4>@result.PortfolioValueBefore.Money()</h4></article>
+    <article><small>Estimated PnL</small><h4 class="@(result.PortfolioPnlDollars < 0 ? "neg" : "pos")">@result.PortfolioPnlDollars.Money()</h4></article>
+    <article><small>Estimated return</small><h4 class="@(result.PortfolioPnlPercent < 0 ? "neg" : "pos")">@result.PortfolioPnlPercent.Pct()</h4></article>
+</div>
+
+<h3 style="margin-top:1rem;">Per-holding impact</h3>
+<table>
+    <thead><tr><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Market value</th><th style="text-align:right;">Beta</th><th style="text-align:right;">Est. PnL $</th><th style="text-align:right;">Est. PnL %</th></tr></thead>
+    <tbody>
+        @foreach (var h in result.HoldingImpacts)
+        {
+            <tr>
+                <td><a href="/Portfolios/@pid/Positions/@h.Symbol">@h.Symbol</a></td>
+                <td style="text-align:right;">@h.Quantity.Num(2)</td>
+                <td style="text-align:right;">@h.MarketValue.Money()</td>
+                <td style="text-align:right;">@h.Beta.Num(2)</td>
+                <td style="text-align:right;" class="@(h.EstimatedPnlDollars < 0 ? "neg" : "pos")">@h.EstimatedPnlDollars.Money()</td>
+                <td style="text-align:right;" class="@(h.EstimatedPnlPercent < 0 ? "neg" : "pos")">@h.EstimatedPnlPercent.Pct()</td>
+            </tr>
+        }
+    </tbody>
+</table>

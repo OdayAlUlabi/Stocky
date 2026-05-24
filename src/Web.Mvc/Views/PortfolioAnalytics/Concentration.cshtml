@@ -1,0 +1,70 @@
+@model ConcentrationRiskDto
+@{
+    ViewData["Title"] = "Concentration Risk";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>Concentration · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+
+<form method="get" class="filters" style="display:flex;gap:.75rem;align-items:end;margin-bottom:1rem;">
+    <label>Max position <input type="number" name="maxPosition" step="0.01" min="0.01" max="1" value="@ViewBag.MaxPosition" /></label>
+    <label>Max sector <input type="number" name="maxSector" step="0.05" min="0.05" max="1" value="@ViewBag.MaxSector" /></label>
+    <label>Max country <input type="number" name="maxCountry" step="0.05" min="0.05" max="1" value="@ViewBag.MaxCountry" /></label>
+    <button type="submit" class="btn"><i class="bi bi-arrow-clockwise"></i> Recompute</button>
+</form>
+
+@if (Model is null) { <p><em>No holdings.</em></p> return; }
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.5rem;">
+    <article><small>HHI score</small><h4>@Model.HhiScore.Num(0)</h4><small>0 = fully diversified · 10,000 = single holding</small></article>
+    <article><small>Interpretation</small><h4>@Model.HhiInterpretation</h4></article>
+    <article><small>Diversification score</small><h4>@Model.DiversificationScore.Num(1) / 100</h4></article>
+    <article><small>Breaches</small><h4 class="@(Model.Breaches.Count == 0 ? "pos" : "neg")">@Model.Breaches.Count</h4></article>
+</div>
+
+@if (Model.Breaches.Count > 0)
+{
+    <h3 style="margin-top:1rem;">Limit breaches</h3>
+    <table>
+        <thead><tr><th>Limit</th><th>Bucket</th><th style="text-align:right;">Current</th><th style="text-align:right;">Threshold</th></tr></thead>
+        <tbody>
+            @foreach (var b in Model.Breaches)
+            {
+                <tr>
+                    <td><span class="badge danger">@b.Limit</span></td>
+                    <td>@b.Key</td>
+                    <td style="text-align:right;">@b.Current.ToString("P2", System.Globalization.CultureInfo.InvariantCulture)</td>
+                    <td style="text-align:right;">@b.Threshold.ToString("P2", System.Globalization.CultureInfo.InvariantCulture)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@{
+    var groups = new (string label, IReadOnlyList<ConcentrationBucketDto> buckets)[]
+    {
+        ("Positions", Model.Positions),
+        ("Sectors",   Model.Sectors),
+        ("Countries", Model.Countries),
+    };
+}
+
+<div class="grid-2" style="margin-top:1rem;">
+    @foreach (var g in groups)
+    {
+        <article>
+            <header><span><i class="bi bi-bar-chart"></i> @g.label</span><small class="text-muted">@g.buckets.Count</small></header>
+            <table>
+                <tbody>
+                    @foreach (var b in g.buckets.Take(15))
+                    {
+                        <tr>
+                            <td>@b.Key</td>
+                            <td style="text-align:right;">@b.Weight.ToString("P2", System.Globalization.CultureInfo.InvariantCulture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </article>
+    }
+</div>

@@ -1,0 +1,36 @@
+@model LiquidityRiskDto
+@{
+    ViewData["Title"] = "Liquidity Risk";
+    var pid = (Guid)ViewBag.PortfolioId;
+}
+<h2>Liquidity Risk · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+
+<form method="get" class="filters" style="display:flex;gap:.75rem;align-items:end;margin-bottom:1rem;">
+    <label>Max participation <input type="number" name="participation" step="0.05" min="0.01" max="1" value="@ViewBag.Participation" /></label>
+    <label>Threshold days <input type="number" name="thresholdDays" min="1" max="60" value="@ViewBag.ThresholdDays" /></label>
+    <label>ADV lookback <input type="number" name="advLookback" min="5" max="120" value="@ViewBag.AdvLookback" /></label>
+    <button type="submit" class="btn"><i class="bi bi-arrow-clockwise"></i> Recompute</button>
+</form>
+
+@if (Model is null) { <p><em>No data.</em></p> return; }
+
+<p>Portfolio liquidity score (value-weighted avg days-to-liquidate): <strong>@Model.PortfolioLiquidityScore.Num(2) days</strong> at @Model.MaxParticipationRate.ToString("P0", System.Globalization.CultureInfo.InvariantCulture) participation.</p>
+
+<table>
+    <thead><tr><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Market value</th><th style="text-align:right;">ADV (shares)</th><th style="text-align:right;">ADV ($)</th><th style="text-align:right;">Days to liquidate</th><th>Flag</th></tr></thead>
+    <tbody>
+        @foreach (var p in Model.Positions)
+        {
+            <tr>
+                <td><a href="/Portfolios/@pid/Positions/@p.Symbol">@p.Symbol</a></td>
+                <td style="text-align:right;">@p.Quantity.Num(2)</td>
+                <td style="text-align:right;">@p.MarketValue.Money()</td>
+                <td style="text-align:right;">@p.AverageDailyVolumeShares.Num(0)</td>
+                <td style="text-align:right;">@p.AverageDailyVolumeDollars.Money()</td>
+                <td style="text-align:right;">@p.DaysToLiquidate.Num(2)</td>
+                <td>@(p.Illiquid ? Html.Raw("<span class='badge danger'>illiquid</span>") : Html.Raw("<span class='badge ok'>OK</span>"))</td>
+            </tr>
+        }
+        @if (Model.Positions.Count == 0) { <tr><td colspan="7"><em>No positions.</em></td></tr> }
+    </tbody>
+</table>

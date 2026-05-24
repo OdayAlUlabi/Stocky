@@ -148,6 +148,103 @@ public class PortfolioAnalyticsController : Controller
         return View(dto);
     }
 
+    // =========================================================================
+    // Advanced portfolio analytics (GitHub milestone #8) — issues 2.1, 2.2,
+    // 2.4, 2.5. Each in-process API call uses the same cookie-auth User so
+    // ownership checks behave identically to the JSON endpoints.
+    // =========================================================================
+
+    public async Task<IActionResult> VarSuite(
+        Guid portfolioId,
+        decimal confidence = 0.95m,
+        int holdingDays = 1,
+        int simulations = 10000,
+        CancellationToken ct = default)
+    {
+        var dto = await this.InvokeAsync<StockyApi.VarSuiteController, VarSuiteDto>(
+            c => c.Get(portfolioId, confidence, holdingDays, simulations, ct));
+        await LoadPortfolioContext(portfolioId);
+        ViewBag.Confidence = confidence;
+        ViewBag.HoldingDays = holdingDays;
+        ViewBag.Simulations = simulations;
+        return View(dto);
+    }
+
+    public async Task<IActionResult> StressTest(Guid portfolioId, CancellationToken ct = default)
+    {
+        var scenarios = this.Invoke<StockyApi.StressTestController, IEnumerable<StressScenarioDto>>(
+            c => c.Scenarios());
+        await LoadPortfolioContext(portfolioId);
+        ViewBag.Scenarios = (scenarios ?? Array.Empty<StressScenarioDto>()).ToList();
+        ViewBag.Result = null;
+        return View();
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [Route("/Portfolios/{portfolioId:guid}/StressTest/Run")]
+    public async Task<IActionResult> StressTestRun(
+        Guid portfolioId,
+        string? scenarioId,
+        decimal? equityShock,
+        decimal? ratesShock,
+        decimal? usdShock,
+        decimal? oilShock,
+        decimal? vixShock,
+        CancellationToken ct = default)
+    {
+        StressShockDto? custom = null;
+        if (string.IsNullOrWhiteSpace(scenarioId) || scenarioId == "custom")
+        {
+            custom = new StressShockDto(
+                equityShock ?? 0m, ratesShock ?? 0m, usdShock ?? 0m,
+                oilShock ?? 0m, vixShock ?? 0m);
+            scenarioId = null;
+        }
+        var req = new StressTestRequest(portfolioId, scenarioId, custom);
+        var result = await this.InvokeAsync<StockyApi.StressTestController, StressTestResultDto>(
+            c => c.Run(portfolioId, req, ct));
+        var scenarios = this.Invoke<StockyApi.StressTestController, IEnumerable<StressScenarioDto>>(
+            c => c.Scenarios());
+        await LoadPortfolioContext(portfolioId);
+        ViewBag.Scenarios = (scenarios ?? Array.Empty<StressScenarioDto>()).ToList();
+        ViewBag.Result = result;
+        ViewBag.SelectedScenarioId = scenarioId ?? "custom";
+        return View(nameof(StressTest));
+    }
+
+    public async Task<IActionResult> Liquidity(
+        Guid portfolioId,
+        decimal participation = 0.20m,
+        int thresholdDays = 5,
+        int advLookback = 30,
+        CancellationToken ct = default)
+    {
+        var dto = await this.InvokeAsync<StockyApi.LiquidityRiskController, LiquidityRiskDto>(
+            c => c.Get(portfolioId, participation, thresholdDays, advLookback, ct));
+        await LoadPortfolioContext(portfolioId);
+        ViewBag.Participation = participation;
+        ViewBag.ThresholdDays = thresholdDays;
+        ViewBag.AdvLookback = advLookback;
+        return View(dto);
+    }
+
+    public async Task<IActionResult> Concentration(
+        Guid portfolioId,
+        decimal maxPosition = 0.10m,
+        decimal maxSector = 0.30m,
+        decimal maxCountry = 0.40m,
+        CancellationToken ct = default)
+    {
+        var dto = await this.InvokeAsync<StockyApi.ConcentrationController, ConcentrationRiskDto>(
+            c => c.Get(portfolioId, maxPosition, maxSector, maxCountry, ct));
+        await LoadPortfolioContext(portfolioId);
+        ViewBag.MaxPosition = maxPosition;
+        ViewBag.MaxSector = maxSector;
+        ViewBag.MaxCountry = maxCountry;
+        return View(dto);
+    }
+
     [Route("/Portfolios/{portfolioId:guid}/Positions/{symbol}")]
     public async Task<IActionResult> Position(Guid portfolioId, string symbol)
     {

@@ -1,0 +1,45 @@
+@model VarSuiteDto
+@{
+    ViewData["Title"] = "Value-at-Risk Suite";
+    var pid = (Guid)ViewBag.PortfolioId;
+    decimal confidence = (decimal)ViewBag.Confidence;
+    int holdingDays = (int)ViewBag.HoldingDays;
+    int sims = (int)ViewBag.Simulations;
+}
+<h2>Value-at-Risk · <small><a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+
+<form method="get" class="filters" style="display:flex;gap:.75rem;align-items:end;margin-bottom:1rem;">
+    <label>Confidence
+        <select name="confidence">
+            @foreach (var c in new[] { 0.90m, 0.95m, 0.99m })
+            {
+                <option value="@c" selected="@(c == confidence)">@(c.ToString("P0", System.Globalization.CultureInfo.InvariantCulture))</option>
+            }
+        </select>
+    </label>
+    <label>Holding days <input type="number" name="holdingDays" min="1" max="60" value="@holdingDays" /></label>
+    <label>Simulations <input type="number" name="simulations" min="1000" max="100000" step="1000" value="@sims" /></label>
+    <button type="submit" class="btn"><i class="bi bi-arrow-clockwise"></i> Recompute</button>
+</form>
+
+@if (Model is null) { <p><em>Not enough history to compute VaR.</em></p> return; }
+
+<p>Portfolio value: <strong>@Model.PortfolioValue.Money()</strong> · Window: @Model.From → @Model.To · @Model.HoldingDays-day VaR at @Model.ConfidenceLevel.ToString("P0", System.Globalization.CultureInfo.InvariantCulture)</p>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.5rem;">
+    <article><small>Historical VaR</small><h4 class="neg">@Model.VarHistoricalDollars.Money()</h4><small>@Model.VarHistoricalPercent.Pct()</small></article>
+    <article><small>Parametric VaR</small><h4 class="neg">@Model.VarParametricDollars.Money()</h4><small>@Model.VarParametricPercent.Pct()</small></article>
+    <article><small>Monte Carlo VaR (@Model.MonteCarloSimulations.ToString("N0") sims)</small><h4 class="neg">@Model.VarMonteCarloDollars.Money()</h4><small>@Model.VarMonteCarloPercent.Pct()</small></article>
+    <article><small>CVaR / Expected Shortfall</small><h4 class="neg">@Model.CvarHistoricalDollars.Money()</h4></article>
+</div>
+
+<h3 style="margin-top:1.5rem;">Worst @Model.WorstScenarios.Count days in window</h3>
+<table>
+    <thead><tr><th>Date</th><th style="text-align:right;">Return</th><th style="text-align:right;">Loss</th></tr></thead>
+    <tbody>
+        @foreach (var s in Model.WorstScenarios)
+        {
+            <tr><td>@s.Date</td><td style="text-align:right;" class="neg">@s.ReturnPercent.Pct()</td><td style="text-align:right;" class="neg">@s.LossDollars.Money()</td></tr>
+        }
+    </tbody>
+</table>

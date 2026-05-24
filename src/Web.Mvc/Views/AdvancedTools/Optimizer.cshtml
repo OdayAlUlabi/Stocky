@@ -1,0 +1,98 @@
+@{
+    ViewData["Title"] = "Mean-Variance Optimizer";
+    var result = (OptimizerResultDto?)ViewBag.Result;
+}
+<h2>Portfolio Optimizer</h2>
+<p class="text-muted">Markowitz mean-variance optimizer with box constraints. Picks tangency (max-Sharpe) and minimum-variance portfolios and traces the efficient frontier.</p>
+
+<form method="post" action="/Tools/OptimizerRun" class="filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1rem;">
+    @Html.AntiForgeryToken()
+    <label style="grid-column:1 / -1;">Symbols (comma separated)
+        <input type="text" name="symbols" value="@ViewBag.Symbols" placeholder="AAPL, MSFT, ..." />
+    </label>
+    <label>Lookback days <input type="number" name="lookbackDays" min="60" max="1260" value="@ViewBag.LookbackDays" /></label>
+    <label>Min weight <input type="number" name="minWeight" min="0" max="1" step="0.01" value="@ViewBag.MinWeight" /></label>
+    <label>Max weight <input type="number" name="maxWeight" min="0.05" max="1" step="0.01" value="@ViewBag.MaxWeight" /></label>
+    <label>Risk-free rate <input type="number" name="riskFreeRate" step="0.005" value="@ViewBag.RiskFreeRate" /></label>
+    <label>Covariance estimator
+        <select name="estimator">
+            <option value="sample" selected="@((string)ViewBag.Estimator == "sample")">Sample</option>
+            <option value="ledoit_wolf" selected="@((string)ViewBag.Estimator == "ledoit_wolf")">Ledoit-Wolf shrinkage</option>
+        </select>
+    </label>
+    <button type="submit" class="btn primary" style="align-self:end;"><i class="bi bi-bullseye"></i> Optimize</button>
+</form>
+
+@if (result is null) { <p><em>Enter at least two symbols and click <strong>Optimize</strong>.</em></p> return; }
+
+<p>As of <strong>@result.AsOf</strong> · Lookback @result.LookbackDays days · @result.Symbols.Count assets</p>
+
+<div class="grid-2">
+    <article>
+        <header><span><i class="bi bi-bullseye"></i> Tangency (max-Sharpe)</span></header>
+        <p>
+            Expected return: <strong>@result.TangencyReturn.Pct()</strong> ·
+            Volatility: <strong>@result.TangencyVolatility.Pct()</strong> ·
+            Sharpe: <strong>@result.TangencySharpe.Num(2)</strong>
+        </p>
+        <table>
+            <thead><tr><th>Symbol</th><th style="text-align:right;">Weight</th></tr></thead>
+            <tbody>
+                @foreach (var w in result.TangencyWeights.OrderByDescending(x => x.Weight))
+                {
+                    <tr><td>@w.Symbol</td><td style="text-align:right;">@w.Weight.ToString("P2", System.Globalization.CultureInfo.InvariantCulture)</td></tr>
+                }
+            </tbody>
+        </table>
+    </article>
+    <article>
+        <header><span><i class="bi bi-shield"></i> Minimum variance</span></header>
+        <p>
+            Expected return: <strong>@result.MinVarianceReturn.Pct()</strong> ·
+            Volatility: <strong>@result.MinVarianceVolatility.Pct()</strong>
+        </p>
+        <table>
+            <thead><tr><th>Symbol</th><th style="text-align:right;">Weight</th></tr></thead>
+            <tbody>
+                @foreach (var w in result.MinVarianceWeights.OrderByDescending(x => x.Weight))
+                {
+                    <tr><td>@w.Symbol</td><td style="text-align:right;">@w.Weight.ToString("P2", System.Globalization.CultureInfo.InvariantCulture)</td></tr>
+                }
+            </tbody>
+        </table>
+    </article>
+</div>
+
+<article style="margin-top:1rem;">
+    <header><span><i class="bi bi-graph-up"></i> Efficient frontier</span><small class="text-muted">@result.EfficientFrontier.Count points</small></header>
+    <canvas id="frontier" height="280"></canvas>
+</article>
+
+@section Scripts {
+    <partial name="_ChartScripts" />
+    <script>
+        (function () {
+            if (!window.Chart) return;
+            var pts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(result.EfficientFrontier.Select(p => new { x = p.Volatility, y = p.ExpectedReturn })));
+            var tangency = { x: @result.TangencyVolatility, y: @result.TangencyReturn };
+            var minVar   = { x: @result.MinVarianceVolatility, y: @result.MinVarianceReturn };
+            new Chart(document.getElementById('frontier'), {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        { label: 'Frontier', data: pts, showLine: true, borderColor: '#5b9dff', backgroundColor: '#5b9dff', pointRadius: 2 },
+                        { label: 'Tangency', data: [tangency], pointRadius: 6, pointBackgroundColor: '#16c784', borderColor: '#16c784' },
+                        { label: 'Min variance', data: [minVar], pointRadius: 6, pointBackgroundColor: '#f0b90b', borderColor: '#f0b90b' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { title: { display: true, text: 'Volatility (annualised)' } },
+                        y: { title: { display: true, text: 'Expected return (annualised)' } }
+                    }
+                }
+            });
+        })();
+    </script>
+}

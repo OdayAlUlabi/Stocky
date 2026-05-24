@@ -303,7 +303,7 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
             {
               name: 'api'
               properties: {
-                paths: [ '/api/*', '/hubs/*', '/health' ]
+                paths: [ '/api/*', '/hubs/*', '/health', '/admin/*' ]
                 backendAddressPool: { id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'pool-api') }
                 backendHttpSettings: { id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', agwName, 'https-api') }
                 rewriteRuleSet: { id: resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', agwName, 'fix-location') }

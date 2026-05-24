@@ -78,6 +78,17 @@ public static class StockyServicesExtensions
         services.AddScoped<Services.GoalsService>();
         services.AddSingleton<Services.EarningsSurpriseService>();
 
+        // Advanced portfolio analytics (GitHub milestone #8 — issues 1.3, 1.4,
+        // 2.1, 2.2, 2.4, 2.5, 4.3). Pure-math services on top of existing
+        // market-data and history infrastructure.
+        services.AddScoped<Services.AdvancedRiskService>();
+        services.AddScoped<Services.PortfolioOptimizerService>();
+        services.AddScoped<Services.MomentumScoringService>();
+        services.AddSingleton<Services.PositionSizingService>();
+
+        // Admin force-refresh endpoint (AdminRefreshController).
+        services.AddScoped<Services.DataRefreshService>();
+
         // M10 — Advanced alerts
         services.AddSingleton<Services.TechnicalIndicatorService>();
         services.AddScoped<Services.IInsiderTradeProvider, Services.StubInsiderTradeProvider>();

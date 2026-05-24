@@ -1,0 +1,56 @@
+@{
+    ViewData["Title"] = "Momentum Scores";
+    var symbols = (string)ViewBag.Symbols;
+    var windows = (string)ViewBag.Windows;
+    var volScale = (bool)ViewBag.VolScale;
+    var skipLatest = (bool)ViewBag.SkipLatest;
+    var result = (MomentumScoreSetDto?)ViewBag.Result;
+}
+<h2>Momentum Scoring</h2>
+<p class="text-muted">Cross-sectional momentum across an arbitrary universe. Per symbol: window returns &rarr; optional vol-scaling &rarr; cross-sectional percentile (0–100) &rarr; rank.</p>
+
+<form method="post" action="/Tools/MomentumRun" class="filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin-bottom:1rem;">
+    @Html.AntiForgeryToken()
+    <label style="grid-column:1 / -1;">Universe (comma separated)
+        <input type="text" name="symbols" value="@symbols" placeholder="AAPL, MSFT, GOOG" />
+    </label>
+    <label>Lookback windows (days)
+        <input type="text" name="windows" value="@windows" placeholder="21,63,126,252" />
+    </label>
+    <label><input type="checkbox" name="volScale" value="true" checked="@volScale" /> Vol-scale</label>
+    <label><input type="checkbox" name="skipLatest" value="true" checked="@skipLatest" /> Skip latest month (1-12 momentum)</label>
+    <button type="submit" class="btn primary"><i class="bi bi-graph-up-arrow"></i> Score</button>
+</form>
+
+@if (result is null) { <p><em>Enter symbols and click <strong>Score</strong>.</em></p> return; }
+
+<p>As of <strong>@result.AsOf</strong> · @result.UniverseSize symbols · Windows: @string.Join(", ", result.Windows)</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Rank</th>
+            <th>Symbol</th>
+            <th style="text-align:right;">Composite</th>
+            @foreach (var w in result.Windows)
+            {
+                <th style="text-align:right;">@(w)d ret</th>
+            }
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var s in result.Scores)
+        {
+            <tr>
+                <td>#@s.Rank</td>
+                <td><strong>@s.Symbol</strong></td>
+                <td style="text-align:right;"><strong>@s.CompositeScore.Num(1)</strong></td>
+                @foreach (var w in result.Windows)
+                {
+                    var hasRet = s.WindowReturns.TryGetValue(w, out var rv);
+                    <td style="text-align:right;" class="@(hasRet && rv < 0 ? "neg" : hasRet && rv > 0 ? "pos" : "")">@(hasRet ? rv.Pct() : "—")</td>
+                }
+            </tr>
+        }
+    </tbody>
+</table>
