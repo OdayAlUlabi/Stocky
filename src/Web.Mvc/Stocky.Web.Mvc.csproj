@@ -5,6 +5,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Stocky.Web.Mvc</RootNamespace>
+    <!--
+      The referenced Api project ships its own appsettings.*.json with the
+      same target path as ours, triggering NETSDK1152. This project's own
+      copies should win (they have host-specific Google auth defaults).
+    -->
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,5 +25,23 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.0" />
   </ItemGroup>
+
+  <!--
+    The Api project's appsettings.*.json files are pulled in as transitive
+    content via the ProjectReference, colliding with this project's own
+    appsettings on publish (NETSDK1152). Remove them from the transitive
+    publish list *after* they're collected but *before* ResolvedFileToPublish
+    is computed.
+  -->
+  <Target Name="RemoveTransitiveApiAppSettings"
+          AfterTargets="_GetCopyToPublishDirectoryItemsFromTransitiveProjectReferences"
+          BeforeTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_TransitiveItemsToCopyToPublishDirectoryAlways Remove="@(_TransitiveItemsToCopyToPublishDirectoryAlways)"
+        Condition="'%(Filename)%(Extension)' == 'appsettings.json' Or '%(Filename)%(Extension)' == 'appsettings.Development.json'" />
+      <_TransitiveItemsToCopyToPublishDirectoryPreserveNewest Remove="@(_TransitiveItemsToCopyToPublishDirectoryPreserveNewest)"
+        Condition="'%(Filename)%(Extension)' == 'appsettings.json' Or '%(Filename)%(Extension)' == 'appsettings.Development.json'" />
+    </ItemGroup>
+  </Target>
 
 </Project>
