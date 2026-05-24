@@ -3,6 +3,7 @@ import { Badge, Card, Group, Loader, SegmentedControl, Stack, Table, Text, Title
 import { Link } from 'react-router-dom';
 import { useEarningsCalendar, useEarningsSurprises } from '../../api/hooks';
 import { EmptyState } from '../../components/EmptyState';
+import { ApiErrorAlert } from '../../components/ApiErrorAlert';
 
 /** M9 #95 — Scoped earnings calendar with EPS surprise drilldown. */
 function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
@@ -41,7 +42,7 @@ export function EarningsCalendar() {
   const to = isoDate(new Date(today.getTime() + days * 86400000));
   const { data, isLoading, error } = useEarningsCalendar({ from, to, scope });
 
-  if (error) return <EmptyState title="Could not load earnings calendar" description={String(error)} />;
+  if (error) return <ApiErrorAlert error={error} title="Could not load earnings calendar" />;
 
   const grouped = (data ?? []).reduce<Record<string, NonNullable<typeof data>>>((acc, ev) => {
     (acc[ev.date] ||= []).push(ev); return acc;

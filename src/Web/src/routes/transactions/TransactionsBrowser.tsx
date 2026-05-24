@@ -2,6 +2,7 @@ import { Alert, Button, Card, FileButton, Group, Loader, NumberFormatter, Select
 import { useState } from 'react';
 import { useImportTransactions, usePortfolios, useTransactions } from '../../api/hooks';
 import { EmptyState } from '../../components/EmptyState';
+import { ApiErrorAlert } from '../../components/ApiErrorAlert';
 
 export function TransactionsBrowser() {
   const { data: portfolios } = usePortfolios();
@@ -10,6 +11,7 @@ export function TransactionsBrowser() {
   const { data: txs, isLoading } = useTransactions(effectiveId);
   const importMut = useImportTransactions(effectiveId ?? '');
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [importError, setImportError] = useState<unknown>(null);
 
   return (
     <Stack>
@@ -28,19 +30,21 @@ export function TransactionsBrowser() {
           onChange={async (file) => {
             if (!file || !effectiveId) return;
             setImportResult(null);
+            setImportError(null);
             try {
               const csv = await file.text();
               const r = await importMut.mutateAsync(csv);
               setImportResult(`Imported ${r.imported}, skipped ${r.skipped}.${r.errors.length ? ' First error: row ' + r.errors[0].row + ' - ' + r.errors[0].message : ''}`);
             } catch (e) {
-              setImportResult(`Import failed: ${(e as Error).message}`);
+              setImportError(e);
             }
           }}
         >
           {(props) => <Button {...props} variant="light">Import CSV</Button>}
         </FileButton>
       </Group>
-      {importResult && <Alert color={importResult.startsWith('Import failed') ? 'red' : 'teal'}>{importResult}</Alert>}
+      {importResult && <Alert color="teal">{importResult}</Alert>}
+      {importError && <ApiErrorAlert error={importError} title="Import failed" />}
       <Card withBorder>
         {isLoading ? <Loader /> : !txs || txs.length === 0 ? (
           <EmptyState title="No transactions" description="Buy or sell something to populate this view, or import a CSV file with headers: symbol,type,quantity,price,fee,currency,executedAt,notes" />

@@ -3,6 +3,7 @@ import { IconRefresh, IconSearch } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { useScreener, useScreenerFacets } from '../../api/hooks';
 import type { ScreenerQuery } from '../../api/types';
+import { ApiErrorAlert } from '../../components/ApiErrorAlert';
 
 type SortValue = NonNullable<ScreenerQuery['sort']>;
 
@@ -174,7 +175,7 @@ export function Screener() {
         {query.isLoading ? (
           <Text c="dimmed" size="sm">Loading…</Text>
         ) : query.isError ? (
-          <Text c="red" size="sm">{(query.error as Error).message}</Text>
+          <ApiErrorAlert error={query.error} title="Screener failed" />
         ) : !query.data || query.data.rows.length === 0 ? (
           <Text c="dimmed" size="sm">No instruments match the current filters.</Text>
         ) : (

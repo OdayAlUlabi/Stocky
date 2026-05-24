@@ -1,4 +1,4 @@
-import { Button, Drawer, Group, NumberInput, Select, Stack, Textarea, TextInput, Text } from '@mantine/core';
+import { Button, Drawer, Group, NumberInput, Select, Stack, Textarea, TextInput } from '@mantine/core';
 import { DateTimePicker } from '@mantine/dates';
 import { useEffect, useState } from 'react';
 import { notifications } from '@mantine/notifications';
@@ -6,6 +6,8 @@ import dayjs from 'dayjs';
 import { TickerSearch } from '../../components/TickerSearch';
 import type { CreateTransactionRequest, TransactionDto, TransactionType } from '../../api/types';
 import { useCreateTransaction, useUpdateTransaction } from '../../api/hooks';
+import { formatApiError } from '../../api/client';
+import { ApiErrorAlert } from '../../components/ApiErrorAlert';
 
 interface TradeDrawerProps {
   portfolioId: string;
@@ -29,7 +31,7 @@ export function TradeDrawer({ portfolioId, opened, onClose, editing, defaultCurr
   const [currency, setCurrency] = useState(defaultCurrency);
   const [executedAt, setExecutedAt] = useState<Date | null>(new Date());
   const [notes, setNotes] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     if (!opened) return;
@@ -86,9 +88,8 @@ export function TradeDrawer({ portfolioId, opened, onClose, editing, defaultCurr
       notifications.show({ message: editing ? 'Trade updated' : 'Trade logged', color: 'teal' });
       onClose();
     } catch (e) {
-      const msg = (e as Error).message;
-      setError(msg);
-      notifications.show({ message: msg, color: 'red' });
+      setError(e);
+      notifications.show({ message: formatApiError(e), color: 'red' });
     }
   };
 
@@ -113,7 +114,7 @@ export function TradeDrawer({ portfolioId, opened, onClose, editing, defaultCurr
         <TextInput label="Currency" value={currency} onChange={(e) => setCurrency(e.currentTarget.value.toUpperCase())} maxLength={3} />
         <DateTimePicker label="Executed at" value={executedAt} onChange={(v) => setExecutedAt(v ? new Date(v) : null)} clearable={false} />
         <Textarea label="Notes" value={notes} onChange={(e) => setNotes(e.currentTarget.value)} autosize minRows={2} />
-        {error && <Text c="red" size="sm">{error}</Text>}
+        {error && <ApiErrorAlert error={error} title="Trade failed" />}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button onClick={submit} loading={busy}>{editing ? 'Save' : 'Add trade'}</Button>

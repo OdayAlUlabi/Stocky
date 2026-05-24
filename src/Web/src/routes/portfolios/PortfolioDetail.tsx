@@ -12,6 +12,7 @@ import {
   useTransactions,
   useUpdatePortfolio
 } from '../../api/hooks';
+import { formatApiError } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
 import { TradeDrawer } from './TradeDrawer';
 import type { CostBasisMethod, TransactionDto } from '../../api/types';
@@ -63,7 +64,7 @@ export function PortfolioDetail() {
       await delTx.mutateAsync(tx.id);
       notifications.show({ message: 'Transaction deleted', color: 'teal' });
     } catch (e) {
-      notifications.show({ message: (e as Error).message, color: 'red' });
+      notifications.show({ message: formatApiError(e), color: 'red' });
     }
   };
 
@@ -137,7 +138,7 @@ export function PortfolioDetail() {
                   });
                   notifications.show({ message: `Cost basis: ${val} — gains recomputed`, color: 'teal' });
                 } catch (e) {
-                  notifications.show({ message: (e as Error).message, color: 'red' });
+                  notifications.show({ message: formatApiError(e), color: 'red' });
                 }
               }}
               disabled={!portfolio || updatePortfolio.isPending}
@@ -342,7 +343,7 @@ export function PortfolioDetail() {
                     color: result.skipped > 0 ? 'yellow' : 'teal'
                   });
                 } catch (e) {
-                  notifications.show({ message: (e as Error).message, color: 'red' });
+                  notifications.show({ message: formatApiError(e), color: 'red' });
                 }
               }}
             >

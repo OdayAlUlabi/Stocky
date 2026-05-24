@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { notifications } from '@mantine/notifications';
 import dayjs from 'dayjs';
 import { useCreatePortfolio, usePortfolios } from '../../api/hooks';
+import { formatApiError } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
 
 export function PortfolioList() {
@@ -23,7 +24,7 @@ export function PortfolioList() {
       setName('');
       close();
     } catch (e) {
-      notifications.show({ message: (e as Error).message, color: 'red' });
+      notifications.show({ message: formatApiError(e), color: 'red' });
     }
   };
 

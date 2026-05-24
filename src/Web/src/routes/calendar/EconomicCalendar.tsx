@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Badge, Card, Group, Loader, SegmentedControl, Stack, Table, Text, Title } from '@mantine/core';
 import { useEconomicCalendar } from '../../api/hooks';
 import { EmptyState } from '../../components/EmptyState';
+import { ApiErrorAlert } from '../../components/ApiErrorAlert';
 
 function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
 
@@ -13,7 +14,7 @@ export function EconomicCalendar() {
   const { data, isLoading, error } = useEconomicCalendar(from, to);
 
   if (isLoading) return <Loader />;
-  if (error) return <EmptyState title="Could not load calendar" description={String(error)} />;
+  if (error) return <ApiErrorAlert error={error} title="Could not load calendar" />;
   if (!data || data.length === 0) return <EmptyState title="No events" />;
 
   const rows = filter === 'All' ? data : data.filter(e => e.importance === filter);

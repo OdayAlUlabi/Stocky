@@ -3,6 +3,7 @@ import { IconPlus, IconStar, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { notifications } from '@mantine/notifications';
 import { useAddWatchlistItem, useCreateWatchlist, useRemoveWatchlistItem, useWatchlists } from '../../api/hooks';
+import { formatApiError } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
 import { TickerSearch } from '../../components/TickerSearch';
 
@@ -27,7 +28,7 @@ export function WatchlistView() {
       setNewName('');
       notifications.show({ message: 'Watchlist created', color: 'teal' });
     } catch (e) {
-      notifications.show({ message: (e as Error).message, color: 'red' });
+      notifications.show({ message: formatApiError(e), color: 'red' });
     }
   };
 
@@ -37,14 +38,14 @@ export function WatchlistView() {
       await addItem.mutateAsync({ symbol });
       setAddingSymbol(null);
     } catch (e) {
-      notifications.show({ message: (e as Error).message, color: 'red' });
+      notifications.show({ message: formatApiError(e), color: 'red' });
     }
   };
 
   const removeSymbol = async (itemId: string) => {
     if (!active) return;
     try { await remItem.mutateAsync(itemId); }
-    catch (e) { notifications.show({ message: (e as Error).message, color: 'red' }); }
+    catch (e) { notifications.show({ message: formatApiError(e), color: 'red' }); }
   };
 
   return (

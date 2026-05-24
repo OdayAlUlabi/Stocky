@@ -10,6 +10,7 @@ import {
 } from '../../api/hooks';
 import { usePriceTicks } from '../../api/priceStream';
 import { EmptyState } from '../../components/EmptyState';
+import { ApiErrorAlert } from '../../components/ApiErrorAlert';
 import type { OhlcBarDto, AnalystRatingDto, EarningsSurprisePointDto } from '../../api/types';
 
 /** M9 #21 — TradingView Lightweight Charts candlestick on Position Detail. */
@@ -110,7 +111,7 @@ export function PositionDetail() {
   const surprises = useEarningsSurprises(sym, 8);
 
   if (isLoading) return <Loader />;
-  if (error) return <EmptyState title="Could not load position" description={String(error)} />;
+  if (error) return <ApiErrorAlert error={error} title="Could not load position" />;
   if (!data) return <EmptyState title="No data" />;
 
   const fmt = (v: number | null | undefined) => v == null ? '—' : <NumberFormatter value={v} thousandSeparator decimalScale={2} prefix={data.currency === 'USD' ? '$' : ''} suffix={data.currency !== 'USD' ? ` ${data.currency}` : ''} />;
