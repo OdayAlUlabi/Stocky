@@ -175,7 +175,12 @@ public class AdminController : Controller
     }
 
     [HttpGet]
-    public IActionResult DataRefresh() => View();
+    public async Task<IActionResult> DataRefresh(CancellationToken ct)
+    {
+        var refresher = HttpContext.RequestServices.GetRequiredService<Stocky.Api.Services.DataRefreshService>();
+        ViewBag.Coverage = await refresher.GetHistoricalCoverageAsync(ct);
+        return View();
+    }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> DataRefresh(string scope, CancellationToken ct)
@@ -217,6 +222,8 @@ public class AdminController : Controller
         var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
         TempData["RefreshPayload"] = System.Text.Json.JsonSerializer.Serialize(payload, jsonOpts);
         TempData["PortfolioValues"] = System.Text.Json.JsonSerializer.Serialize(portfolios, jsonOpts);
+        TempData["Coverage"] = System.Text.Json.JsonSerializer.Serialize(
+            await refresher.GetHistoricalCoverageAsync(ct), jsonOpts);
         TempData["Status"] = "Data refresh complete.";
         return RedirectToAction(nameof(DataRefresh));
     }

@@ -199,6 +199,11 @@ public sealed class DataRefreshService(
             return new HistoryBackfillResult(symbols.Count, 0, globalStart, today);
         }
 
+        logger.LogInformation(
+            "Force-refresh history: provider returned bars for {Returned}/{Requested} symbols (window {From}..{To}): {Detail}",
+            bars.Count(kv => kv.Value.Count > 0), symbols.Count, globalStart, today,
+            string.Join(", ", symbols.Select(s => $"{s}=" + (bars.TryGetValue(s, out var list) ? list.Count : 0))));
+
         if (bars.Count == 0)
         {
             return new HistoryBackfillResult(symbols.Count, 0, globalStart, today);
@@ -246,10 +251,47 @@ public sealed class DataRefreshService(
 
         return new HistoryBackfillResult(symbols.Count, inserted, globalStart, today);
     }
+
+    /// <summary>
+    /// Snapshot of how much daily-close coverage exists in HistoricalPrices for every
+    /// symbol that has at least one transaction. Used by the admin Data Refresh page
+    /// so users can verify "from each transaction date through today" is fully filled in.
+    /// </summary>
+    public async Task<IReadOnlyList<HistoricalCoverageRow>> GetHistoricalCoverageAsync(CancellationToken ct)
+    {
+        var firstSeen = await db.Transactions
+            .Where(t => t.Symbol != null && t.Symbol != "")
+            .GroupBy(t => t.Symbol!)
+            .Select(g => new { Symbol = g.Key, First = g.Min(t => t.ExecutedAt) })
+            .ToListAsync(ct);
+        if (firstSeen.Count == 0) return Array.Empty<HistoricalCoverageRow>();
+
+        var symbols = firstSeen.Select(x => x.Symbol.ToUpperInvariant()).ToList();
+        var coverage = await db.HistoricalPrices
+            .Where(h => symbols.Contains(h.Symbol))
+            .GroupBy(h => h.Symbol)
+            .Select(g => new { Symbol = g.Key, Rows = g.Count(), MinDate = g.Min(x => x.Date), MaxDate = g.Max(x => x.Date) })
+            .ToListAsync(ct);
+        var byUpper = coverage.ToDictionary(c => c.Symbol.ToUpperInvariant());
+
+        return firstSeen
+            .Select(f =>
+            {
+                var upper = f.Symbol.ToUpperInvariant();
+                var firstTx = DateOnly.FromDateTime(f.First.UtcDateTime);
+                if (byUpper.TryGetValue(upper, out var c))
+                    return new HistoricalCoverageRow(upper, c.Rows, c.MinDate, c.MaxDate, firstTx);
+                return new HistoricalCoverageRow(upper, 0, null, null, firstTx);
+            })
+            .OrderBy(r => r.Symbol)
+            .ToList();
+    }
 }
 
 public readonly record struct QuoteRefreshResult(int Symbols, int Quotes, IReadOnlyList<PortfolioValueSnapshot> Portfolios);
 public readonly record struct HistoryBackfillResult(int Symbols, int Inserted, DateOnly? GlobalStart, DateOnly Today);
+
+public sealed record HistoricalCoverageRow(string Symbol, int Rows, DateOnly? MinDate, DateOnly? MaxDate, DateOnly? FirstTransaction);
 
 public sealed record PortfolioValueSnapshot(
     Guid PortfolioId,

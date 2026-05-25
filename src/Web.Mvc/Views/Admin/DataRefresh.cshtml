@@ -2,6 +2,7 @@
     ViewData["Title"] = "Data refresh";
     var payload = TempData["RefreshPayload"] as string;
     var portfoliosJson = TempData["PortfolioValues"] as string;
+    var coverageJson = TempData["Coverage"] as string;
     List<Stocky.Api.Services.PortfolioValueSnapshot> portfolios = new();
     if (!string.IsNullOrWhiteSpace(portfoliosJson))
     {
@@ -13,6 +14,19 @@
         }
         catch { portfolios = new(); }
     }
+    var coverage = ViewBag.Coverage as IReadOnlyList<Stocky.Api.Services.HistoricalCoverageRow>
+        ?? new List<Stocky.Api.Services.HistoricalCoverageRow>();
+    if (!string.IsNullOrWhiteSpace(coverageJson))
+    {
+        try
+        {
+            coverage = System.Text.Json.JsonSerializer.Deserialize<List<Stocky.Api.Services.HistoricalCoverageRow>>(
+                coverageJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? coverage;
+        }
+        catch { /* keep ViewBag fallback */ }
+    }
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
 }
 <div class="page-header">
     <h2><i class="bi bi-arrow-repeat"></i> Data refresh</h2>
@@ -71,6 +85,58 @@
                         <td style="text-align:right;@(p.UnrealizedPnL >= 0 ? "color:var(--pos,#1a7f37);" : "color:var(--neg,#cf222e);")">@p.UnrealizedPnL.Money(p.Currency)</td>
                         <td style="text-align:right;">@p.CashBalance.Money(p.Currency)</td>
                         <td style="text-align:right;font-weight:600;">@p.TotalEquity.Money(p.Currency)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (coverage.Count > 0)
+{
+    <div class="card" style="padding:1rem;max-width:960px;margin-top:1rem;">
+        <strong>Historical closing-price coverage</strong>
+        <p class="muted" style="margin:.25rem 0 .75rem;">
+            One row per symbol that has at least one transaction. <em>Rows</em> is the
+            count of daily-close entries stored in <code>HistoricalPrices</code> between
+            the first transaction date and today (weekends &amp; market holidays excluded).
+        </p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th style="text-align:right;">Rows stored</th>
+                    <th>First transaction</th>
+                    <th>Earliest close</th>
+                    <th>Latest close</th>
+                    <th>Up to date?</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in coverage)
+                {
+                    var fresh = c.MaxDate.HasValue && c.MaxDate.Value >= today.AddDays(-3);
+                    var startOk = c.MinDate.HasValue && c.FirstTransaction.HasValue && c.MinDate.Value <= c.FirstTransaction.Value.AddDays(3);
+                    <tr>
+                        <td><strong>@c.Symbol</strong></td>
+                        <td style="text-align:right;">@c.Rows</td>
+                        <td>@(c.FirstTransaction?.ToString("yyyy-MM-dd") ?? "-")</td>
+                        <td>@(c.MinDate?.ToString("yyyy-MM-dd") ?? "none")</td>
+                        <td>@(c.MaxDate?.ToString("yyyy-MM-dd") ?? "none")</td>
+                        <td>
+                            @if (c.Rows == 0)
+                            {
+                                <span style="color:var(--neg,#cf222e);">No data</span>
+                            }
+                            else if (fresh && startOk)
+                            {
+                                <span style="color:var(--pos,#1a7f37);">OK</span>
+                            }
+                            else
+                            {
+                                <span style="color:var(--neg,#cf222e);">Gap</span>
+                            }
+                        </td>
                     </tr>
                 }
             </tbody>
