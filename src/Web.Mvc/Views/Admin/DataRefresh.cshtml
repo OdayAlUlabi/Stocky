@@ -121,9 +121,9 @@
                     <tr>
                         <td><strong>@c.Symbol</strong></td>
                         <td style="text-align:right;">@c.Rows</td>
-                        <td>@(c.FirstTransaction?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
-                        <td>@(c.MinDate?.ToString("yyyy-MM-dd HH:mm") ?? "none")</td>
-                        <td>@(c.MaxDate?.ToString("yyyy-MM-dd HH:mm") ?? "none")</td>
+                        <td>@(c.FirstTransaction?.ToString("yyyy-MM-dd") ?? "-")</td>
+                        <td>@(c.MinDate?.ToString("yyyy-MM-dd") ?? "none")</td>
+                        <td>@(c.MaxDate?.ToString("yyyy-MM-dd") ?? "none")</td>
                         <td>
                             @if (c.Rows == 0)
                             {
