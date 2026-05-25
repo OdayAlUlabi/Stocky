@@ -64,16 +64,16 @@
                 <a class="@nav("/Alerts", "/alerts")" href="/Alerts"><i class="bi bi-bell"></i>Alerts</a>
                 <a class="@nav("/News", "/news")" href="/News"><i class="bi bi-newspaper"></i>News</a>
                 <a class="@nav("/Earnings", "/earnings")" href="/Earnings"><i class="bi bi-calendar-event"></i>Earnings</a>
-                <a class="@nav("/Calendar/Earnings", "/calendar/earnings")" href="/Calendar/Earnings"><i class="bi bi-calendar2-event"></i>Earnings (mine)</a>
+                <a class="@nav("/Calendar/Earnings", "/calendar/earnings")" href="/Calendar/Earnings"><i class="bi bi-calendar2-event"></i>Portfolio Earnings</a>
                 <a class="@nav("/Calendar/Economic", "/calendar/economic")" href="/Calendar/Economic"><i class="bi bi-calendar3"></i>Economic</a>
             </div>
 
             <div class="nav-group">
                 <div class="nav-group-label">Planning</div>
-                <a class="@nav("/Goals", "/goals")" href="/Goals"><i class="bi bi-bullseye"></i>Goals</a>
+                <a class="@nav("/Goals", "/goals")" href="/Goals"><i class="bi bi-trophy"></i>Goals</a>
                 <a class="@nav("/Templates", "/templates")" href="/Templates"><i class="bi bi-collection"></i>Templates</a>
                 <a class="@nav("/Notes", "/notes")" href="/Notes"><i class="bi bi-journal-text"></i>Notes</a>
-                <a class="@nav("/ReportSchedules", "/reportschedules")" href="/ReportSchedules"><i class="bi bi-clock-history"></i>Reports</a>
+                <a class="@nav("/ReportSchedules", "/reportschedules")" href="/ReportSchedules"><i class="bi bi-clock-history"></i>Schedules</a>
                 <a class="@nav("/Share", "/share")" href="/Share"><i class="bi bi-share"></i>Share</a>
             </div>
 
@@ -86,9 +86,13 @@
             </div>
         </nav>
     </aside>
+    <div class="nav-backdrop" id="navBackdrop"></div>
 
     <div>
         <div class="topbar">
+            <button class="menu-toggle" id="menuToggle" aria-label="Open navigation" aria-expanded="false">
+                <i class="bi bi-list"></i>
+            </button>
             <div class="crumb">
                 <i class="bi bi-house-door"></i>
                 <strong>@(ViewData["Title"] ?? "Stocky")</strong>
@@ -121,5 +125,25 @@
 <script src="~/js/prices-hub.js" asp-append-version="true" defer></script>
 <script src="~/js/table-sort.js" asp-append-version="true" defer></script>
 @await RenderSectionAsync("Scripts", required: false)
+<script>
+(function () {
+    var app = document.querySelector('.app');
+    var toggle = document.getElementById('menuToggle');
+    var backdrop = document.getElementById('navBackdrop');
+    if (!toggle) return;
+    function openNav() { app.classList.add('nav-open'); toggle.setAttribute('aria-expanded', 'true'); }
+    function closeNav() { app.classList.remove('nav-open'); toggle.setAttribute('aria-expanded', 'false'); }
+    toggle.addEventListener('click', function () {
+        app.classList.contains('nav-open') ? closeNav() : openNav();
+    });
+    backdrop.addEventListener('click', closeNav);
+    document.querySelectorAll('.sidebar .nav-link').forEach(function (a) {
+        a.addEventListener('click', closeNav);
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeNav();
+    });
+}());
+</script>
 </body>
 </html>

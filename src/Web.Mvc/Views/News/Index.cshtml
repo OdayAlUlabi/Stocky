@@ -5,23 +5,42 @@
     var lim = (int)ViewBag.Limit;
 }
 <div class="page-header"><h2><i class="bi bi-newspaper"></i> News</h2></div>
-<form method="get" action="/News" style="display:flex;gap:.5rem;align-items:end;">
-    <label>Symbols (comma-separated) <input name="symbols" value="@sym" placeholder="AAPL,MSFT" /></label>
-    <label>Limit <input name="limit" type="number" value="@lim" min="5" max="200" /></label>
-    <button type="submit">Filter</button>
-</form>
-<table>
-    <thead><tr><th>Published</th><th>Symbol</th><th>Source</th><th>Headline</th></tr></thead>
-    <tbody>
-        @foreach (var n in Model)
-        {
+<div class="filter-bar">
+    <form method="get" action="/News" style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
+        <label>Symbols <input name="symbols" value="@sym" placeholder="AAPL, MSFT" style="min-width:200px;" /></label>
+        <label>Limit <input name="limit" type="number" value="@lim" min="5" max="200" style="width:80px;" /></label>
+        <button type="submit" class="btn btn-ghost"><i class="bi bi-search"></i> Filter</button>
+    </form>
+</div>
+<article>
+    <table>
+        <thead>
             <tr>
-                <td>@n.PublishedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                <td>@n.Symbol</td>
-                <td>@n.Source</td>
-                <td>@(string.IsNullOrEmpty(n.Url) ? (object)n.Headline : (object)Html.Raw($"<a href=\"{System.Net.WebUtility.HtmlEncode(n.Url)}\" target=\"_blank\" rel=\"noopener\">{System.Net.WebUtility.HtmlEncode(n.Headline)}</a>"))</td>
+                <th>Published</th>
+                <th>Symbol</th>
+                <th>Source</th>
+                <th>Headline</th>
             </tr>
-        }
-        @if (Model.Count == 0) { <tr><td colspan="4"><em>No news.</em></td></tr> }
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            @foreach (var n in Model)
+            {
+                <tr>
+                    <td class="text-muted" style="white-space:nowrap;">@n.PublishedAt.ToString("MMM d · HH:mm")</td>
+                    <td><strong>@n.Symbol</strong></td>
+                    <td><span class="pill">@n.Source</span></td>
+                    <td>@(string.IsNullOrEmpty(n.Url) ? (object)n.Headline : (object)Html.Raw($"<a href=\"{System.Net.WebUtility.HtmlEncode(n.Url)}\" target=\"_blank\" rel=\"noopener\">{System.Net.WebUtility.HtmlEncode(n.Headline)}</a>"))</td>
+                </tr>
+            }
+            @if (Model.Count == 0)
+            {
+                <tr><td colspan="4">
+                    <div class="empty-state">
+                        <i class="bi bi-newspaper empty-icon"></i>
+                        <p>No news found for the current filter.</p>
+                    </div>
+                </td></tr>
+            }
+        </tbody>
+    </table>
+</article>

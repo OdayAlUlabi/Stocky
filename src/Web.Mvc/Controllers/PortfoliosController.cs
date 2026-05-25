@@ -12,9 +12,19 @@ public class PortfoliosController : Controller
     // GET /Portfolios
     public async Task<IActionResult> Index()
     {
-        var list = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
-            c => c.List()) ?? Array.Empty<PortfolioDto>();
-        return View(list.ToList());
+        var list = (await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>()).ToList();
+
+        // Fetch performance (market value, cost basis, P&L) for each portfolio in parallel.
+        var perfTasks = list.Select(p =>
+            this.InvokeAsync<StockyApi.PortfoliosController, PortfolioPerformanceDto>(c => c.Performance(p.Id)));
+        var perfs = await Task.WhenAll(perfTasks);
+        var perfMap = perfs
+            .Where(p => p is not null)
+            .ToDictionary(p => p!.PortfolioId, p => p!);
+
+        ViewBag.Performance = perfMap;
+        return View(list);
     }
 
     // GET /Portfolios/Detail/{id}

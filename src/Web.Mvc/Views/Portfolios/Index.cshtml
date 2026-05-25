@@ -1,5 +1,9 @@
 @model List<PortfolioDto>
-@{ ViewData["Title"] = "Portfolios"; }
+@using Stocky.Api.Dtos
+@{
+    ViewData["Title"] = "Portfolios";
+    var perfMap = ViewBag.Performance as Dictionary<Guid, PortfolioPerformanceDto> ?? new();
+}
 
 <div class="page-header">
     <h2><i class="bi bi-briefcase"></i> Portfolios</h2>
@@ -14,7 +18,10 @@
             <tr>
                 <th>Name</th>
                 <th>Currency</th>
-                <th>Cost basis</th>
+                <th>Cost basis method</th>
+                <th style="text-align:right;">Cost basis</th>
+                <th style="text-align:right;">Market value</th>
+                <th style="text-align:right;">Unrealised P&amp;L</th>
                 <th style="text-align:right;">Cash</th>
                 <th>Created</th>
                 <th style="text-align:right;">Actions</th>
@@ -23,6 +30,9 @@
         <tbody>
             @foreach (var p in Model)
             {
+                var perf = perfMap.TryGetValue(p.Id, out var pv) ? pv : null;
+                var pnlPos = perf is not null && perf.UnrealizedPnL >= 0;
+                var pnlClass = perf is null ? "text-muted" : (pnlPos ? "green" : "red");
                 <tr>
                     <td>
                         <a href="/Portfolios/Detail/@p.Id" style="display:flex;align-items:center;gap:.5rem;">
@@ -32,7 +42,28 @@
                     </td>
                     <td><span class="pill">@p.BaseCurrency</span></td>
                     <td><span class="pill">@p.CostBasisMethod</span></td>
-                    <td style="text-align:right;">@p.CashBalance.Money(p.BaseCurrency)</td>
+                    <td style="text-align:right;" class="mono">
+                        @if (perf is not null)
+                        { @perf.CostBasis.Money(p.BaseCurrency) }
+                        else
+                        { <span class="text-muted">—</span> }
+                    </td>
+                    <td style="text-align:right;" class="mono">
+                        @if (perf is not null)
+                        { @perf.MarketValue.Money(p.BaseCurrency) }
+                        else
+                        { <span class="text-muted">—</span> }
+                    </td>
+                    <td style="text-align:right;" class="mono @pnlClass">
+                        @if (perf is not null)
+                        {
+                            <span>@(pnlPos ? "+" : "")@perf.UnrealizedPnL.Money(p.BaseCurrency)</span>
+                            <span class="text-muted" style="font-size:.8em;margin-left:.25rem;">(@(pnlPos ? "+" : "")@perf.UnrealizedPnLPercent.ToString("0.##")%)</span>
+                        }
+                        else
+                        { <span class="text-muted">—</span> }
+                    </td>
+                    <td style="text-align:right;" class="mono">@p.CashBalance.Money(p.BaseCurrency)</td>
                     <td class="text-muted">@p.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
                     <td style="text-align:right;">
                         <a href="/Portfolios/Edit/@p.Id" class="btn btn-ghost btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
@@ -46,11 +77,31 @@
             @if (Model.Count == 0)
             {
                 <tr>
-                    <td colspan="6" style="text-align:center;padding:2rem;">
+                    <td colspan="9" style="text-align:center;padding:2rem;">
                         <div class="text-muted" style="margin-bottom:.75rem;"><i class="bi bi-inbox" style="font-size:2rem;"></i></div>
                         <p class="text-muted">No portfolios yet.</p>
                         <a href="/Portfolios/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create your first portfolio</a>
                     </td>
+                </tr>
+            }
+            @if (Model.Count > 1 && perfMap.Count > 0)
+            {
+                var totalCost   = perfMap.Values.Sum(x => x.CostBasis);
+                var totalMarket = perfMap.Values.Sum(x => x.MarketValue);
+                var totalPnl    = totalMarket - totalCost;
+                var totalPnlPct = totalCost == 0 ? 0m : Math.Round(totalPnl / totalCost * 100m, 2);
+                var totalCash   = Model.Sum(x => x.CashBalance);
+                var totPos      = totalPnl >= 0;
+                <tr style="border-top:2px solid var(--border);font-weight:600;">
+                    <td colspan="3" class="text-muted" style="font-size:.85em;text-transform:uppercase;letter-spacing:.04em;">Total</td>
+                    <td style="text-align:right;" class="mono">@totalCost.Money("USD")</td>
+                    <td style="text-align:right;" class="mono">@totalMarket.Money("USD")</td>
+                    <td style="text-align:right;" class="mono @(totPos ? "green" : "red")">
+                        @(totPos ? "+" : "")@totalPnl.Money("USD")
+                        <span class="text-muted" style="font-size:.8em;margin-left:.25rem;">(@(totPos ? "+" : "")@totalPnlPct.ToString("0.##")%)</span>
+                    </td>
+                    <td style="text-align:right;" class="mono">@totalCash.Money("USD")</td>
+                    <td colspan="2"></td>
                 </tr>
             }
         </tbody>

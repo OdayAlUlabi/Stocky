@@ -1,29 +1,42 @@
 @model List<GoalDto>
 @{ ViewData["Title"] = "Goals"; }
-<div class="page-header"><h2><i class="bi bi-bullseye"></i> Goals</h2>
-    <a href="/Goals/Create" class="btn btn-primary">+ New</a>
+<div class="page-header"><h2><i class="bi bi-trophy"></i> Goals</h2>
+    <div class="actions">
+        <a href="/Goals/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> New goal</a>
+    </div>
 </div>
-<table>
-    <thead><tr><th>Name</th><th style="text-align:right;">Target</th><th>Target date</th><th style="text-align:right;">Progress</th><th>On track?</th><th style="text-align:right;">Projected</th><th></th></tr></thead>
-    <tbody>
-        @foreach (var g in Model)
-        {
-            <tr>
-                <td>@g.Name</td>
-                <td style="text-align:right;">@g.TargetValue.Money("USD")</td>
-                <td>@g.TargetDate</td>
-                <td style="text-align:right;">@g.ProgressPercent.Pct()</td>
-                <td>@(g.OnTrack ? "Yes" : "No")</td>
-                <td style="text-align:right;">@g.ProjectedFinalValue.Money("USD")</td>
-                <td>
-                    <a href="/Goals/Edit/@g.Id">Edit</a> ·
-                    <form method="post" action="/Goals/Delete/@g.Id" style="display:inline;" onsubmit="return confirm('Delete?');">
-                        @Html.AntiForgeryToken()
-                        <button type="submit" class="btn btn-ghost btn-sm">×</button>
-                    </form>
-                </td>
-            </tr>
-        }
-        @if (Model.Count == 0) { <tr><td colspan="7"><em>No goals.</em></td></tr> }
-    </tbody>
-</table>
+<article>
+    <table>
+        <thead><tr><th>Name</th><th style="text-align:right;">Target</th><th>Target date</th><th style="text-align:right;">Progress</th><th>On track?</th><th style="text-align:right;">Projected</th><th style="text-align:right;"></th></tr></thead>
+        <tbody>
+            @foreach (var g in Model)
+            {
+                <tr>
+                    <td><strong>@g.Name</strong></td>
+                    <td style="text-align:right;">@g.TargetValue.Money("USD")</td>
+                    <td class="text-muted">@g.TargetDate</td>
+                    <td style="text-align:right;">@g.ProgressPercent.Pct()</td>
+                    <td><span class="status-badge @(g.OnTrack ? "s-on-track" : "s-off-track")"><i class="bi @(g.OnTrack ? "bi-check-circle-fill" : "bi-x-circle-fill")"></i>@(g.OnTrack ? "On track" : "Off track")</span></td>
+                    <td style="text-align:right;">@g.ProjectedFinalValue.Money("USD")</td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <a href="/Goals/Edit/@g.Id" class="btn btn-ghost btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                        <form method="post" action="/Goals/Delete/@g.Id" style="display:inline;" onsubmit="return confirm('Delete @g.Name?');">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            @if (Model.Count == 0)
+            {
+                <tr><td colspan="7">
+                    <div class="empty-state">
+                        <i class="bi bi-trophy empty-icon"></i>
+                        <p>No goals yet — set a savings or investment target.</p>
+                        <a href="/Goals/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create first goal</a>
+                    </div>
+                </td></tr>
+            }
+        </tbody>
+    </table>
+</article>

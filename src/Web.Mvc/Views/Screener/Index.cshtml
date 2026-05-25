@@ -1,46 +1,87 @@
 @model ScreenerResultDto
 @{
     ViewData["Title"] = "Screener";
+    var sortLabels = new Dictionary<string, string> {
+        ["marketcap-desc"] = "Market cap ↓",
+        ["marketcap-asc"]  = "Market cap ↑",
+        ["yield-desc"]     = "Div yield ↓",
+        ["beta-asc"]       = "Beta ↑",
+        ["symbol-asc"]     = "Symbol A–Z"
+    };
 }
 <div class="page-header"><h2><i class="bi bi-funnel"></i> Stock screener</h2></div>
-<form method="get" action="/Screener" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem;">
-    <label>Query <input name="q" value="@(Context.Request.Query["q"])" placeholder="symbol or name" /></label>
-    <label>Asset class <input name="assetClass" value="@(Context.Request.Query["assetClass"])" placeholder="Equity" /></label>
-    <label>Sector <input name="sector" value="@(Context.Request.Query["sector"])" /></label>
-    <label>Country <input name="country" value="@(Context.Request.Query["country"])" /></label>
-    <label>Min market cap <input name="minMarketCap" value="@(Context.Request.Query["minMarketCap"])" type="number" step="any" /></label>
-    <label>Max market cap <input name="maxMarketCap" value="@(Context.Request.Query["maxMarketCap"])" type="number" step="any" /></label>
-    <label>Min div yield <input name="minDividendYield" value="@(Context.Request.Query["minDividendYield"])" type="number" step="any" /></label>
-    <label>Max beta <input name="maxBeta" value="@(Context.Request.Query["maxBeta"])" type="number" step="any" /></label>
-    <label>Sort
-        <select name="sort">
-            @foreach (var s in new[] { "marketcap-desc","marketcap-asc","yield-desc","beta-asc","symbol-asc" })
-            {
-                <option value="@s" selected="@((string)ViewBag.Sort == s)">@s</option>
-            }
-        </select>
-    </label>
-    <label>Limit <input name="limit" type="number" value="@ViewBag.Limit" /></label>
-    <div style="grid-column:1/-1;"><button type="submit">Run screen</button></div>
-</form>
 
-@if (Model is null) { <p><em>No results.</em></p> return; }
-<p>Total: <strong>@Model.Total</strong></p>
-<table>
-    <thead><tr><th>Symbol</th><th>Name</th><th>Sector</th><th>Country</th><th style="text-align:right;">Cap</th><th style="text-align:right;">Beta</th><th style="text-align:right;">Yield</th><th style="text-align:right;">Last</th></tr></thead>
-    <tbody>
-        @foreach (var r in Model.Rows)
-        {
-            <tr>
-                <td>@r.Symbol</td>
-                <td>@r.Name</td>
-                <td>@r.Sector</td>
-                <td>@r.Country</td>
-                <td style="text-align:right;">@(r.MarketCap?.Num(0) ?? "—")</td>
-                <td style="text-align:right;">@(r.Beta?.Num(2) ?? "—")</td>
-                <td style="text-align:right;">@(r.DividendYield?.Pct() ?? "—")</td>
-                <td style="text-align:right;">@(r.LatestPrice?.Money("USD") ?? "—")</td>
-            </tr>
-        }
-    </tbody>
-</table>
+<article>
+    <header><span><i class="bi bi-sliders2"></i> Filters</span></header>
+    <form method="get" action="/Screener" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem .75rem;">
+        <label>Query <input name="q" value="@(Context.Request.Query["q"])" placeholder="symbol or name" /></label>
+        <label>Asset class <input name="assetClass" value="@(Context.Request.Query["assetClass"])" placeholder="Equity" /></label>
+        <label>Sector <input name="sector" value="@(Context.Request.Query["sector"])" /></label>
+        <label>Country <input name="country" value="@(Context.Request.Query["country"])" /></label>
+        <label>Min market cap <input name="minMarketCap" value="@(Context.Request.Query["minMarketCap"])" type="number" step="any" /></label>
+        <label>Max market cap <input name="maxMarketCap" value="@(Context.Request.Query["maxMarketCap"])" type="number" step="any" /></label>
+        <label>Min div yield <input name="minDividendYield" value="@(Context.Request.Query["minDividendYield"])" type="number" step="any" /></label>
+        <label>Max beta <input name="maxBeta" value="@(Context.Request.Query["maxBeta"])" type="number" step="any" /></label>
+        <label>Sort
+            <select name="sort">
+                @foreach (var kv in sortLabels)
+                {
+                    <option value="@kv.Key" selected="@((string)ViewBag.Sort == kv.Key)">@kv.Value</option>
+                }
+            </select>
+        </label>
+        <label>Limit <input name="limit" type="number" value="@ViewBag.Limit" /></label>
+        <div style="grid-column:1/-1;display:flex;gap:.5rem;align-items:center;">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Run screen</button>
+            <a href="/Screener" class="btn btn-ghost"><i class="bi bi-x-lg"></i> Clear</a>
+        </div>
+    </form>
+</article>
+
+@if (Model is null)
+{
+    <article>
+        <div class="empty-state">
+            <i class="bi bi-funnel empty-icon"></i>
+            <p>Apply filters above to screen the market.</p>
+        </div>
+    </article>
+}
+else
+{
+    <article>
+        <header>
+            <span><i class="bi bi-table"></i> Results</span>
+            <small class="text-muted">@Model.Total matches</small>
+        </header>
+        <table class="sortable">
+            <thead>
+                <tr>
+                    <th class="sortable-col">Symbol</th>
+                    <th class="sortable-col">Name</th>
+                    <th class="sortable-col">Sector</th>
+                    <th class="sortable-col">Country</th>
+                    <th class="sortable-col" style="text-align:right;">Cap</th>
+                    <th class="sortable-col" style="text-align:right;">Beta</th>
+                    <th class="sortable-col" style="text-align:right;">Yield</th>
+                    <th class="sortable-col" style="text-align:right;">Last</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model.Rows)
+                {
+                    <tr>
+                        <td><strong>@r.Symbol</strong></td>
+                        <td>@r.Name</td>
+                        <td><span class="pill">@r.Sector</span></td>
+                        <td class="text-muted">@r.Country</td>
+                        <td style="text-align:right;">@(r.MarketCap?.Num(0) ?? "—")</td>
+                        <td style="text-align:right;">@(r.Beta?.Num(2) ?? "—")</td>
+                        <td style="text-align:right;">@(r.DividendYield?.Pct() ?? "—")</td>
+                        <td style="text-align:right;font-variant-numeric:tabular-nums;">@(r.LatestPrice?.Money("USD") ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </article>
+}

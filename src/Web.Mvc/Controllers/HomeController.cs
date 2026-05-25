@@ -11,11 +11,21 @@ public class HomeController : Controller
 {
     public async Task<IActionResult> Index(Guid? portfolioId)
     {
+        var portfolios = ((await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List())) ?? Array.Empty<PortfolioDto>()).ToList();
+
+        // Auto-select the "Shared" portfolio when no explicit selection is made
+        if (portfolioId is null)
+        {
+            var shared = portfolios.FirstOrDefault(p =>
+                p.Name.Contains("shared", StringComparison.OrdinalIgnoreCase));
+            if (shared is not null)
+                portfolioId = shared.Id;
+        }
+
         var dashboard = await this.InvokeAsync<StockyApi.DashboardController, DashboardDto>(
             c => c.Get(portfolioId));
-        var portfolios = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
-            c => c.List()) ?? Array.Empty<PortfolioDto>();
-        ViewBag.Portfolios = portfolios.ToList();
+        ViewBag.Portfolios = portfolios;
         ViewBag.SelectedPortfolioId = portfolioId;
         return View(dashboard);
     }

@@ -2,55 +2,86 @@
 @{
     ViewData["Title"] = "Alerts";
     var status = ViewBag.Status as string;
+    static string AlertStatusClass(string s) => s?.ToLower() switch {
+        "active"    => "s-active",
+        "triggered" => "s-triggered",
+        "snoozed"   => "s-snoozed",
+        "disabled"  => "s-disabled",
+        _ => ""
+    };
 }
 <div class="page-header"><h2><i class="bi bi-bell"></i> Alerts</h2>
     <div class="actions">
-        <a href="/Alerts/Create" class="btn btn-primary">+ New</a>
-        <a href="/Alerts/History" class="btn btn-ghost">History</a>
+        <a href="/Alerts/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> New alert</a>
+        <a href="/Alerts/History" class="btn btn-ghost"><i class="bi bi-clock-history"></i> History</a>
     </div>
 </div>
 
-<form method="get" action="/Alerts" style="display:flex;gap:.5rem;align-items:end;">
-    <label>Status
-        <select name="status" onchange="this.form.submit()">
-            <option value="">All</option>
-            @foreach (var s in new[] { "Active","Triggered","Snoozed","Disabled" })
-            {
-                <option value="@s" selected="@(status == s)">@s</option>
-            }
-        </select>
-    </label>
-</form>
+<div class="filter-bar">
+    <form method="get" action="/Alerts" style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
+        <label>Status
+            <select name="status" onchange="this.form.submit()">
+                <option value="">All statuses</option>
+                @foreach (var s in new[] { "Active","Triggered","Snoozed","Disabled" })
+                {
+                    <option value="@s" selected="@(status == s)">@s</option>
+                }
+            </select>
+        </label>
+    </form>
+</div>
 
-<table>
-    <thead><tr><th>Symbol</th><th>Type</th><th>Condition</th><th style="text-align:right;">Threshold</th><th>Status</th><th>Channels</th><th>Triggered</th><th></th></tr></thead>
-    <tbody>
-        @foreach (var a in Model)
-        {
+<article>
+    <table>
+        <thead>
             <tr>
-                <td>@a.Symbol</td>
-                <td>@a.Type</td>
-                <td>@a.Condition</td>
-                <td style="text-align:right;">@a.Threshold.Num(4)</td>
-                <td>@a.Status</td>
-                <td>@a.Channels</td>
-                <td>@(a.TriggeredAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-                <td>
-                    <a href="/Alerts/Edit/@a.Id">Edit</a> ·
-                    <form method="post" action="/Alerts/Delete/@a.Id" style="display:inline;" onsubmit="return confirm('Delete?');">
-                        @Html.AntiForgeryToken()
-                        <button type="submit" class="btn btn-ghost btn-sm">×</button>
-                    </form>
-                    @if (a.Status == "Triggered" || a.Status == "Snoozed")
-                    {
-                        <form method="post" action="/Alerts/Reactivate/@a.Id" style="display:inline;">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-ghost btn-sm">Reactivate</button>
-                        </form>
-                    }
-                </td>
+                <th>Symbol</th>
+                <th>Type</th>
+                <th>Condition</th>
+                <th style="text-align:right;">Threshold</th>
+                <th>Status</th>
+                <th>Channels</th>
+                <th>Triggered</th>
+                <th style="text-align:right;"></th>
             </tr>
-        }
-        @if (Model.Count == 0) { <tr><td colspan="8"><em>No alerts.</em></td></tr> }
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            @foreach (var a in Model)
+            {
+                <tr>
+                    <td><strong>@a.Symbol</strong></td>
+                    <td><span class="pill">@a.Type</span></td>
+                    <td class="text-muted">@a.Condition</td>
+                    <td style="text-align:right;font-variant-numeric:tabular-nums;">@a.Threshold.Num(4)</td>
+                    <td><span class="status-badge @AlertStatusClass(a.Status)">@a.Status</span></td>
+                    <td class="text-muted">@a.Channels</td>
+                    <td class="text-muted">@(a.TriggeredAt?.ToString("MMM d, yyyy HH:mm") ?? "—")</td>
+                    <td style="text-align:right;white-space:nowrap;">
+                        <a href="/Alerts/Edit/@a.Id" class="btn btn-ghost btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                        @if (a.Status == "Triggered" || a.Status == "Snoozed")
+                        {
+                            <form method="post" action="/Alerts/Reactivate/@a.Id" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-ghost btn-sm" title="Reactivate"><i class="bi bi-arrow-counterclockwise"></i></button>
+                            </form>
+                        }
+                        <form method="post" action="/Alerts/Delete/@a.Id" style="display:inline;" onsubmit="return confirm('Delete alert for @a.Symbol?');">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            @if (Model.Count == 0)
+            {
+                <tr><td colspan="8">
+                    <div class="empty-state">
+                        <i class="bi bi-bell-slash empty-icon"></i>
+                        <p>No alerts@(status != null ? " with status \u201c" + status + "\u201d" : "") yet.</p>
+                        <a href="/Alerts/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create first alert</a>
+                    </div>
+                </td></tr>
+            }
+        </tbody>
+    </table>
+</article>

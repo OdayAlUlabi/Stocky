@@ -6,44 +6,59 @@
 }
 <div class="page-header"><h2><i class="bi bi-journal-text"></i> Position notes</h2></div>
 
-<form method="get" action="/Notes" style="display:flex;gap:.5rem;align-items:end;">
-    <label>Symbol <input name="symbol" value="@symbol" list="tickers" /></label>
-    <label>Portfolio ID <input name="portfolioId" value="@pid" /></label>
-    <button type="submit">Filter</button>
-</form>
-
-<h3>Add note</h3>
-<form method="post" action="/Notes/Create" style="max-width:680px;">
-    @Html.AntiForgeryToken()
-    <div class="grid">
-        <label>Symbol <input name="symbol" value="@symbol" required list="tickers" /></label>
+<article>
+    <header><span><i class="bi bi-funnel"></i> Filter</span></header>
+    <form method="get" action="/Notes" style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
+        <label>Symbol <input name="symbol" value="@symbol" list="tickers" /></label>
         <label>Portfolio ID <input name="portfolioId" value="@pid" /></label>
-    </div>
-    <label>Note <textarea name="body" rows="3" required></textarea></label>
-    <button type="submit">Add</button>
-</form>
+        <button type="submit" class="btn btn-ghost"><i class="bi bi-search"></i> Filter</button>
+    </form>
+</article>
 
-<h3>Notes</h3>
+<article>
+    <header><span><i class="bi bi-plus-circle"></i> Add note</span></header>
+    <form method="post" action="/Notes/Create">
+        @Html.AntiForgeryToken()
+        <div class="grid" style="margin-bottom:.75rem;">
+            <label>Symbol <input name="symbol" value="@symbol" required list="tickers" /></label>
+            <label>Portfolio ID <input name="portfolioId" value="@pid" /></label>
+        </div>
+        <label>Note <textarea name="body" rows="3" required></textarea></label>
+        <div style="margin-top:.65rem;">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add note</button>
+        </div>
+    </form>
+</article>
+
 @foreach (var n in Model)
 {
     <article>
-        <header style="display:flex;justify-content:space-between;">
-            <strong>@n.Symbol</strong>
-            <small>@n.UpdatedAt.ToString("yyyy-MM-dd HH:mm")</small>
+        <header>
+            <span><strong>@n.Symbol</strong> <small class="text-muted">· @n.UpdatedAt.ToString("MMM d, yyyy HH:mm")</small></span>
         </header>
         <form method="post" action="/Notes/Edit/@n.Id">
             @Html.AntiForgeryToken()
             <input type="hidden" name="returnSymbol" value="@symbol" />
             <input type="hidden" name="returnPortfolioId" value="@pid" />
             <textarea name="body" rows="3">@n.Body</textarea>
-            <button type="submit">Save</button>
-        </form>
-        <form method="post" action="/Notes/Delete/@n.Id" onsubmit="return confirm('Delete note?');" style="margin-top:.25rem;">
-            @Html.AntiForgeryToken()
-            <input type="hidden" name="returnSymbol" value="@symbol" />
-            <input type="hidden" name="returnPortfolioId" value="@pid" />
-            <button type="submit" class="btn btn-ghost btn-sm">Delete</button>
+            <div style="display:flex;gap:.5rem;margin-top:.65rem;">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> Save</button>
+                <form method="post" action="/Notes/Delete/@n.Id" onsubmit="return confirm('Delete note?');" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnSymbol" value="@symbol" />
+                    <input type="hidden" name="returnPortfolioId" value="@pid" />
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Delete</button>
+                </form>
+            </div>
         </form>
     </article>
 }
-@if (Model.Count == 0) { <p><em>No notes.</em></p> }
+@if (Model.Count == 0)
+{
+    <article>
+        <div class="empty-state">
+            <i class="bi bi-journal empty-icon"></i>
+            <p>No notes match the current filter.</p>
+        </div>
+    </article>
+}

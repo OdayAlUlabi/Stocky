@@ -1,24 +1,33 @@
 @model UserSettingsDto
 @{ ViewData["Title"] = "Settings"; }
 <div class="page-header"><h2><i class="bi bi-gear"></i> Settings</h2></div>
-<form method="post" action="/Settings" style="max-width:560px;">
+<form method="post" action="/Settings" style="max-width:580px;">
     @Html.AntiForgeryToken()
     <div asp-validation-summary="All" class="flash error"></div>
-    <div class="grid">
-        <label>Display currency <input name="DisplayCurrency" value="@Model.DisplayCurrency" maxlength="8" required /></label>
-        <label>Theme
-            <select name="Theme">
-                @foreach (var t in new[] { "system","light","dark" })
-                {
-                    <option value="@t" selected="@(Model.Theme == t)">@t</option>
-                }
-            </select>
-        </label>
-    </div>
-    <label>Locale <input name="Locale" value="@Model.Locale" /></label>
-    <fieldset>
-        <label><input type="checkbox" name="EmailAlerts" value="true" @(Model.EmailAlerts ? "checked" : "") /> Email alerts</label>
-        <label><input type="checkbox" name="WeeklyDigest" value="true" @(Model.WeeklyDigest ? "checked" : "") /> Weekly digest</label>
-    </fieldset>
-    <button type="submit">Save</button>
+
+    <article>
+        <header><span><i class="bi bi-palette"></i> Display</span></header>
+        <div class="grid" style="margin-bottom:.75rem;">
+            <label>Display currency <input name="DisplayCurrency" value="@Model.DisplayCurrency" maxlength="8" required /></label>
+            <label>Theme
+                <select name="Theme">
+                    @foreach (var t in new[] { "system","light","dark" })
+                    {
+                        <option value="@t" selected="@(Model.Theme == t)">@(char.ToUpper(t[0]) + t[1..])</option>
+                    }
+                </select>
+            </label>
+        </div>
+        <label>Locale <input name="Locale" value="@Model.Locale" /></label>
+    </article>
+
+    <article>
+        <header><span><i class="bi bi-bell"></i> Notifications</span></header>
+        <fieldset style="border:0;padding:0;margin:0;">
+            <label><input type="checkbox" name="EmailAlerts" value="true" @(Model.EmailAlerts ? "checked" : "") /> Email alerts</label>
+            <label><input type="checkbox" name="WeeklyDigest" value="true" @(Model.WeeklyDigest ? "checked" : "") /> Weekly digest</label>
+        </fieldset>
+    </article>
+
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Save settings</button>
 </form>
