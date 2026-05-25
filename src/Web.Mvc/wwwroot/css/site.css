@@ -242,6 +242,28 @@ table tbody tr:last-child td { border-bottom: 0; }
 table th[style*="right"], table td[style*="right"] { font-variant-numeric: tabular-nums; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 
+/* Sortable tables (see wwwroot/js/table-sort.js) */
+table.sortable thead th.sortable-col {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 1.4rem;
+}
+table.sortable thead th.sortable-col:hover { color: var(--text); }
+table.sortable thead th.sortable-col::after {
+    content: "";
+    position: absolute;
+    right: .55rem;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: .35;
+    font-size: .7rem;
+    line-height: 1;
+}
+table.sortable thead th.sortable-col::after { content: "\2195"; }   /* ↕ */
+table.sortable thead th.sort-asc::after  { content: "\25B2"; opacity: 1; color: var(--text); } /* ▲ */
+table.sortable thead th.sort-desc::after { content: "\25BC"; opacity: 1; color: var(--text); } /* ▼ */
+
 /* ============================================================
    Color utilities
    ============================================================ */

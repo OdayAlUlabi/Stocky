@@ -80,16 +80,22 @@
                         <th>Type</th>
                         <th style="text-align:right;">Amount</th>
                         <th>Notes</th>
-                        <th></th>
+                        <th data-no-sort></th>
                     </tr>
                 </thead>
                 <tbody>
+                    @{
+                        decimal netCash = 0m;
+                        string? footerCcy = null;
+                    }
                     @foreach (var t in Model)
                     {
+                        netCash += t.Amount;
+                        footerCcy ??= t.Currency;
                         <tr>
                             <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
                             <td><span class="pill">@t.Type</span></td>
-                            <td style="text-align:right;" class="@t.Amount.SignClass()">@t.Amount.Money(t.Currency)</td>
+                            <td style="text-align:right;" class="@t.Amount.SignClass()" data-sort-value="@t.Amount">@t.Amount.Money(t.Currency)</td>
                             <td>@t.Notes</td>
                             <td>
                                 <form method="post" action="/Portfolios/@pid/Cash/Delete" style="display:inline;" onsubmit="return confirm('Delete this cash transaction?');">
@@ -101,6 +107,16 @@
                         </tr>
                     }
                 </tbody>
+                @if (footerCcy is not null)
+                {
+                    <tfoot>
+                        <tr>
+                            <td colspan="2" style="text-align:right;" class="text-muted">Net total</td>
+                            <td style="text-align:right;" class="@netCash.SignClass()"><strong>@netCash.Money(footerCcy)</strong></td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                }
             </table>
         }
     </article>
