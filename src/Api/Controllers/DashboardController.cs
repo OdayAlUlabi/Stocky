@@ -67,11 +67,16 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
             .Where(i => symbols.Contains(i.Symbol))
             .ToDictionaryAsync(i => i.Symbol, i => i);
 
+        var metadata = await db.InstrumentMetadata
+            .Where(m => symbols.Contains(m.Symbol))
+            .ToDictionaryAsync(m => m.Symbol, m => m);
+
         decimal totalValue = 0m, costBasis = 0m, dayPnL = 0m;
         var perSymbolValue = new Dictionary<string, decimal>();
         var perSymbolDayPct = new Dictionary<string, decimal>();
+        var perSymbolDayChange = new Dictionary<string, decimal>();
         var bySector = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-        var byClass = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var bySymbol = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var h in holdings)
         {
@@ -81,15 +86,20 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
             var value = h.Quantity * quote.Price;
             totalValue += value;
             perSymbolValue[h.Symbol] = perSymbolValue.GetValueOrDefault(h.Symbol) + value;
+            bySymbol[h.Symbol] = bySymbol.GetValueOrDefault(h.Symbol) + value;
 
-            if (quote.Change.HasValue) dayPnL += h.Quantity * quote.Change.Value;
+            if (quote.Change.HasValue)
+            {
+                var dayChange = h.Quantity * quote.Change.Value;
+                dayPnL += dayChange;
+                perSymbolDayChange[h.Symbol] = perSymbolDayChange.GetValueOrDefault(h.Symbol) + dayChange;
+            }
             if (quote.ChangePercent.HasValue) perSymbolDayPct[h.Symbol] = quote.ChangePercent.Value;
 
-            var sector = instruments.TryGetValue(h.Symbol, out var inst) ? inst.AssetClass : "Other";
+            var sector = metadata.TryGetValue(h.Symbol, out var meta) && !string.IsNullOrWhiteSpace(meta.Sector)
+                ? meta.Sector!
+                : "Unknown";
             bySector[sector] = bySector.GetValueOrDefault(sector) + value;
-
-            var cls = instruments.TryGetValue(h.Symbol, out var inst2) ? inst2.AssetClass : "Other";
-            byClass[cls] = byClass.GetValueOrDefault(cls) + value;
         }
 
         var totalReturn = totalValue - costBasis;
@@ -97,14 +107,29 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
         var prevValue = totalValue - dayPnL;
         var dayPnLPct = prevValue == 0 ? 0m : Math.Round(dayPnL / prevValue * 100m, 4);
 
+        // Asset allocation = per-holding (each stock as its own slice) + a Cash slice.
+        var assetTotal = totalValue + Math.Max(0m, cashBalance);
+        var assetBuckets = new List<(string Label, decimal Value)>();
+        foreach (var kv in bySymbol.OrderByDescending(kv => kv.Value))
+        {
+            assetBuckets.Add((kv.Key, kv.Value));
+        }
+        if (cashBalance > 0m) assetBuckets.Add(("Cash", cashBalance));
+        var classSlices = assetBuckets
+            .Select(b => new AllocationSliceDto(b.Label, b.Value, assetTotal == 0 ? 0m : Math.Round(b.Value / assetTotal * 100m, 2)))
+            .ToList();
+
         var sectorSlices = ToSlices(bySector, totalValue);
-        var classSlices = ToSlices(byClass, totalValue);
 
         var movers = perSymbolValue
-            .Select(kv => new MoverDto(kv.Key, kv.Value, perSymbolDayPct.GetValueOrDefault(kv.Key)))
+            .Select(kv => new MoverDto(
+                kv.Key,
+                kv.Value,
+                perSymbolDayPct.GetValueOrDefault(kv.Key),
+                perSymbolDayChange.GetValueOrDefault(kv.Key)))
             .ToList();
-        var topGainers = movers.OrderByDescending(m => m.DayChangePercent).Take(5).ToList();
-        var topLosers = movers.OrderBy(m => m.DayChangePercent).Take(5).ToList();
+        var topGainers = movers.Where(m => m.DayChange > 0).OrderByDescending(m => m.DayChange).Take(5).ToList();
+        var topLosers = movers.Where(m => m.DayChange < 0).OrderBy(m => m.DayChange).Take(5).ToList();
 
         var valueHistory = await BuildValueHistoryAsync(portfolios, ownerId, ct);
 

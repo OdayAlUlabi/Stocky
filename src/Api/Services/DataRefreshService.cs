@@ -346,6 +346,81 @@ public sealed class DataRefreshService(
     }
 
     /// <summary>
+    /// Pulls fresh reference data (name, exchange, asset class, tradable /
+    /// fractionable / shortable / marginable flags, maintenance-margin
+    /// requirement, status) from the provider and writes it into
+    /// <see cref="Instrument"/> rows that are either placeholders
+    /// (<c>Exchange == "UNKNOWN"</c>), never enriched, or enriched more than
+    /// 30 days ago. Symbols the provider cannot resolve are left untouched.
+    /// </summary>
+    /// <param name="forceAll">
+    /// When <c>true</c>, refreshes every instrument regardless of age — useful
+    /// for backfills or when the upstream catalog changes (corporate actions,
+    /// re-listings).
+    /// </param>
+    public async Task<InstrumentEnrichmentResult> EnrichInstrumentsOnceAsync(
+        CancellationToken ct, bool forceAll = false)
+    {
+        var staleCutoff = DateTimeOffset.UtcNow.AddDays(-30);
+
+        var query = db.Instruments.AsQueryable();
+        if (!forceAll)
+        {
+            query = query.Where(i =>
+                i.Exchange == "UNKNOWN" ||
+                i.ProfileUpdatedAt == null ||
+                i.ProfileUpdatedAt < staleCutoff);
+        }
+        var targets = await query.ToListAsync(ct);
+        if (targets.Count == 0)
+        {
+            return new InstrumentEnrichmentResult(0, 0, 0);
+        }
+
+        var symbols = targets.Select(t => t.Symbol).ToList();
+        IReadOnlyList<Dtos.AssetProfileDto> profiles;
+        try
+        {
+            profiles = await provider.GetAssetProfilesAsync(symbols, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "EnrichInstruments: provider call failed for {Count} symbols", symbols.Count);
+            return new InstrumentEnrichmentResult(symbols.Count, 0, 0);
+        }
+
+        var byUpper = targets.ToDictionary(t => t.Symbol, StringComparer.OrdinalIgnoreCase);
+        var now = DateTimeOffset.UtcNow;
+        var updated = 0;
+        foreach (var p in profiles)
+        {
+            if (!byUpper.TryGetValue(p.Symbol, out var inst)) continue;
+            if (!string.IsNullOrWhiteSpace(p.Name)) inst.Name = p.Name!;
+            if (!string.IsNullOrWhiteSpace(p.Exchange)) inst.Exchange = p.Exchange!;
+            if (!string.IsNullOrWhiteSpace(p.AssetClass)) inst.AssetClass = p.AssetClass!;
+            inst.Status = p.Status;
+            inst.IsTradable = p.IsTradable;
+            inst.IsFractionable = p.IsFractionable;
+            inst.IsShortable = p.IsShortable;
+            inst.IsMarginable = p.IsMarginable;
+            inst.IsEasyToBorrow = p.IsEasyToBorrow;
+            inst.MaintenanceMarginRequirement = p.MaintenanceMarginRequirement;
+            inst.ProfileUpdatedAt = now;
+            updated++;
+        }
+
+        if (updated > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        var unresolved = symbols.Count - updated;
+        logger.LogInformation(
+            "EnrichInstruments: requested={Requested} updated={Updated} unresolved={Unresolved} forceAll={Force}",
+            symbols.Count, updated, unresolved, forceAll);
+        return new InstrumentEnrichmentResult(symbols.Count, updated, unresolved);
+    }
+
+    /// <summary>
     /// Inserts placeholder <see cref="Instrument"/> rows for any symbol that
     /// PriceQuotes/Holdings will FK to but is missing from the Instruments
     /// table. Matches the on-the-fly creation pattern used by
@@ -476,6 +551,7 @@ public sealed class DataRefreshService(
 
 public readonly record struct QuoteRefreshResult(int Symbols, int Quotes, IReadOnlyList<PortfolioValueSnapshot> Portfolios);
 public readonly record struct HistoryBackfillResult(int Symbols, int Inserted, DateOnly? GlobalStart, DateOnly Today);
+public readonly record struct InstrumentEnrichmentResult(int Requested, int Updated, int Unresolved);
 
 public sealed record HistoricalCoverageRow(string Symbol, int Rows, DateOnly? MinDate, DateOnly? MaxDate, DateOnly? FirstTransaction);
 

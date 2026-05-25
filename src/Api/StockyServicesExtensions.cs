@@ -38,13 +38,28 @@ public static class StockyServicesExtensions
         if (!string.IsNullOrWhiteSpace(alpacaKeyId) && !string.IsNullOrWhiteSpace(alpacaSecret))
         {
             var alpacaBase = configuration["MarketData:Alpaca:BaseUrl"] ?? "https://data.alpaca.markets/";
-            services.AddHttpClient<Services.AlpacaMarketDataProvider>(client =>
+            var alpacaTradingBase = configuration["MarketData:Alpaca:TradingBaseUrl"] ?? "https://paper-api.alpaca.markets/";
+
+            // Data API: quotes, bars, news, earnings.
+            services.AddHttpClient("Alpaca:Data", client =>
             {
                 client.BaseAddress = new Uri(alpacaBase);
                 client.DefaultRequestHeaders.Add("APCA-API-KEY-ID", alpacaKeyId);
                 client.DefaultRequestHeaders.Add("APCA-API-SECRET-KEY", alpacaSecret);
                 client.Timeout = TimeSpan.FromSeconds(10);
             });
+            // Trading API: /v2/assets/{symbol} for asset reference data
+            // (name, exchange, class, tradable/fractionable/shortable, etc.).
+            // Paper-trading base is fine — it returns the same asset metadata
+            // as live and doesn't require funded credentials.
+            services.AddHttpClient("Alpaca:Trading", client =>
+            {
+                client.BaseAddress = new Uri(alpacaTradingBase);
+                client.DefaultRequestHeaders.Add("APCA-API-KEY-ID", alpacaKeyId);
+                client.DefaultRequestHeaders.Add("APCA-API-SECRET-KEY", alpacaSecret);
+                client.Timeout = TimeSpan.FromSeconds(10);
+            });
+            services.AddScoped<Services.AlpacaMarketDataProvider>();
             services.AddScoped<Services.IMarketDataProvider>(sp =>
                 sp.GetRequiredService<Services.AlpacaMarketDataProvider>());
         }

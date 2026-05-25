@@ -34,6 +34,8 @@
                 <th style="text-align:right;">Qty</th>
                 <th style="text-align:right;">Price</th>
                 <th style="text-align:right;">Fee</th>
+                <th style="text-align:right;">Cash effect</th>
+                <th style="text-align:right;">Cash balance</th>
                 <th style="text-align:right;">Current Price</th>
                 <th style="text-align:right;">Market Value</th>
                 <th>Notes</th>
@@ -45,6 +47,7 @@
                 decimal totalMv = 0m;
                 decimal netSignedMv = 0m;
                 decimal netCash = 0m;
+                decimal investedCapital = 0m;
                 string? footerCcy = null;
                 static decimal CashEffect(string type, decimal qty, decimal price, decimal fee)
                 {
@@ -53,10 +56,36 @@
                     {
                         "buy" => -(gross + fee),
                         "sell" => gross - fee,
-                        "deposit" or "dividend" or "interest" => gross,
+                        "deposit" or "dividend" or "interest" or "transfer" => gross,
                         "withdrawal" or "withdraw" or "fee" => -gross,
                         _ => 0m
                     };
+                }
+                static decimal CapitalEffect(string type, decimal qty, decimal price)
+                {
+                    // Invested capital = net cash the user contributed to the
+                    // account (deposits + external transfers in − withdrawals).
+                    // Dividends/Interest/trade P&L are NOT contributions.
+                    var gross = qty * price;
+                    return type?.ToLowerInvariant() switch
+                    {
+                        "deposit" or "transfer" => gross,
+                        "withdrawal" or "withdraw" => -gross,
+                        _ => 0m
+                    };
+                }
+                // Compute the running cash balance in chronological order so the
+                // value shown on each row reflects the post-transaction balance.
+                // The table itself is rendered newest-first, so we look up the
+                // pre-computed balance by transaction id.
+                var balanceById = new Dictionary<Guid, decimal>(Model.Count);
+                {
+                    decimal running = 0m;
+                    foreach (var t in Model.OrderBy(x => x.ExecutedAt))
+                    {
+                        running += CashEffect(t.Type, t.Quantity, t.Price, t.Fee);
+                        balanceById[t.Id] = running;
+                    }
                 }
             }
             @foreach (var t in Model)
@@ -73,15 +102,18 @@
                 }
                 var cashEffect = CashEffect(t.Type, t.Quantity, t.Price, t.Fee);
                 netCash += cashEffect;
+                investedCapital += CapitalEffect(t.Type, t.Quantity, t.Price);
                 footerCcy ??= t.Currency;
-                var displayPrice = cashEffect != 0 && !isBuy && !isSell ? cashEffect : t.Price;
+                var runningBalance = balanceById[t.Id];
                 <tr>
                     <td class="text-muted">@t.ExecutedAt.ToString("yyyy-MM-dd HH:mm")</td>
                     <td><span class="@pillCls">@t.Type</span></td>
                     <td><strong>@t.Symbol</strong></td>
                     <td style="text-align:right;">@t.Quantity.Num(4)</td>
-                    <td style="text-align:right;" class="@(displayPrice < 0 ? "text-down" : "")">@displayPrice.Money(t.Currency)</td>
+                    <td style="text-align:right;">@t.Price.Money(t.Currency)</td>
                     <td style="text-align:right;" class="text-muted">@t.Fee.Money(t.Currency)</td>
+                    <td style="text-align:right;" class="@cashEffect.SignClass()">@cashEffect.Money(t.Currency)</td>
+                    <td style="text-align:right;"><strong>@runningBalance.Money(t.Currency)</strong></td>
                     <td style="text-align:right;">@t.LatestPrice.Money(t.Currency)</td>
                     <td style="text-align:right;">@t.MarketValue.Money(t.Currency)</td>
                     <td class="text-muted">@t.Notes</td>
@@ -97,7 +129,7 @@
             @if (Model.Count == 0)
             {
                 <tr>
-                    <td colspan="10" style="text-align:center;padding:2rem;">
+                    <td colspan="12" style="text-align:center;padding:2rem;">
                         <div class="text-muted" style="margin-bottom:.75rem;"><i class="bi bi-inbox" style="font-size:2rem;"></i></div>
                         <p class="text-muted">No transactions yet.</p>
                         <a href="/Portfolios/@pid/Transactions/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add first transaction</a>
@@ -109,13 +141,18 @@
         {
             <tfoot>
                 <tr>
-                    <td colspan="7" style="text-align:right;" class="text-muted">Net market value (Buys − Sells)</td>
-                    <td style="text-align:right;"><strong>@netSignedMv.Money(footerCcy)</strong></td>
-                    <td colspan="2"></td>
+                    <td colspan="6" style="text-align:right;" class="text-muted">Invested capital (Deposits + Transfers − Withdrawals)</td>
+                    <td colspan="2" style="text-align:right;"><strong>@investedCapital.Money(footerCcy)</strong></td>
+                    <td colspan="4"></td>
                 </tr>
                 <tr>
-                    <td colspan="7" style="text-align:right;" class="text-muted">Net cash effect (all transactions)</td>
-                    <td style="text-align:right;" class="@netCash.SignClass()"><strong>@netCash.Money(footerCcy)</strong></td>
+                    <td colspan="6" style="text-align:right;" class="text-muted">Net cash effect (all transactions)</td>
+                    <td colspan="2" style="text-align:right;" class="@netCash.SignClass()"><strong>@netCash.Money(footerCcy)</strong></td>
+                    <td colspan="4"></td>
+                </tr>
+                <tr>
+                    <td colspan="9" style="text-align:right;" class="text-muted">Net market value (Buys − Sells)</td>
+                    <td style="text-align:right;"><strong>@netSignedMv.Money(footerCcy)</strong></td>
                     <td colspan="2"></td>
                 </tr>
             </tfoot>

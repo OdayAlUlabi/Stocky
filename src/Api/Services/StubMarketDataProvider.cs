@@ -82,6 +82,14 @@ public sealed class StubMarketDataProvider : IMarketDataProvider
         return Task.FromResult(empty);
     }
 
+    public Task<IReadOnlyList<AssetProfileDto>> GetAssetProfilesAsync(
+        IReadOnlyCollection<string> symbols, CancellationToken ct = default)
+    {
+        // Stub has no reference data — return an empty list so the enrichment
+        // job is a no-op offline.
+        return Task.FromResult<IReadOnlyList<AssetProfileDto>>(Array.Empty<AssetProfileDto>());
+    }
+
     private static (decimal Price, decimal Change, decimal ChangePct) Synthesize(string symbol, DateTimeOffset now)
     {
         var hash = 0;

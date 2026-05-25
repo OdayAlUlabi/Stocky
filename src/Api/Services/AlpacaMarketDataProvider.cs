@@ -14,13 +14,19 @@ namespace Stocky.Api.Services;
 /// IMemoryCache for 30 seconds.
 /// </summary>
 public sealed class AlpacaMarketDataProvider(
-    HttpClient http,
+    IHttpClientFactory httpFactory,
     IMemoryCache cache,
     IProviderCache distributedCache,
     StubMarketDataProvider fallback,
     ILogger<AlpacaMarketDataProvider> log) : IMarketDataProvider
 {
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(5);
+
+    // Two HttpClients: data API for snapshots/bars/news, trading API for
+    // /v2/assets/{symbol} (reference data). Configured by name in
+    // StockyServicesExtensions so credentials and base URLs live in one place.
+    private HttpClient http => httpFactory.CreateClient("Alpaca:Data");
+    private HttpClient trading => httpFactory.CreateClient("Alpaca:Trading");
 
     public async Task<IReadOnlyList<QuoteDto>> GetQuotesAsync(IReadOnlyCollection<string> symbols, CancellationToken ct = default)
     {
@@ -151,6 +157,87 @@ public sealed class AlpacaMarketDataProvider(
     public Task<IReadOnlyList<EarningsEventDto>> GetEarningsAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
         => fallback.GetEarningsAsync(from, to, ct);
 
+    public async Task<IReadOnlyList<AssetProfileDto>> GetAssetProfilesAsync(
+        IReadOnlyCollection<string> symbols, CancellationToken ct = default)
+    {
+        if (symbols.Count == 0) return Array.Empty<AssetProfileDto>();
+
+        var symList = symbols
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Alpaca's /v2/assets/{symbol} is single-symbol; fan out with bounded
+        // parallelism (~8 in flight) so 100 symbols cost ~13 round-trips of
+        // wall time instead of 100. Per-symbol responses are cached for 24h
+        // in memory since asset reference data rarely changes.
+        var results = new System.Collections.Concurrent.ConcurrentBag<AssetProfileDto>();
+        using var gate = new SemaphoreSlim(8);
+        var tasks = symList.Select(async sym =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                if (cache.TryGetValue($"asset:{sym}", out AssetProfileDto? cached) && cached is not null)
+                {
+                    results.Add(cached);
+                    return;
+                }
+                AlpacaAsset? asset = null;
+                try
+                {
+                    asset = await trading.GetFromJsonAsync<AlpacaAsset>(
+                        $"v2/assets/{Uri.EscapeDataString(sym)}", ct);
+                }
+                catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    // Alpaca doesn't know this symbol (e.g. private tickers, OTC
+                    // spin-off warrants). Cache a null marker so we don't hammer
+                    // the API on every refresh.
+                    cache.Set($"asset:{sym}", (AssetProfileDto?)null, TimeSpan.FromHours(24));
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    log.LogDebug(ex, "Alpaca /v2/assets/{Symbol} failed", sym);
+                    return;
+                }
+                if (asset is null) return;
+
+                var profile = new AssetProfileDto(
+                    Symbol: sym,
+                    Name: asset.Name,
+                    Exchange: asset.Exchange,
+                    AssetClass: MapAssetClass(asset.Class),
+                    Status: asset.Status,
+                    IsTradable: asset.Tradable,
+                    IsFractionable: asset.Fractionable,
+                    IsShortable: asset.Shortable,
+                    IsMarginable: asset.Marginable,
+                    IsEasyToBorrow: asset.EasyToBorrow,
+                    MaintenanceMarginRequirement: asset.MaintenanceMarginRequirement);
+                cache.Set($"asset:{sym}", profile, TimeSpan.FromHours(24));
+                results.Add(profile);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+        await Task.WhenAll(tasks);
+        return results.ToList();
+    }
+
+    private static string? MapAssetClass(string? alpacaClass) => alpacaClass?.ToLowerInvariant() switch
+    {
+        "us_equity" => "Equity",
+        "crypto" => "Crypto",
+        "us_option" => "Option",
+        null or "" => null,
+        _ => alpacaClass
+    };
+
     public async Task<IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>>> GetDailyBarsAsync(
         IReadOnlyCollection<string> symbols, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
@@ -268,5 +355,20 @@ public sealed class AlpacaMarketDataProvider(
     {
         [JsonPropertyName("news")] public List<AlpacaNewsItem>? News { get; set; }
         [JsonPropertyName("next_page_token")] public string? NextPageToken { get; set; }
+    }
+
+    private sealed class AlpacaAsset
+    {
+        [JsonPropertyName("symbol")] public string? Symbol { get; set; }
+        [JsonPropertyName("name")] public string? Name { get; set; }
+        [JsonPropertyName("exchange")] public string? Exchange { get; set; }
+        [JsonPropertyName("class")] public string? Class { get; set; }
+        [JsonPropertyName("status")] public string? Status { get; set; }
+        [JsonPropertyName("tradable")] public bool? Tradable { get; set; }
+        [JsonPropertyName("marginable")] public bool? Marginable { get; set; }
+        [JsonPropertyName("shortable")] public bool? Shortable { get; set; }
+        [JsonPropertyName("easy_to_borrow")] public bool? EasyToBorrow { get; set; }
+        [JsonPropertyName("fractionable")] public bool? Fractionable { get; set; }
+        [JsonPropertyName("maintenance_margin_requirement")] public decimal? MaintenanceMarginRequirement { get; set; }
     }
 }

@@ -76,7 +76,7 @@
     <article>
         <header>
             <span><i class="bi bi-pie-chart"></i> Asset allocation</span>
-            <small class="text-muted">@Model.AssetClassAllocation.Count classes</small>
+            <small class="text-muted">@Model.AssetClassAllocation.Count holdings</small>
         </header>
         <div style="display:grid;grid-template-columns:200px 1fr;gap:1rem;align-items:center;">
             <div class="chart-donut"><canvas id="assetChart" width="200" height="200"></canvas></div>
@@ -125,13 +125,13 @@
 
 <div class="grid-2">
     <article>
-        <header><span><i class="bi bi-arrow-up-right-circle text-green"></i> Top gainers</span></header>
+        <header><span><i class="bi bi-arrow-up-right-circle text-green"></i> Top gainers</span><small class="text-muted">today's $ change</small></header>
         <table>
-            <thead><tr><th>Symbol</th><th style="text-align:right;">Value</th><th style="text-align:right;">Day</th></tr></thead>
+            <thead><tr><th>Symbol</th><th style="text-align:right;">Value</th><th style="text-align:right;">Day $</th><th style="text-align:right;">Day %</th></tr></thead>
             <tbody>
                 @if (Model.TopGainers.Count == 0)
                 {
-                    <tr><td colspan="3" class="text-muted" style="text-align:center;padding:1rem;">No data</td></tr>
+                    <tr><td colspan="4" class="text-muted" style="text-align:center;padding:1rem;">No data</td></tr>
                 }
                 @foreach (var m in Model.TopGainers)
                 {
@@ -147,6 +147,7 @@
                             }
                         </td>
                         <td style="text-align:right;"><span data-price-symbol="@m.Symbol" data-price-currency="@Model.Currency">@m.MarketValue.Money(Model.Currency)</span></td>
+                        <td style="text-align:right;" class="@m.DayChange.SignClass()">@m.DayChange.Money(Model.Currency)</td>
                         <td style="text-align:right;"><span class="badge-up"><i class="bi bi-caret-up-fill"></i><span data-price-symbol="@m.Symbol" data-price-kind="pct">@m.DayChangePercent.Pct()</span></span></td>
                     </tr>
                 }
@@ -154,13 +155,13 @@
         </table>
     </article>
     <article>
-        <header><span><i class="bi bi-arrow-down-right-circle text-red"></i> Top losers</span></header>
+        <header><span><i class="bi bi-arrow-down-right-circle text-red"></i> Top losers</span><small class="text-muted">today's $ change</small></header>
         <table>
-            <thead><tr><th>Symbol</th><th style="text-align:right;">Value</th><th style="text-align:right;">Day</th></tr></thead>
+            <thead><tr><th>Symbol</th><th style="text-align:right;">Value</th><th style="text-align:right;">Day $</th><th style="text-align:right;">Day %</th></tr></thead>
             <tbody>
                 @if (Model.TopLosers.Count == 0)
                 {
-                    <tr><td colspan="3" class="text-muted" style="text-align:center;padding:1rem;">No data</td></tr>
+                    <tr><td colspan="4" class="text-muted" style="text-align:center;padding:1rem;">No data</td></tr>
                 }
                 @foreach (var m in Model.TopLosers)
                 {
@@ -176,6 +177,7 @@
                             }
                         </td>
                         <td style="text-align:right;"><span data-price-symbol="@m.Symbol" data-price-currency="@Model.Currency">@m.MarketValue.Money(Model.Currency)</span></td>
+                        <td style="text-align:right;" class="@m.DayChange.SignClass()">@m.DayChange.Money(Model.Currency)</td>
                         <td style="text-align:right;"><span class="badge-down"><i class="bi bi-caret-down-fill"></i><span data-price-symbol="@m.Symbol" data-price-kind="pct">@m.DayChangePercent.Pct()</span></span></td>
                     </tr>
                 }
@@ -242,27 +244,25 @@
                         labels,
                         datasets: [
                             {
-                                label: 'Stocks',
+                                label: 'Stocks value',
                                 data: stocks,
                                 borderColor: '#5b9dff',
-                                backgroundColor: 'rgba(91,157,255,.35)',
-                                fill: 'origin',
+                                backgroundColor: 'rgba(91,157,255,.15)',
+                                fill: false,
                                 tension: .25,
                                 pointRadius: 0,
-                                borderWidth: 1.5,
-                                stack: 'value',
+                                borderWidth: 1.75,
                                 order: 2
                             },
                             {
                                 label: 'Cash',
                                 data: cash,
                                 borderColor: '#16c784',
-                                backgroundColor: 'rgba(22,199,132,.35)',
-                                fill: '-1',
+                                backgroundColor: 'rgba(22,199,132,.15)',
+                                fill: false,
                                 tension: .25,
                                 pointRadius: 0,
-                                borderWidth: 1.5,
-                                stack: 'value',
+                                borderWidth: 1.75,
                                 order: 3
                             },
                             {
@@ -296,7 +296,7 @@
                         },
                         scales: {
                             x: { ticks: { color: txtMuted, maxTicksLimit: 8 }, grid: { color: border } },
-                            y: { stacked: true, ticks: { color: txtMuted }, grid: { color: border } }
+                            y: { ticks: { color: txtMuted }, grid: { color: border } }
                         }
                     }
                 });

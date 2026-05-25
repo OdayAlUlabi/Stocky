@@ -22,4 +22,13 @@ public interface IMarketDataProvider
     /// </summary>
     Task<IReadOnlyDictionary<string, IReadOnlyList<DailyBarDto>>> GetDailyBarsAsync(
         IReadOnlyCollection<string> symbols, DateOnly from, DateOnly to, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reference-data profile (name, exchange, asset class, tradable / shortable /
+    /// fractionable flags, margin requirement) for each requested symbol.
+    /// Symbols the provider cannot resolve are simply omitted from the result —
+    /// callers should treat that as "no update".
+    /// </summary>
+    Task<IReadOnlyList<AssetProfileDto>> GetAssetProfilesAsync(
+        IReadOnlyCollection<string> symbols, CancellationToken ct = default);
 }

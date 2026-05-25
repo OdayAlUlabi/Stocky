@@ -42,6 +42,8 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.Property(x => x.Exchange).HasMaxLength(32);
             e.Property(x => x.Currency).HasMaxLength(8);
             e.Property(x => x.AssetClass).HasMaxLength(16);
+            e.Property(x => x.Status).HasMaxLength(16);
+            e.Property(x => x.MaintenanceMarginRequirement).HasPrecision(9, 4);
         });
 
         modelBuilder.Entity<InstrumentMetadata>(e =>

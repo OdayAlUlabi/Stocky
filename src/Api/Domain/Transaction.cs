@@ -9,7 +9,12 @@ public enum TransactionType
     Withdrawal,
     Split,
     SpinOff,
-    Fee
+    Fee,
+    // Interest credited to the account (e.g. cash sweep yield). Cash inflow like Dividend.
+    Interest,
+    // External cash transfer into the account (e.g. ACAT/ACH from another broker).
+    // Treated as a cash inflow for ledger purposes; users record outflows as Withdrawal.
+    Transfer
 }
 
 public class Transaction

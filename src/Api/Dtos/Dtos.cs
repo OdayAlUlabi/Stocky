@@ -48,6 +48,25 @@ public record AddWatchlistItemRequest(string Symbol);
 
 public record QuoteDto(string Symbol, decimal Price, decimal? Change, decimal? ChangePercent, DateTimeOffset AsOf);
 
+/// <summary>
+/// Reference-data profile for a symbol as returned by an upstream broker /
+/// market-data provider (Alpaca's <c>/v2/assets/{symbol}</c>). Populates the
+/// long-lived columns on <c>Instrument</c>; refreshed on an admin trigger
+/// rather than per-quote.
+/// </summary>
+public record AssetProfileDto(
+    string Symbol,
+    string? Name,
+    string? Exchange,
+    string? AssetClass,
+    string? Status,
+    bool? IsTradable,
+    bool? IsFractionable,
+    bool? IsShortable,
+    bool? IsMarginable,
+    bool? IsEasyToBorrow,
+    decimal? MaintenanceMarginRequirement);
+
 public record PortfolioPerformanceDto(
     Guid PortfolioId,
     decimal MarketValue,
@@ -80,7 +99,7 @@ public record ScreenerResultDto(
 
 public record AllocationSliceDto(string Label, decimal Value, decimal Percent);
 
-public record MoverDto(string Symbol, decimal MarketValue, decimal DayChangePercent);
+public record MoverDto(string Symbol, decimal MarketValue, decimal DayChangePercent, decimal DayChange = 0m);
 
 public record ValuePointDto(DateTimeOffset Date, decimal Value, decimal Cash = 0m, decimal MarketValue = 0m);
 

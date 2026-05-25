@@ -40,6 +40,21 @@ public sealed class AdminRefreshController(
         return Ok(new { ok = true, history = result });
     }
 
+    /// <summary>
+    /// Pulls fresh reference data from the market-data provider for every
+    /// instrument that's a placeholder (Exchange=UNKNOWN), never enriched, or
+    /// last enriched more than 30 days ago. Pass <c>?force=true</c> to refresh
+    /// every instrument regardless of age.
+    /// </summary>
+    [HttpPost("instruments")]
+    public async Task<IActionResult> Instruments(CancellationToken ct, [FromQuery] bool force = false)
+    {
+        if (CheckAdminKey() is { } unauth) return unauth;
+        logger.LogInformation("Admin force-refresh: instruments requested (force={Force})", force);
+        var result = await refresher.EnrichInstrumentsOnceAsync(ct, forceAll: force);
+        return Ok(new { ok = true, instruments = result });
+    }
+
     [HttpPost("all")]
     public async Task<IActionResult> All(CancellationToken ct)
     {
@@ -47,7 +62,8 @@ public sealed class AdminRefreshController(
         logger.LogInformation("Admin force-refresh: all requested");
         var quotes = await refresher.RefreshQuotesOnceAsync(ct);
         var history = await refresher.BackfillHistoricalOnceAsync(ct);
-        return Ok(new { ok = true, quotes, history });
+        var instruments = await refresher.EnrichInstrumentsOnceAsync(ct);
+        return Ok(new { ok = true, quotes, history, instruments });
     }
 
     private IActionResult? CheckAdminKey()

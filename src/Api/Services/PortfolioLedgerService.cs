@@ -15,12 +15,12 @@ public sealed class PortfolioLedgerService(StockyDbContext db)
 {
     /// <summary>
     /// Cash balance is the running sum of every transaction's effect on cash:
-    /// - Deposit / Dividend / refund            : + qty * price
-    /// - Withdrawal / Fee                       : - qty * price
-    /// - Buy                                    : - (qty * price + fee)
-    /// - Sell                                   : + (qty * price - fee)
-    /// - SpinOff (cash-in-lieu)                 : + qty * price
-    /// - Split residual (fractional share cash) : + qty * price
+    /// - Deposit / Dividend / Interest / Transfer (in)  : + qty * price
+    /// - Withdrawal / Fee                               : - qty * price
+    /// - Buy                                            : - (qty * price + fee)
+    /// - Sell                                           : + (qty * price - fee)
+    /// - SpinOff / Split                                : 0 (position-only; record any
+    ///   cash-in-lieu as a separate Deposit row so the ledger stays unambiguous).
     /// </summary>
     public async Task<decimal> GetCashBalanceAsync(Guid portfolioId, CancellationToken ct = default)
     {
@@ -35,6 +35,8 @@ public sealed class PortfolioLedgerService(StockyDbContext db)
             {
                 case TransactionType.Deposit:
                 case TransactionType.Dividend:
+                case TransactionType.Interest:
+                case TransactionType.Transfer:
                     cash += gross;
                     break;
                 case TransactionType.Withdrawal:
