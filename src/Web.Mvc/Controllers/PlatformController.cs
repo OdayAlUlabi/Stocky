@@ -173,4 +173,32 @@ public class AdminController : Controller
         ViewBag.Resource = resource;
         return View(rows.ToList());
     }
+
+    [HttpGet]
+    public IActionResult DataRefresh() => View();
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DataRefresh(string scope, CancellationToken ct)
+    {
+        var refresher = HttpContext.RequestServices.GetRequiredService<Stocky.Api.Services.DataRefreshService>();
+        object payload;
+        switch ((scope ?? "all").ToLowerInvariant())
+        {
+            case "quotes":
+                payload = new { scope = "quotes", quotes = await refresher.RefreshQuotesOnceAsync(ct) };
+                break;
+            case "history":
+                payload = new { scope = "history", history = await refresher.BackfillHistoricalOnceAsync(ct) };
+                break;
+            default:
+                var q = await refresher.RefreshQuotesOnceAsync(ct);
+                var h = await refresher.BackfillHistoricalOnceAsync(ct);
+                payload = new { scope = "all", quotes = q, history = h };
+                break;
+        }
+        TempData["RefreshPayload"] = System.Text.Json.JsonSerializer.Serialize(payload,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        TempData["Status"] = "Data refresh complete.";
+        return RedirectToAction(nameof(DataRefresh));
+    }
 }

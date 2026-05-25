@@ -61,6 +61,13 @@ builder.Services.AddDbContext<Stocky.Api.Data.StockyDbContext>((sp, options) =>
 
 builder.Services.AddStockyDomainServices(builder.Configuration);
 
+// IProviderCache is registered in Api/Program.cs alongside the Redis /
+// in-memory IDistributedCache setup. We need it here too so that in-process
+// invocations of API controllers (via ApiControllerInvoker) that depend on
+// IMarketDataProvider → AlpacaMarketDataProvider can resolve their cache
+// dependency. Uses the AddDistributedMemoryCache registered above.
+builder.Services.AddSingleton<Stocky.Api.Services.IProviderCache, Stocky.Api.Services.ProviderCache>();
+
 var app = builder.Build();
 
 // Warm up SQL credential before serving traffic (ACA IMDS cold-start mitigation).

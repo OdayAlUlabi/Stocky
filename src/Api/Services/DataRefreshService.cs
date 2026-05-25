@@ -33,8 +33,26 @@ public sealed class DataRefreshService(
         }
 
         var quotes = await provider.GetQuotesAsync(symbols, ct);
+
+        // Dedupe: skip writing a new PriceQuote row if the latest existing row
+        // for the same symbol has identical Price/Change/ChangePercent.
+        var quoteSymbols = quotes.Select(q => q.Symbol).ToList();
+        var latestExisting = await db.PriceQuotes
+            .Where(p => quoteSymbols.Contains(p.Symbol))
+            .GroupBy(p => p.Symbol)
+            .Select(g => g.OrderByDescending(p => p.AsOf).First())
+            .ToDictionaryAsync(p => p.Symbol, ct);
+
+        int added = 0;
         foreach (var q in quotes)
         {
+            if (latestExisting.TryGetValue(q.Symbol, out var prev) &&
+                prev.Price == q.Price &&
+                prev.Change == q.Change &&
+                prev.ChangePercent == q.ChangePercent)
+            {
+                continue;
+            }
             db.PriceQuotes.Add(new PriceQuote
             {
                 Symbol = q.Symbol,
@@ -43,8 +61,12 @@ public sealed class DataRefreshService(
                 ChangePercent = q.ChangePercent,
                 AsOf = q.AsOf
             });
+            added++;
         }
-        await db.SaveChangesAsync(ct);
+        if (added > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         await evaluator.EvaluateAsync(quotes, ct);
 
         if (broadcaster is not null)

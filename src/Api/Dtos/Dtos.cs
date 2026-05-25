@@ -23,7 +23,9 @@ public record TransactionDto(
     decimal Fee,
     string Currency,
     DateTimeOffset ExecutedAt,
-    string? Notes);
+    string? Notes,
+    decimal? LatestPrice = null,
+    decimal? MarketValue = null);
 
 public record CreateTransactionRequest(
     string? Symbol,

@@ -21,9 +21,29 @@ public class TransactionsController(StockyDbContext db, TaxLotService taxLots, P
         var items = await db.Transactions
             .Where(t => t.PortfolioId == portfolioId)
             .OrderByDescending(t => t.ExecutedAt)
-            .Select(t => new TransactionDto(t.Id, t.Symbol, t.Type.ToString(), t.Quantity, t.Price, t.Fee, t.Currency, t.ExecutedAt, t.Notes))
+            .Select(t => new { t.Id, t.Symbol, t.Type, t.Quantity, t.Price, t.Fee, t.Currency, t.ExecutedAt, t.Notes })
             .ToListAsync();
-        return Ok(items);
+
+        var symbols = items
+            .Where(i => i.Symbol != null)
+            .Select(i => i.Symbol!)
+            .Distinct()
+            .ToList();
+        var latestPrices = symbols.Count == 0
+            ? new Dictionary<string, decimal>()
+            : await db.PriceQuotes
+                .Where(q => symbols.Contains(q.Symbol))
+                .GroupBy(q => q.Symbol)
+                .Select(g => g.OrderByDescending(x => x.AsOf).First())
+                .ToDictionaryAsync(q => q.Symbol, q => q.Price);
+
+        var dtos = items.Select(t =>
+        {
+            decimal? latest = t.Symbol != null && latestPrices.TryGetValue(t.Symbol, out var p) ? p : null;
+            decimal? mv = latest.HasValue ? latest.Value * t.Quantity : null;
+            return new TransactionDto(t.Id, t.Symbol, t.Type.ToString(), t.Quantity, t.Price, t.Fee, t.Currency, t.ExecutedAt, t.Notes, latest, mv);
+        }).ToList();
+        return Ok(dtos);
     }
 
     [HttpPost]

@@ -73,8 +73,29 @@ public sealed class QuoteRefresher(
         if (symbols.Count == 0) return;
 
         var quotes = await provider.GetQuotesAsync(symbols, ct);
+
+        // Only persist when the latest stored price for a symbol has actually
+        // changed. Without this, the refresher appends an identical row every
+        // 5 s during market hours (and forever when using the deterministic
+        // stub provider), bloating the PriceQuotes table.
+        var symbolList = quotes.Select(q => q.Symbol).Distinct().ToList();
+        var latestExisting = await db.PriceQuotes
+            .Where(q => symbolList.Contains(q.Symbol))
+            .GroupBy(q => q.Symbol)
+            .Select(g => g.OrderByDescending(x => x.AsOf).First())
+            .ToDictionaryAsync(q => q.Symbol, q => q, ct);
+
+        int added = 0;
         foreach (var q in quotes)
         {
+            if (latestExisting.TryGetValue(q.Symbol, out var prev)
+                && prev.Price == q.Price
+                && prev.Change == q.Change
+                && prev.ChangePercent == q.ChangePercent)
+            {
+                continue;
+            }
+
             db.PriceQuotes.Add(new PriceQuote
             {
                 Symbol = q.Symbol,
@@ -83,8 +104,9 @@ public sealed class QuoteRefresher(
                 ChangePercent = q.ChangePercent,
                 AsOf = q.AsOf
             });
+            added++;
         }
-        await db.SaveChangesAsync(ct);
+        if (added > 0) await db.SaveChangesAsync(ct);
         await evaluator.EvaluateAsync(quotes, ct);
 
         // M8 #1 — fan-out real-time ticks to SignalR subscribers.
