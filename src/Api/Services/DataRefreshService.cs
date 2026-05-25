@@ -14,6 +14,7 @@ public sealed class DataRefreshService(
     StockyDbContext db,
     IMarketDataProvider provider,
     AlertEvaluator evaluator,
+    PortfolioLedgerService ledger,
     PriceTickBroadcaster? broadcaster,
     ILogger<DataRefreshService> logger)
 {
@@ -29,7 +30,7 @@ public sealed class DataRefreshService(
 
         if (symbols.Count == 0)
         {
-            return new QuoteRefreshResult(0, 0);
+            return new QuoteRefreshResult(0, 0, Array.Empty<PortfolioValueSnapshot>());
         }
 
         var quotes = await provider.GetQuotesAsync(symbols, ct);
@@ -75,9 +76,82 @@ public sealed class DataRefreshService(
             catch (Exception ex) { logger.LogDebug(ex, "PriceTick broadcast failed"); }
         }
 
-        logger.LogInformation("Force-refresh: refreshed {Count} quotes across {Symbols} symbols",
-            quotes.Count, symbols.Count);
-        return new QuoteRefreshResult(symbols.Count, quotes.Count);
+        var portfolioValues = await RefreshPortfolioSnapshotsAsync(ct);
+
+        logger.LogInformation("Force-refresh: refreshed {Count} quotes across {Symbols} symbols; updated {Portfolios} portfolio snapshots",
+            quotes.Count, symbols.Count, portfolioValues.Count);
+        return new QuoteRefreshResult(symbols.Count, quotes.Count, portfolioValues);
+    }
+
+    /// <summary>
+    /// Recompute today's PortfolioSnapshot rows from the latest PriceQuote per symbol
+    /// and return a current market-value summary for every portfolio. Mirrors the logic
+    /// in <see cref="SnapshotJob"/> so portfolio values reflect the freshly-pulled
+    /// prices immediately after a force-refresh, instead of waiting for the next
+    /// 6-hourly snapshot run.
+    /// </summary>
+    public async Task<IReadOnlyList<PortfolioValueSnapshot>> RefreshPortfolioSnapshotsAsync(CancellationToken ct)
+    {
+        var portfolios = await db.Portfolios.Include(p => p.Holdings).ToListAsync(ct);
+        if (portfolios.Count == 0) return Array.Empty<PortfolioValueSnapshot>();
+
+        var symbols = portfolios.SelectMany(p => p.Holdings.Select(h => h.Symbol)).Distinct().ToList();
+        var latest = symbols.Count == 0
+            ? new Dictionary<string, PriceQuote>()
+            : await db.PriceQuotes
+                .Where(q => symbols.Contains(q.Symbol))
+                .GroupBy(q => q.Symbol)
+                .Select(g => g.OrderByDescending(x => x.AsOf).First())
+                .ToDictionaryAsync(q => q.Symbol, q => q, ct);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var existing = await db.PortfolioSnapshots
+            .Where(s => s.Date == today)
+            .ToDictionaryAsync(s => s.PortfolioId, s => s, ct);
+
+        var results = new List<PortfolioValueSnapshot>(portfolios.Count);
+        foreach (var p in portfolios)
+        {
+            decimal mv = 0m, cb = 0m, dayPnl = 0m;
+            foreach (var h in p.Holdings)
+            {
+                cb += h.Quantity * h.AverageCost;
+                if (latest.TryGetValue(h.Symbol, out var q))
+                {
+                    mv += h.Quantity * q.Price;
+                    if (q.Change.HasValue) dayPnl += h.Quantity * q.Change.Value;
+                }
+            }
+            if (existing.TryGetValue(p.Id, out var snap))
+            {
+                snap.MarketValue = mv;
+                snap.CostBasis = cb;
+                snap.DayPnL = dayPnl;
+            }
+            else
+            {
+                db.PortfolioSnapshots.Add(new PortfolioSnapshot
+                {
+                    PortfolioId = p.Id,
+                    Date = today,
+                    MarketValue = mv,
+                    CostBasis = cb,
+                    DayPnL = dayPnl
+                });
+            }
+
+            var cash = await ledger.GetCashBalanceAsync(p.Id, ct);
+            results.Add(new PortfolioValueSnapshot(
+                p.Id, p.Name, p.BaseCurrency,
+                Math.Round(mv, 2),
+                Math.Round(cb, 2),
+                Math.Round(mv - cb, 2),
+                cash,
+                Math.Round(mv + cash, 2)));
+        }
+
+        await db.SaveChangesAsync(ct);
+        return results;
     }
 
     public async Task<HistoryBackfillResult> BackfillHistoricalOnceAsync(CancellationToken ct)
@@ -158,5 +232,15 @@ public sealed class DataRefreshService(
     }
 }
 
-public readonly record struct QuoteRefreshResult(int Symbols, int Quotes);
+public readonly record struct QuoteRefreshResult(int Symbols, int Quotes, IReadOnlyList<PortfolioValueSnapshot> Portfolios);
 public readonly record struct HistoryBackfillResult(int Symbols, int Inserted, DateOnly? GlobalStart, DateOnly Today);
+
+public sealed record PortfolioValueSnapshot(
+    Guid PortfolioId,
+    string Name,
+    string Currency,
+    decimal MarketValue,
+    decimal CostBasis,
+    decimal UnrealizedPnL,
+    decimal CashBalance,
+    decimal TotalEquity);

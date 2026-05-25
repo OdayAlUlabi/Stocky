@@ -1,6 +1,18 @@
 @{
     ViewData["Title"] = "Data refresh";
     var payload = TempData["RefreshPayload"] as string;
+    var portfoliosJson = TempData["PortfolioValues"] as string;
+    List<Stocky.Api.Services.PortfolioValueSnapshot> portfolios = new();
+    if (!string.IsNullOrWhiteSpace(portfoliosJson))
+    {
+        try
+        {
+            portfolios = System.Text.Json.JsonSerializer.Deserialize<List<Stocky.Api.Services.PortfolioValueSnapshot>>(
+                portfoliosJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+        }
+        catch { portfolios = new(); }
+    }
 }
 <div class="page-header">
     <h2><i class="bi bi-arrow-repeat"></i> Data refresh</h2>
@@ -29,10 +41,47 @@
     </form>
 </div>
 
+@if (portfolios.Count > 0)
+{
+    <div class="card" style="padding:1rem;max-width:960px;margin-top:1rem;">
+        <strong>Updated portfolio values</strong>
+        <p class="muted" style="margin:.25rem 0 .75rem;">
+            Market value reflects the freshly-pulled quotes (latest <code>PriceQuote</code>
+            row per symbol) multiplied by current holdings. Today's
+            <code>PortfolioSnapshot</code> row has been upserted with the same values.
+        </p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Portfolio</th>
+                    <th style="text-align:right;">Market value</th>
+                    <th style="text-align:right;">Cost basis</th>
+                    <th style="text-align:right;">Unrealized P/L</th>
+                    <th style="text-align:right;">Cash</th>
+                    <th style="text-align:right;">Total equity</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in portfolios)
+                {
+                    <tr>
+                        <td><a href="/Portfolios/Detail/@p.PortfolioId">@p.Name</a></td>
+                        <td style="text-align:right;">@p.MarketValue.Money(p.Currency)</td>
+                        <td style="text-align:right;">@p.CostBasis.Money(p.Currency)</td>
+                        <td style="text-align:right;@(p.UnrealizedPnL >= 0 ? "color:var(--pos,#1a7f37);" : "color:var(--neg,#cf222e);")">@p.UnrealizedPnL.Money(p.Currency)</td>
+                        <td style="text-align:right;">@p.CashBalance.Money(p.Currency)</td>
+                        <td style="text-align:right;font-weight:600;">@p.TotalEquity.Money(p.Currency)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
 @if (!string.IsNullOrWhiteSpace(payload))
 {
-    <div class="card" style="padding:1rem;max-width:640px;margin-top:1rem;">
-        <strong>Last result</strong>
+    <details class="card" style="padding:1rem;max-width:960px;margin-top:1rem;">
+        <summary><strong>Raw refresh result</strong></summary>
         <pre style="margin:.5rem 0 0;white-space:pre-wrap;word-break:break-word;">@payload</pre>
-    </div>
+    </details>
 }

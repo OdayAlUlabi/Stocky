@@ -182,22 +182,38 @@ public class AdminController : Controller
     {
         var refresher = HttpContext.RequestServices.GetRequiredService<Stocky.Api.Services.DataRefreshService>();
         object payload;
+        IReadOnlyList<Stocky.Api.Services.PortfolioValueSnapshot> portfolios =
+            Array.Empty<Stocky.Api.Services.PortfolioValueSnapshot>();
         switch ((scope ?? "all").ToLowerInvariant())
         {
             case "quotes":
-                payload = new { scope = "quotes", quotes = await refresher.RefreshQuotesOnceAsync(ct) };
-                break;
+                {
+                    var q = await refresher.RefreshQuotesOnceAsync(ct);
+                    portfolios = q.Portfolios;
+                    payload = new { scope = "quotes", quotes = q };
+                    break;
+                }
             case "history":
-                payload = new { scope = "history", history = await refresher.BackfillHistoricalOnceAsync(ct) };
-                break;
+                {
+                    var h = await refresher.BackfillHistoricalOnceAsync(ct);
+                    // Even when only running history, refresh portfolio snapshots so the
+                    // displayed values match the freshest stored prices.
+                    portfolios = await refresher.RefreshPortfolioSnapshotsAsync(ct);
+                    payload = new { scope = "history", history = h, portfolios };
+                    break;
+                }
             default:
-                var q = await refresher.RefreshQuotesOnceAsync(ct);
-                var h = await refresher.BackfillHistoricalOnceAsync(ct);
-                payload = new { scope = "all", quotes = q, history = h };
-                break;
+                {
+                    var q = await refresher.RefreshQuotesOnceAsync(ct);
+                    var h = await refresher.BackfillHistoricalOnceAsync(ct);
+                    portfolios = q.Portfolios;
+                    payload = new { scope = "all", quotes = q, history = h };
+                    break;
+                }
         }
-        TempData["RefreshPayload"] = System.Text.Json.JsonSerializer.Serialize(payload,
-            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        TempData["RefreshPayload"] = System.Text.Json.JsonSerializer.Serialize(payload, jsonOpts);
+        TempData["PortfolioValues"] = System.Text.Json.JsonSerializer.Serialize(portfolios, jsonOpts);
         TempData["Status"] = "Data refresh complete.";
         return RedirectToAction(nameof(DataRefresh));
     }
