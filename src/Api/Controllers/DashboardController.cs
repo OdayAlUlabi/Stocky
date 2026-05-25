@@ -13,10 +13,10 @@ namespace Stocky.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-public class DashboardController(StockyDbContext db, PortfolioLedgerService ledger) : ControllerBase
+public class DashboardController(StockyDbContext db, PortfolioLedgerService ledger, PortfolioHistoryService history) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<DashboardDto>> Get([FromQuery] Guid? portfolioId)
+    public async Task<ActionResult<DashboardDto>> Get([FromQuery] Guid? portfolioId, CancellationToken ct = default)
     {
         var ownerId = User.GetOwnerId();
 
@@ -105,7 +105,7 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
         var topGainers = movers.OrderByDescending(m => m.DayChangePercent).Take(5).ToList();
         var topLosers = movers.OrderBy(m => m.DayChangePercent).Take(5).ToList();
 
-        var valueHistory = await BuildValueHistoryAsync(holdings, symbols);
+        var valueHistory = await BuildValueHistoryAsync(portfolios, ownerId, ct);
 
         return new DashboardDto(
             portfolioId, name, currency,
@@ -126,43 +126,46 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
     }
 
     /// <summary>
-    /// Build a daily portfolio value series from cached PriceQuotes history (up to ~90 days).
-    /// Returns an empty list if no historic quotes exist; the UI then shows the empty state.
+    /// Build a daily portfolio value series from the transaction ledger via
+    /// <see cref="PortfolioHistoryService"/>. Returns per-day Cash, MarketValue
+    /// (stock value), and Total so the dashboard chart can stack the two
+    /// components and the user can see how each evolved over time.
+    /// When multiple portfolios are in scope, the daily values are summed
+    /// across portfolios by date.
     /// </summary>
-    private async Task<List<ValuePointDto>> BuildValueHistoryAsync(List<Holding> holdings, List<string> symbols)
+    private async Task<List<ValuePointDto>> BuildValueHistoryAsync(
+        List<Portfolio> portfolios, string ownerId, CancellationToken ct)
     {
-        var since = DateTimeOffset.UtcNow.AddDays(-90);
-        var rows = await db.PriceQuotes
-            .Where(q => symbols.Contains(q.Symbol) && q.AsOf >= since)
-            .OrderBy(q => q.AsOf)
-            .Select(q => new { q.Symbol, q.AsOf, q.Price })
-            .ToListAsync();
-        if (rows.Count == 0) return new List<ValuePointDto>();
+        if (portfolios.Count == 0) return new List<ValuePointDto>();
 
-        // Group quotes by date (UTC), take the last quote per symbol per day.
-        var byDate = rows
-            .GroupBy(r => r.AsOf.UtcDateTime.Date)
-            .OrderBy(g => g.Key)
-            .ToList();
-
-        var latestBySymbol = new Dictionary<string, decimal>();
-        var qtyBySymbol = holdings
-            .GroupBy(h => h.Symbol)
-            .ToDictionary(g => g.Key, g => g.Sum(h => h.Quantity));
+        // Aggregate per-day across all portfolios in scope.
+        var byDate = new SortedDictionary<DateOnly, (decimal Cash, decimal Mv)>();
+        foreach (var p in portfolios)
+        {
+            var dto = await history.BuildAsync(p.Id, ownerId, ct);
+            if (dto is null) continue;
+            foreach (var pt in dto.Series)
+            {
+                if (!byDate.TryGetValue(pt.Date, out var agg))
+                {
+                    byDate[pt.Date] = (pt.Cash, pt.MarketValue);
+                }
+                else
+                {
+                    byDate[pt.Date] = (agg.Cash + pt.Cash, agg.Mv + pt.MarketValue);
+                }
+            }
+        }
 
         var series = new List<ValuePointDto>(byDate.Count);
-        foreach (var day in byDate)
+        foreach (var (day, agg) in byDate)
         {
-            foreach (var grouping in day.GroupBy(r => r.Symbol))
-            {
-                latestBySymbol[grouping.Key] = grouping.Last().Price;
-            }
-            decimal value = 0m;
-            foreach (var (sym, qty) in qtyBySymbol)
-            {
-                if (latestBySymbol.TryGetValue(sym, out var px)) value += qty * px;
-            }
-            series.Add(new ValuePointDto(new DateTimeOffset(day.Key, TimeSpan.Zero), value));
+            var total = Math.Round(agg.Cash + agg.Mv, 2);
+            series.Add(new ValuePointDto(
+                new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
+                total,
+                Math.Round(agg.Cash, 2),
+                Math.Round(agg.Mv, 2)));
         }
         return series;
     }

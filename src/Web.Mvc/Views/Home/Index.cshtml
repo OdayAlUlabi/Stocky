@@ -188,7 +188,7 @@
 {
     <article>
         <header>
-            <span><i class="bi bi-graph-up-arrow"></i> Portfolio value</span>
+            <span><i class="bi bi-graph-up-arrow"></i> Portfolio value — Cash vs Stocks</span>
             <small class="text-muted">@Model.ValueHistory.Count points</small>
         </header>
         <canvas id="valueChart" height="80"></canvas>
@@ -233,28 +233,70 @@
             const valueCanvas = document.getElementById('valueChart');
             if (valueCanvas && window.Chart) {
                 const labels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ValueHistory.Select(p => p.Date.ToString("yyyy-MM-dd"))));
-                const data = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ValueHistory.Select(p => p.Value)));
+                const cash = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ValueHistory.Select(p => p.Cash)));
+                const stocks = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ValueHistory.Select(p => p.MarketValue)));
+                const total = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ValueHistory.Select(p => p.Value)));
                 new Chart(valueCanvas, {
                     type: 'line',
                     data: {
                         labels,
-                        datasets: [{
-                            data,
-                            borderColor: '#5b9dff',
-                            backgroundColor: 'rgba(91,157,255,.15)',
-                            fill: true,
-                            tension: .3,
-                            pointRadius: 0,
-                            borderWidth: 2
-                        }]
+                        datasets: [
+                            {
+                                label: 'Stocks',
+                                data: stocks,
+                                borderColor: '#5b9dff',
+                                backgroundColor: 'rgba(91,157,255,.35)',
+                                fill: 'origin',
+                                tension: .25,
+                                pointRadius: 0,
+                                borderWidth: 1.5,
+                                stack: 'value',
+                                order: 2
+                            },
+                            {
+                                label: 'Cash',
+                                data: cash,
+                                borderColor: '#16c784',
+                                backgroundColor: 'rgba(22,199,132,.35)',
+                                fill: '-1',
+                                tension: .25,
+                                pointRadius: 0,
+                                borderWidth: 1.5,
+                                stack: 'value',
+                                order: 3
+                            },
+                            {
+                                label: 'Total',
+                                data: total,
+                                borderColor: '#f0b90b',
+                                backgroundColor: 'transparent',
+                                fill: false,
+                                tension: .25,
+                                pointRadius: 0,
+                                borderWidth: 2,
+                                order: 1
+                            }
+                        ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { display: true, labels: { color: txtMuted } },
+                            tooltip: {
+                                callbacks: {
+                                    footer: function (items) {
+                                        if (!items || !items.length) return '';
+                                        var i = items[0].dataIndex;
+                                        return 'Total: ' + (total[i] != null ? Number(total[i]).toLocaleString() : '');
+                                    }
+                                }
+                            }
+                        },
                         scales: {
                             x: { ticks: { color: txtMuted, maxTicksLimit: 8 }, grid: { color: border } },
-                            y: { ticks: { color: txtMuted }, grid: { color: border } }
+                            y: { stacked: true, ticks: { color: txtMuted }, grid: { color: border } }
                         }
                     }
                 });

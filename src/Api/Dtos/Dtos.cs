@@ -82,7 +82,7 @@ public record AllocationSliceDto(string Label, decimal Value, decimal Percent);
 
 public record MoverDto(string Symbol, decimal MarketValue, decimal DayChangePercent);
 
-public record ValuePointDto(DateTimeOffset Date, decimal Value);
+public record ValuePointDto(DateTimeOffset Date, decimal Value, decimal Cash = 0m, decimal MarketValue = 0m);
 
 public record DashboardDto(
     Guid? PortfolioId,
