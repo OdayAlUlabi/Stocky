@@ -21,10 +21,17 @@
                 </select>
             </form>
         }
+        <button id="btnRefreshAll" class="btn btn-ghost btn-sm" onclick="dashRefreshAll()" title="Refresh quotes &amp; history">
+            <i class="bi bi-arrow-clockwise" id="refreshIcon"></i> Refresh
+        </button>
         <a class="btn btn-ghost btn-sm" href="/Transactions"><i class="bi bi-arrow-left-right"></i> Transactions</a>
         <a class="btn btn-primary btn-sm" href="/Portfolios"><i class="bi bi-briefcase"></i> Portfolios</a>
     </div>
 </div>
+<form id="frmRefreshAll" method="post" action="/Admin/DataRefresh" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="scope" value="all" />
+</form>
 
 @if (Model is null)
 {
@@ -315,5 +322,39 @@
                 });
             }
         })();
+    </script>
+    <script>
+        function dashRefreshAll() {
+            var btn  = document.getElementById('btnRefreshAll');
+            var icon = document.getElementById('refreshIcon');
+            if (btn.disabled) return;
+            btn.disabled = true;
+            icon.className = 'bi bi-arrow-clockwise spin';
+            btn.title = 'Refreshing…';
+
+            var frm = document.getElementById('frmRefreshAll');
+            var body = new URLSearchParams(new FormData(frm)).toString();
+            fetch(frm.action, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body
+            }).then(function(r) {
+                if (r.ok || r.redirected) {
+                    icon.className = 'bi bi-check-circle-fill';
+                    btn.style.color = 'var(--green)';
+                    setTimeout(function() { window.location.reload(); }, 800);
+                } else {
+                    icon.className = 'bi bi-exclamation-triangle-fill';
+                    btn.style.color = 'var(--red)';
+                    btn.title = 'Refresh failed (' + r.status + ')';
+                    btn.disabled = false;
+                }
+            }).catch(function() {
+                icon.className = 'bi bi-exclamation-triangle-fill';
+                btn.style.color = 'var(--red)';
+                btn.title = 'Refresh failed';
+                btn.disabled = false;
+            });
+        }
     </script>
 }

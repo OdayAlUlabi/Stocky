@@ -343,6 +343,9 @@ button:hover, .btn:hover, input[type=submit]:hover {
 .btn-danger:hover { background: #c92a35; border-color: #c92a35; }
 .btn-sm { padding: .25rem .55rem; font-size: .78rem; }
 
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { display: inline-block; animation: spin .7s linear infinite; }
+
 input, select, textarea {
     background: var(--bg);
     border: 1px solid var(--border);
