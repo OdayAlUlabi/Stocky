@@ -84,11 +84,13 @@ public sealed class DataRefreshService(
     }
 
     /// <summary>
-    /// Recompute today's PortfolioSnapshot rows from the latest PriceQuote per symbol
-    /// and return a current market-value summary for every portfolio. Mirrors the logic
-    /// in <see cref="SnapshotJob"/> so portfolio values reflect the freshly-pulled
-    /// prices immediately after a force-refresh, instead of waiting for the next
-    /// 6-hourly snapshot run.
+    /// Compute a live portfolio value summary for every portfolio from the
+    /// latest <see cref="PriceQuote"/> per symbol (falling back to the most
+    /// recent <see cref="HistoricalPrice"/> close when no intraday quote
+    /// exists). Pure read — does NOT persist anything to
+    /// <see cref="StockyDbContext.PortfolioSnapshots"/>. The periodic
+    /// <see cref="SnapshotJob"/> is the single source of truth for stored
+    /// snapshots used by <c>PerformanceController</c>'s TWR window.
     /// </summary>
     public async Task<IReadOnlyList<PortfolioValueSnapshot>> RefreshPortfolioSnapshotsAsync(CancellationToken ct)
     {
@@ -115,45 +117,22 @@ public sealed class DataRefreshService(
                 .Select(g => g.OrderByDescending(x => x.Date).First())
                 .ToDictionaryAsync(h => h.Symbol, h => h, ct);
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var existing = await db.PortfolioSnapshots
-            .Where(s => s.Date == today)
-            .ToDictionaryAsync(s => s.PortfolioId, s => s, ct);
-
         var results = new List<PortfolioValueSnapshot>(portfolios.Count);
         foreach (var p in portfolios)
         {
-            decimal mv = 0m, cb = 0m, dayPnl = 0m;
+            decimal mv = 0m, cb = 0m;
             foreach (var h in p.Holdings)
             {
                 cb += h.Quantity * h.AverageCost;
                 if (latest.TryGetValue(h.Symbol, out var q))
                 {
                     mv += h.Quantity * q.Price;
-                    if (q.Change.HasValue) dayPnl += h.Quantity * q.Change.Value;
                 }
                 else if (latestHist.TryGetValue(h.Symbol.ToUpperInvariant(), out var hp))
                 {
                     // No live quote — use the last available daily close.
                     mv += h.Quantity * hp.Close;
                 }
-            }
-            if (existing.TryGetValue(p.Id, out var snap))
-            {
-                snap.MarketValue = mv;
-                snap.CostBasis = cb;
-                snap.DayPnL = dayPnl;
-            }
-            else
-            {
-                db.PortfolioSnapshots.Add(new PortfolioSnapshot
-                {
-                    PortfolioId = p.Id,
-                    Date = today,
-                    MarketValue = mv,
-                    CostBasis = cb,
-                    DayPnL = dayPnl
-                });
             }
 
             var cash = await ledger.GetCashBalanceAsync(p.Id, ct);
@@ -166,7 +145,6 @@ public sealed class DataRefreshService(
                 Math.Round(mv + cash, 2)));
         }
 
-        await db.SaveChangesAsync(ct);
         return results;
     }
 

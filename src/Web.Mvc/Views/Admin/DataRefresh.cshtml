@@ -61,8 +61,9 @@
         <strong>Updated portfolio values</strong>
         <p class="muted" style="margin:.25rem 0 .75rem;">
             Market value reflects the freshly-pulled quotes (latest <code>PriceQuote</code>
-            row per symbol) multiplied by current holdings. Today's
-            <code>PortfolioSnapshot</code> row has been upserted with the same values.
+            row per symbol) multiplied by current holdings, computed on the fly.
+            Nothing is written to <code>PortfolioSnapshots</code>; the periodic
+            <code>SnapshotJob</code> remains the single source of truth for stored snapshots.
         </p>
         <table class="table">
             <thead>
