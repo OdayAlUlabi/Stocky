@@ -15,6 +15,7 @@ public sealed class DataRefreshService(
     IMarketDataProvider provider,
     AlertEvaluator evaluator,
     PortfolioLedgerService ledger,
+    HoldingsCalculator holdingsCalc,
     PriceTickBroadcaster? broadcaster,
     ILogger<DataRefreshService> logger)
 {
@@ -94,10 +95,18 @@ public sealed class DataRefreshService(
     /// </summary>
     public async Task<IReadOnlyList<PortfolioValueSnapshot>> RefreshPortfolioSnapshotsAsync(CancellationToken ct)
     {
-        var portfolios = await db.Portfolios.Include(p => p.Holdings).ToListAsync(ct);
+        var portfolios = await db.Portfolios.ToListAsync(ct);
         if (portfolios.Count == 0) return Array.Empty<PortfolioValueSnapshot>();
 
-        var symbols = portfolios.SelectMany(p => p.Holdings.Select(h => h.Symbol)).Distinct().ToList();
+        // Derive current holdings live from the transaction journal — do not
+        // read from db.Holdings.
+        var holdings = await holdingsCalc.ComputeManyAsync(
+            portfolios.Select(p => p.Id).ToList(), ct);
+        var holdingsByPortfolio = holdings
+            .GroupBy(h => h.PortfolioId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Holding>)g.ToList());
+
+        var symbols = holdings.Select(h => h.Symbol).Distinct().ToList();
         var latest = symbols.Count == 0
             ? new Dictionary<string, PriceQuote>()
             : await db.PriceQuotes
@@ -121,7 +130,10 @@ public sealed class DataRefreshService(
         foreach (var p in portfolios)
         {
             decimal mv = 0m, cb = 0m;
-            foreach (var h in p.Holdings)
+            var portfolioHoldings = holdingsByPortfolio.TryGetValue(p.Id, out var hs)
+                ? hs
+                : (IReadOnlyList<Holding>)Array.Empty<Holding>();
+            foreach (var h in portfolioHoldings)
             {
                 cb += h.Quantity * h.AverageCost;
                 if (latest.TryGetValue(h.Symbol, out var q))

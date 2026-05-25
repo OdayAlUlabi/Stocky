@@ -13,7 +13,7 @@ namespace Stocky.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-public class DashboardController(StockyDbContext db, PortfolioLedgerService ledger, PortfolioHistoryService history) : ControllerBase
+public class DashboardController(StockyDbContext db, PortfolioLedgerService ledger, PortfolioHistoryService history, HoldingsCalculator holdingsCalc) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<DashboardDto>> Get([FromQuery] Guid? portfolioId, CancellationToken ct = default)
@@ -23,9 +23,7 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
         var portfolioQuery = db.Portfolios.Where(p => p.OwnerId == ownerId);
         if (portfolioId.HasValue) portfolioQuery = portfolioQuery.Where(p => p.Id == portfolioId.Value);
 
-        var portfolios = await portfolioQuery
-            .Include(p => p.Holdings)
-            .ToListAsync();
+        var portfolios = await portfolioQuery.ToListAsync(ct);
 
         var primary = portfolios.FirstOrDefault();
         var currency = primary?.BaseCurrency ?? "USD";
@@ -33,11 +31,14 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
             ? (primary?.Name ?? "Portfolio")
             : "All Portfolios";
 
-        var holdings = portfolios.SelectMany(p => p.Holdings).ToList();
+        // Derive holdings live from the transaction journal — never trust the
+        // materialized Holdings table here.
+        var holdings = (await holdingsCalc.ComputeManyAsync(
+            portfolios.Select(p => p.Id).ToList(), ct)).ToList();
         decimal cashBalance = 0m;
         foreach (var p in portfolios)
         {
-            cashBalance += await ledger.GetCashBalanceAsync(p.Id);
+            cashBalance += await ledger.GetCashBalanceAsync(p.Id, ct);
         }
         if (holdings.Count == 0)
         {

@@ -58,6 +58,7 @@ public static class StockyServicesExtensions
         services.AddScoped<Services.AlertEvaluator>();
         services.AddScoped<Services.TaxLotService>();
         services.AddScoped<Services.PortfolioLedgerService>();
+        services.AddScoped<Services.HoldingsCalculator>();
         services.AddScoped<Services.PortfolioHistoryService>();
         services.AddScoped<Services.PortfolioAnalyticsService>();
         services.AddScoped<Services.WashSaleService>();
