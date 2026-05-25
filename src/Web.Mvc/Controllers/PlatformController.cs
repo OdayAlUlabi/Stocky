@@ -189,8 +189,11 @@ public class AdminController : Controller
             case "quotes":
                 {
                     var q = await refresher.RefreshQuotesOnceAsync(ct);
+                    // Also backfill any missing daily closes from each symbol's earliest
+                    // transaction date through today so historical coverage stays complete.
+                    var h = await refresher.BackfillHistoricalOnceAsync(ct);
                     portfolios = q.Portfolios;
-                    payload = new { scope = "quotes", quotes = q };
+                    payload = new { scope = "quotes", quotes = q, history = h };
                     break;
                 }
             case "history":

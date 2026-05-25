@@ -104,6 +104,17 @@ public sealed class DataRefreshService(
                 .Select(g => g.OrderByDescending(x => x.AsOf).First())
                 .ToDictionaryAsync(q => q.Symbol, q => q, ct);
 
+        // Fallback: latest available daily close per symbol (used when no intraday
+        // PriceQuote exists, e.g. weekend / off-hours / never-quoted symbols).
+        var symbolsUpper = symbols.Select(s => s.ToUpperInvariant()).ToList();
+        var latestHist = symbolsUpper.Count == 0
+            ? new Dictionary<string, HistoricalPrice>()
+            : await db.HistoricalPrices
+                .Where(h => symbolsUpper.Contains(h.Symbol))
+                .GroupBy(h => h.Symbol)
+                .Select(g => g.OrderByDescending(x => x.Date).First())
+                .ToDictionaryAsync(h => h.Symbol, h => h, ct);
+
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var existing = await db.PortfolioSnapshots
             .Where(s => s.Date == today)
@@ -120,6 +131,11 @@ public sealed class DataRefreshService(
                 {
                     mv += h.Quantity * q.Price;
                     if (q.Change.HasValue) dayPnl += h.Quantity * q.Change.Value;
+                }
+                else if (latestHist.TryGetValue(h.Symbol.ToUpperInvariant(), out var hp))
+                {
+                    // No live quote — use the last available daily close.
+                    mv += h.Quantity * hp.Close;
                 }
             }
             if (existing.TryGetValue(p.Id, out var snap))
