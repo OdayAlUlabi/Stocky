@@ -227,8 +227,20 @@ public class AdminController : Controller
         catch (Exception ex)
         {
             logger.LogError(ex, "Admin data refresh failed for scope {Scope}", scope);
-            status = $"Data refresh failed: {ex.Message}. Symbols without provider data are skipped — see container logs for details.";
-            payload = new { scope = scope ?? "all", error = ex.Message };
+            // Surface the inner exception too — for EF SaveChanges failures the
+            // outer message is a generic wrapper ("An error occurred while saving
+            // the entity changes. See the inner exception for details.") and the
+            // real cause (unique-key violation, FK error, etc.) is in InnerException.
+            var detail = ex.Message;
+            var inner = ex.InnerException;
+            int depth = 0;
+            while (inner is not null && depth++ < 4)
+            {
+                detail += $" → {inner.GetType().Name}: {inner.Message}";
+                inner = inner.InnerException;
+            }
+            status = $"Data refresh failed: {detail}. Symbols without provider data are skipped — see container logs for details.";
+            payload = new { scope = scope ?? "all", error = detail };
         }
         var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
         TempData["RefreshPayload"] = System.Text.Json.JsonSerializer.Serialize(payload, jsonOpts);

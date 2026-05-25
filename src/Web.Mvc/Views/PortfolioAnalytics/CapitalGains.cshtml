@@ -25,8 +25,8 @@
         {
             <tr>
                 <td>@l.Symbol</td>
-                <td>@l.AcquiredAt.ToString("yyyy-MM-dd")</td>
-                <td>@l.SoldAt.ToString("yyyy-MM-dd")</td>
+                <td>@l.AcquiredAt.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@l.SoldAt.ToString("yyyy-MM-dd HH:mm")</td>
                 <td style="text-align:right;">@l.Quantity.Num(4)</td>
                 <td style="text-align:right;">@l.CostBasis.Money("USD")</td>
                 <td style="text-align:right;">@l.Proceeds.Money("USD")</td>

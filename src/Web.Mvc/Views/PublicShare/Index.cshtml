@@ -60,7 +60,7 @@
                 @foreach (var t in Model.Transactions)
                 {
                     <tr>
-                        <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
+                        <td>@t.ExecutedAt.ToString("yyyy-MM-dd HH:mm")</td>
                         <td>@t.Type</td>
                         <td>@t.Symbol</td>
                         <td style="text-align:right;">@t.Quantity.Num(4)</td>

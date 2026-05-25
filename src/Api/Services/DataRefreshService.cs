@@ -30,8 +30,12 @@ public sealed class DataRefreshService(
 
     public async Task<QuoteRefreshResult> RefreshQuotesOnceAsync(CancellationToken ct)
     {
-        var rawSymbols = await db.Holdings.Select(h => h.Symbol)
-            .Union(db.WatchlistItems.Select(w => w.Symbol))
+        var rawSymbols = await db.Holdings
+            .Where(h => h.Symbol != null && h.Symbol != "")
+            .Select(h => h.Symbol)
+            .Union(db.WatchlistItems
+                .Where(w => w.Symbol != null && w.Symbol != "")
+                .Select(w => w.Symbol))
             .Union(db.Transactions
                 .Where(t => t.Symbol != null && t.Symbol != "")
                 .Select(t => t.Symbol!))
@@ -91,7 +95,14 @@ public sealed class DataRefreshService(
         }
         if (added > 0)
         {
-            await db.SaveChangesAsync(ct);
+            try { await db.SaveChangesAsync(ct); }
+            catch (Exception ex)
+            {
+                logger.LogError(ex,
+                    "Force-refresh: SaveChanges failed while inserting {Added} PriceQuote rows. Inner: {Inner}",
+                    added, ex.InnerException?.Message);
+                throw;
+            }
         }
         await evaluator.EvaluateAsync(quotes, ct);
 
@@ -273,7 +284,17 @@ public sealed class DataRefreshService(
 
         if (inserted > 0 || updated > 0)
         {
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex,
+                    "Force-refresh: SaveChanges failed while inserting {Inserted} HistoricalPrice rows / updating {Updated}. Inner: {Inner}",
+                    inserted, updated, ex.InnerException?.Message);
+                throw;
+            }
             logger.LogInformation(
                 "Force-refresh: inserted {Inserted} new daily bars, backfilled OHLCV on {Updated} existing rows across {Symbols} symbols.",
                 inserted, updated, symbols.Count);

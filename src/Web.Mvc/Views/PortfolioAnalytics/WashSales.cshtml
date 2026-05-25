@@ -19,7 +19,7 @@
         {
             <tr>
                 <td>@a.Symbol</td>
-                <td>@a.SoldAt.ToString("yyyy-MM-dd")</td>
+                <td>@a.SoldAt.ToString("yyyy-MM-dd HH:mm")</td>
                 <td style="text-align:right;">@a.LotQuantity.Num(4)</td>
                 <td style="text-align:right;" class="neg">@a.LotLoss.Money("USD")</td>
                 <td style="text-align:right;" class="neg">@a.DisallowedLoss.Money("USD")</td>

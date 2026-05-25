@@ -25,7 +25,7 @@
             @foreach (var l in Model.Lots)
             {
                 <tr>
-                    <td>@l.OpenedAt.ToString("yyyy-MM-dd")</td>
+                    <td>@l.OpenedAt.ToString("yyyy-MM-dd HH:mm")</td>
                     <td style="text-align:right;">@l.Quantity.Num(4)</td>
                     <td style="text-align:right;">@l.RemainingQuantity.Num(4)</td>
                     <td style="text-align:right;">@l.CostPerShare.Money(Model.Currency)</td>
@@ -44,7 +44,7 @@
             @foreach (var t in Model.Transactions)
             {
                 <tr>
-                    <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
+                    <td>@t.ExecutedAt.ToString("yyyy-MM-dd HH:mm")</td>
                     <td>@t.Type</td>
                     <td style="text-align:right;">@t.Quantity.Num(4)</td>
                     <td style="text-align:right;">@t.Price.Money(t.Currency)</td>

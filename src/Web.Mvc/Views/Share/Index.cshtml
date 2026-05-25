@@ -44,8 +44,8 @@
                 <td>@s.Label</td>
                 <td><code>@s.TokenPrefix…</code></td>
                 <td><code>@s.PortfolioId</code></td>
-                <td>@s.CreatedAt.ToString("yyyy-MM-dd")</td>
-                <td>@(s.ExpiresAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                <td>@s.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@(s.ExpiresAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                 <td style="text-align:right;">@s.ViewCount</td>
                 <td>@(s.IsActive ? "Yes" : "No")</td>
                 <td>

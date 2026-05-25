@@ -33,7 +33,7 @@
                     <td><span class="pill">@p.BaseCurrency</span></td>
                     <td><span class="pill">@p.CostBasisMethod</span></td>
                     <td style="text-align:right;">@p.CashBalance.Money(p.BaseCurrency)</td>
-                    <td class="text-muted">@p.CreatedAt.ToString("yyyy-MM-dd")</td>
+                    <td class="text-muted">@p.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
                     <td style="text-align:right;">
                         <a href="/Portfolios/Edit/@p.Id" class="btn btn-ghost btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                         <form method="post" action="/Portfolios/Delete/@p.Id" style="display:inline;" onsubmit="return confirm('Delete @p.Name?');">

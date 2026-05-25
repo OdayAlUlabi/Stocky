@@ -141,7 +141,7 @@
                         netCash += amt;
                         footerCcy ??= t.Currency;
                         <tr>
-                            <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
+                            <td>@t.ExecutedAt.ToString("yyyy-MM-dd HH:mm")</td>
                             <td><span class="pill">@typeLabel</span></td>
                             <td style="text-align:right;" class="@amt.SignClass()" data-sort-value="@amt">@amt.Money(t.Currency)</td>
                             <td>@t.Notes</td>

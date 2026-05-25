@@ -36,8 +36,8 @@
                 <td>@k.Name</td>
                 <td><code>@k.Prefix…</code></td>
                 <td>@k.Scopes</td>
-                <td>@k.CreatedAt.ToString("yyyy-MM-dd")</td>
-                <td>@(k.ExpiresAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                <td>@k.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@(k.ExpiresAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                 <td>@(k.LastUsedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                 <td>@(k.IsActive ? "Yes" : "No")</td>
                 <td>

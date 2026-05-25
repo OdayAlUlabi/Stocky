@@ -25,7 +25,7 @@
 
 @if (Model is not null)
 {
-    <h3>Summary (@Model.From.ToString("yyyy-MM-dd") → @Model.To.ToString("yyyy-MM-dd"))</h3>
+    <h3>Summary (@Model.From.ToString("yyyy-MM-dd HH:mm") → @Model.To.ToString("yyyy-MM-dd HH:mm"))</h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;">
         <article><small>Deposits</small><h4>@Model.TotalDeposits.Money(Model.Currency)</h4></article>
         <article><small>Withdrawals</small><h4>@Model.TotalWithdrawals.Money(Model.Currency)</h4></article>
@@ -44,7 +44,7 @@
     <tbody>
         @foreach (var d in dividends)
         {
-            <tr><td>@d.Date.ToString("yyyy-MM-dd")</td><td>@d.Symbol</td><td style="text-align:right;">@d.Amount.Money(d.Currency)</td></tr>
+            <tr><td>@d.Date.ToString("yyyy-MM-dd HH:mm")</td><td>@d.Symbol</td><td style="text-align:right;">@d.Amount.Money(d.Currency)</td></tr>
         }
         @if (dividends.Count == 0) { <tr><td colspan="3"><em>No dividends in selected window.</em></td></tr> }
     </tbody>

@@ -78,8 +78,8 @@
             <span><i class="bi bi-pie-chart"></i> Asset allocation</span>
             <small class="text-muted">@Model.AssetClassAllocation.Count classes</small>
         </header>
-        <div style="display:grid;grid-template-columns:160px 1fr;gap:1rem;align-items:center;">
-            <canvas id="assetChart" width="160" height="160"></canvas>
+        <div style="display:grid;grid-template-columns:200px 1fr;gap:1rem;align-items:center;">
+            <div class="chart-donut"><canvas id="assetChart" width="200" height="200"></canvas></div>
             <table>
                 <tbody>
                     @foreach (var s in Model.AssetClassAllocation)
@@ -191,7 +191,7 @@
             <span><i class="bi bi-graph-up-arrow"></i> Portfolio value — Cash vs Stocks</span>
             <small class="text-muted">@Model.ValueHistory.Count points</small>
         </header>
-        <canvas id="valueChart" height="80"></canvas>
+        <div class="chart-box"><canvas id="valueChart"></canvas></div>
     </article>
 }
 

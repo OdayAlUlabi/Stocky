@@ -63,8 +63,12 @@ public sealed class QuoteRefresher(
         var provider = scope.ServiceProvider.GetRequiredService<IMarketDataProvider>();
         var evaluator = scope.ServiceProvider.GetRequiredService<AlertEvaluator>();
 
-        var symbols = await db.Holdings.Select(h => h.Symbol)
-            .Union(db.WatchlistItems.Select(w => w.Symbol))
+        var symbols = await db.Holdings
+            .Where(h => h.Symbol != null && h.Symbol != "")
+            .Select(h => h.Symbol)
+            .Union(db.WatchlistItems
+                .Where(w => w.Symbol != null && w.Symbol != "")
+                .Select(w => w.Symbol))
             .Union(db.Transactions
                 .Where(t => t.Symbol != null && t.Symbol != "")
                 .Select(t => t.Symbol!))

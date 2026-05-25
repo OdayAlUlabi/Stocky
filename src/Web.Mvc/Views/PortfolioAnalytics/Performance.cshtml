@@ -33,7 +33,7 @@
 {
     <article>
         <header><span><i class="bi bi-graph-up-arrow"></i> Value vs cost basis</span><small class="text-muted">@Model.Series.Count points</small></header>
-        <canvas id="perfChart" height="90"></canvas>
+        <div class="chart-box"><canvas id="perfChart"></canvas></div>
     </article>
 }
 
@@ -43,7 +43,7 @@
         @foreach (var p in Model.Series.TakeLast(60))
         {
             <tr>
-                <td>@p.Date.ToString("yyyy-MM-dd")</td>
+                <td>@p.Date.ToString("yyyy-MM-dd HH:mm")</td>
                 <td style="text-align:right;">@p.Value.Money(Model.Currency)</td>
                 <td style="text-align:right;">@p.CostBasis.Money(Model.Currency)</td>
                 <td style="text-align:right;" class="@p.TwrPercent.SignClass()">@p.TwrPercent.Pct()</td>

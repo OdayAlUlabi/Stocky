@@ -65,7 +65,7 @@
 
 <article style="margin-top:1rem;">
     <header><span><i class="bi bi-graph-up"></i> Efficient frontier</span><small class="text-muted">@result.EfficientFrontier.Count points</small></header>
-    <canvas id="frontier" height="280"></canvas>
+    <div class="chart-box"><canvas id="frontier"></canvas></div>
 </article>
 
 @section Scripts {
@@ -87,6 +87,7 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     scales: {
                         x: { title: { display: true, text: 'Volatility (annualised)' } },
                         y: { title: { display: true, text: 'Expected return (annualised)' } }

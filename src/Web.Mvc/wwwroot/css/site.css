@@ -265,6 +265,38 @@ table.sortable thead th.sort-asc::after  { content: "\25B2"; opacity: 1; color: 
 table.sortable thead th.sort-desc::after { content: "\25BC"; opacity: 1; color: var(--text); } /* ▼ */
 
 /* ============================================================
+   Chart sizing
+   ------------------------------------------------------------
+   Chart.js requires its canvas to live inside a positioned
+   parent of definite size when maintainAspectRatio:false is
+   used. .chart-box gives line/bar charts a stable, responsive
+   height; .chart-donut sizes the small allocation donuts.
+   ============================================================ */
+
+.chart-box {
+    position: relative;
+    width: 100%;
+    height: clamp(220px, 32vh, 360px);
+}
+.chart-box-sm {
+    position: relative;
+    width: 100%;
+    height: clamp(180px, 22vh, 240px);
+}
+.chart-box > canvas,
+.chart-box-sm > canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+.chart-donut {
+    width: 200px;
+    height: 200px;
+    flex: 0 0 auto;
+}
+.chart-donut canvas { display: block; }
+
+/* ============================================================
    Color utilities
    ============================================================ */
 

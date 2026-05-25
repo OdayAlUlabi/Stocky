@@ -76,7 +76,7 @@
                 footerCcy ??= t.Currency;
                 var displayPrice = cashEffect != 0 && !isBuy && !isSell ? cashEffect : t.Price;
                 <tr>
-                    <td class="text-muted">@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
+                    <td class="text-muted">@t.ExecutedAt.ToString("yyyy-MM-dd HH:mm")</td>
                     <td><span class="@pillCls">@t.Type</span></td>
                     <td><strong>@t.Symbol</strong></td>
                     <td style="text-align:right;">@t.Quantity.Num(4)</td>
