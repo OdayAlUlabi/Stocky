@@ -114,6 +114,10 @@ public sealed class HistoricalDataBackfillJob(
                     Symbol = upper,
                     Date = bar.Date,
                     Close = bar.Close,
+                    Open = bar.Open,
+                    High = bar.High,
+                    Low = bar.Low,
+                    Volume = bar.Volume,
                     Source = "provider",
                     CapturedAt = DateTimeOffset.UtcNow
                 });

@@ -211,16 +211,17 @@ public sealed class DataRefreshService(
 
         var existing = await db.HistoricalPrices
             .Where(h => symbols.Contains(h.Symbol))
-            .Select(h => new { h.Symbol, h.Date })
             .ToListAsync(ct);
-        var existingSet = new HashSet<(string, DateOnly)>(
-            existing.Select(e => (e.Symbol.ToUpperInvariant(), e.Date)));
+        var existingByKey = existing.ToDictionary(
+            e => (e.Symbol.ToUpperInvariant(), e.Date),
+            e => e);
 
         var firstByUpper = firstSeenBySymbol.ToDictionary(
             x => x.Symbol.ToUpperInvariant(),
             x => DateOnly.FromDateTime(x.First.UtcDateTime));
 
         int inserted = 0;
+        int updated = 0;
         foreach (var (sym, list) in bars)
         {
             var upper = sym.ToUpperInvariant();
@@ -228,12 +229,27 @@ public sealed class DataRefreshService(
             foreach (var bar in list)
             {
                 if (bar.Date < symStart) continue;
-                if (existingSet.Contains((upper, bar.Date))) continue;
+                if (existingByKey.TryGetValue((upper, bar.Date), out var row))
+                {
+                    // Backfill OHLCV onto pre-existing rows that were saved before
+                    // the provider returned the full bar shape.
+                    var dirty = false;
+                    if (row.Open is null && bar.Open is not null) { row.Open = bar.Open; dirty = true; }
+                    if (row.High is null && bar.High is not null) { row.High = bar.High; dirty = true; }
+                    if (row.Low is null && bar.Low is not null) { row.Low = bar.Low; dirty = true; }
+                    if (row.Volume is null && bar.Volume is not null) { row.Volume = bar.Volume; dirty = true; }
+                    if (dirty) updated++;
+                    continue;
+                }
                 db.HistoricalPrices.Add(new HistoricalPrice
                 {
                     Symbol = upper,
                     Date = bar.Date,
                     Close = bar.Close,
+                    Open = bar.Open,
+                    High = bar.High,
+                    Low = bar.Low,
+                    Volume = bar.Volume,
                     Source = "provider",
                     CapturedAt = DateTimeOffset.UtcNow
                 });
@@ -241,12 +257,12 @@ public sealed class DataRefreshService(
             }
         }
 
-        if (inserted > 0)
+        if (inserted > 0 || updated > 0)
         {
             await db.SaveChangesAsync(ct);
             logger.LogInformation(
-                "Force-refresh: inserted {Count} new daily bars across {Symbols} symbols.",
-                inserted, symbols.Count);
+                "Force-refresh: inserted {Inserted} new daily bars, backfilled OHLCV on {Updated} existing rows across {Symbols} symbols.",
+                inserted, updated, symbols.Count);
         }
 
         return new HistoryBackfillResult(symbols.Count, inserted, globalStart, today);

@@ -298,7 +298,7 @@ public record UserSettingsDto(string DisplayCurrency, string Theme, string Local
 public record ImportResultDto(int Imported, int Skipped, IReadOnlyList<string> Errors);
 
 // Daily OHLC close for historical bar fetches
-public record DailyBarDto(DateOnly Date, decimal Close);
+public record DailyBarDto(DateOnly Date, decimal Close, decimal? Open = null, decimal? High = null, decimal? Low = null, long? Volume = null);
 
 // SCR-041 Portfolio history since first transaction
 public record PortfolioHistoryPointDto(

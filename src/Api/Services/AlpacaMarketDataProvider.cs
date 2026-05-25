@@ -172,7 +172,13 @@ public sealed class AlpacaMarketDataProvider(
                             result[sym] = existing;
                         }
                         foreach (var b in bars)
-                            existing.Add(new DailyBarDto(DateOnly.FromDateTime(b.Timestamp.UtcDateTime), b.Close));
+                            existing.Add(new DailyBarDto(
+                                DateOnly.FromDateTime(b.Timestamp.UtcDateTime),
+                                b.Close,
+                                b.Open,
+                                b.High,
+                                b.Low,
+                                b.Volume));
                     }
                 }
                 pageToken = resp?.NextPageToken;
@@ -215,7 +221,11 @@ public sealed class AlpacaMarketDataProvider(
 
     private sealed class AlpacaBar
     {
+        [JsonPropertyName("o")] public decimal? Open { get; set; }
+        [JsonPropertyName("h")] public decimal? High { get; set; }
+        [JsonPropertyName("l")] public decimal? Low { get; set; }
         [JsonPropertyName("c")] public decimal Close { get; set; }
+        [JsonPropertyName("v")] public long? Volume { get; set; }
         [JsonPropertyName("t")] public DateTimeOffset Timestamp { get; set; }
     }
 
