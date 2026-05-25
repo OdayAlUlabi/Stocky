@@ -15,13 +15,17 @@ public class PortfoliosController : Controller
         var list = (await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
             c => c.List()) ?? Array.Empty<PortfolioDto>()).ToList();
 
-        // Fetch performance (market value, cost basis, P&L) for each portfolio in parallel.
-        var perfTasks = list.Select(p =>
-            this.InvokeAsync<StockyApi.PortfoliosController, PortfolioPerformanceDto>(c => c.Performance(p.Id)));
-        var perfs = await Task.WhenAll(perfTasks);
-        var perfMap = perfs
-            .Where(p => p is not null)
-            .ToDictionary(p => p!.PortfolioId, p => p!);
+        // Fetch performance (market value, cost basis, P&L) for each portfolio sequentially.
+        // DbContext is Scoped (one per request) and not thread-safe — Task.WhenAll would
+        // cause concurrent access exceptions.
+        var perfMap = new Dictionary<Guid, PortfolioPerformanceDto>(list.Count);
+        foreach (var p in list)
+        {
+            var perf = await this.InvokeAsync<StockyApi.PortfoliosController, PortfolioPerformanceDto>(
+                c => c.Performance(p.Id));
+            if (perf is not null)
+                perfMap[perf.PortfolioId] = perf;
+        }
 
         ViewBag.Performance = perfMap;
         return View(list);

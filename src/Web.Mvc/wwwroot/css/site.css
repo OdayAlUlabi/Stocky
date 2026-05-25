@@ -495,7 +495,7 @@ details > *:not(summary) { margin-top: .85rem; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; }
-@media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .d-none-mobile { display: none !important; } }
+@media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .d-none-mobile { display: none !important; } article { overflow-x: auto; } }
 
 /* ============================================================
    Text aliases

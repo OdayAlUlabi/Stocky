@@ -34,12 +34,12 @@
                 <th>Symbol</th>
                 <th style="text-align:right;">Qty</th>
                 <th style="text-align:right;">Price</th>
-                <th style="text-align:right;">Fee</th>
-                <th style="text-align:right;">Cash effect</th>
-                <th style="text-align:right;">Cash balance</th>
-                <th style="text-align:right;">Current Price</th>
-                <th style="text-align:right;">Market Value</th>
-                <th>Notes</th>
+                <th style="text-align:right;" class="d-none-mobile">Fee</th>
+                <th style="text-align:right;" class="d-none-mobile">Cash effect</th>
+                <th style="text-align:right;" class="d-none-mobile">Cash balance</th>
+                <th style="text-align:right;" class="d-none-mobile">Current Price</th>
+                <th style="text-align:right;" class="d-none-mobile">Market Value</th>
+                <th class="d-none-mobile">Notes</th>
                 <th style="text-align:right;">Actions</th>
             </tr>
         </thead>
@@ -112,12 +112,12 @@
                     <td><strong>@t.Symbol</strong></td>
                     <td style="text-align:right;">@t.Quantity.Num(4)</td>
                     <td style="text-align:right;">@t.Price.Money(t.Currency)</td>
-                    <td style="text-align:right;" class="text-muted">@t.Fee.Money(t.Currency)</td>
-                    <td style="text-align:right;" class="@cashEffect.SignClass()">@cashEffect.Money(t.Currency)</td>
-                    <td style="text-align:right;"><strong>@runningBalance.Money(t.Currency)</strong></td>
-                    <td style="text-align:right;">@t.LatestPrice.Money(t.Currency)</td>
-                    <td style="text-align:right;">@t.MarketValue.Money(t.Currency)</td>
-                    <td class="text-muted">@t.Notes</td>
+                    <td style="text-align:right;" class="d-none-mobile text-muted">@t.Fee.Money(t.Currency)</td>
+                    <td style="text-align:right;" class="d-none-mobile @cashEffect.SignClass()">@cashEffect.Money(t.Currency)</td>
+                    <td style="text-align:right;" class="d-none-mobile"><strong>@runningBalance.Money(t.Currency)</strong></td>
+                    <td style="text-align:right;" class="d-none-mobile">@t.LatestPrice.Money(t.Currency)</td>
+                    <td style="text-align:right;" class="d-none-mobile">@t.MarketValue.Money(t.Currency)</td>
+                    <td class="d-none-mobile text-muted">@t.Notes</td>
                     <td style="text-align:right;">
                         <a href="/Portfolios/@pid/Transactions/Edit/@t.Id" class="btn btn-ghost btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                         <form method="post" action="/Portfolios/@pid/Transactions/Delete/@t.Id" style="display:inline;" onsubmit="return confirm('Delete this transaction?');">
