@@ -128,6 +128,9 @@ public class ReportSchedulesController : Controller
     {
         var rows = await this.InvokeAsync<StockyApi.ReportSchedulesController, IEnumerable<ReportScheduleDto>>(
             c => c.List(ct)) ?? Array.Empty<ReportScheduleDto>();
+        var portfolios = (await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>()).ToList();
+        ViewBag.Portfolios = portfolios;
         return View(rows.ToList());
     }
 

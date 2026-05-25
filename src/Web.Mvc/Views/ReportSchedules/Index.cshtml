@@ -1,74 +1,166 @@
 @model List<ReportScheduleDto>
-@{ ViewData["Title"] = "Report schedules"; }
-<div class="page-header"><h2><i class="bi bi-file-earmark-text"></i> Scheduled reports</h2></div>
+@{
+    ViewData["Title"] = "Scheduled Reports";
+    var portfolios = ViewBag.Portfolios as List<PortfolioDto> ?? new();
+    var portfolioMap = portfolios.ToDictionary(p => p.Id, p => p.Name);
+    var types = new[] { "Performance", "Holdings", "Transactions", "CapitalGains", "Tax" };
+    var formats = new[] { "Pdf", "Csv", "Xlsx", "Json" };
+    var cadences = new[] { "Daily", "Weekly", "Monthly", "Quarterly" };
+}
 
-<h3>Create schedule</h3>
-<form method="post" action="/ReportSchedules/Create" style="max-width:680px;">
-    @Html.AntiForgeryToken()
-    <div class="grid">
-        <label>Portfolio ID <input name="portfolioId" required /></label>
-        <label>Type
-            <select name="type">
-                @foreach (var t in new[] { "Performance","Holdings","Transactions","CapitalGains","Tax" })
-                {
-                    <option value="@t">@t</option>
-                }
-            </select>
-        </label>
-    </div>
-    <div class="grid">
-        <label>Format
-            <select name="format">
-                @foreach (var f in new[] { "Pdf","Csv","Xlsx","Json" })
-                {
-                    <option value="@f">@f</option>
-                }
-            </select>
-        </label>
-        <label>Cadence
-            <select name="cadence">
-                @foreach (var c in new[] { "Daily","Weekly","Monthly","Quarterly" })
-                {
-                    <option value="@c">@c</option>
-                }
-            </select>
-        </label>
-    </div>
-    <div class="grid">
-        <label>Email (optional) <input name="email" type="email" /></label>
-        <label><input type="checkbox" name="enabled" value="true" checked /> Enabled</label>
-    </div>
-    <button type="submit">Create schedule</button>
-</form>
+<div class="page-header">
+    <h2><i class="bi bi-clock-history"></i> Scheduled Reports</h2>
+</div>
 
-<h3>Existing schedules</h3>
-<table>
-    <thead><tr><th>Type</th><th>Format</th><th>Cadence</th><th>Email</th><th>Enabled</th><th>Next run</th><th>Last run</th><th></th></tr></thead>
-    <tbody>
-        @foreach (var s in Model)
-        {
-            <tr>
-                <td>@s.Type</td>
-                <td>@s.Format</td>
-                <td>@s.Cadence</td>
-                <td>@s.Email</td>
-                <td>@(s.Enabled ? "Yes" : "No")</td>
-                <td>@s.NextRunUtc.ToString("yyyy-MM-dd HH:mm")</td>
-                <td>@(s.LastRunUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
-                <td>
-                    <form method="post" action="/ReportSchedules/Run" style="display:inline;">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@s.Id" />
-                        <button type="submit" class="btn btn-ghost btn-sm">Run now</button>
-                    </form>
-                    <form method="post" action="/ReportSchedules/Delete" style="display:inline;" onsubmit="return confirm('Delete?');">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@s.Id" />
-                        <button type="submit" class="btn btn-ghost btn-sm">×</button>
-                    </form>
-                </td>
-            </tr>
-        }
-        @if (Model.Count == 0) { <tr><td colspan="8"><em>No schedules.</em></td></tr> }
-    </tbody>
-</table>
+@if (TempData["Status"] is string status)
+{
+    <div class="flash success" style="margin-bottom:1rem;"><i class="bi bi-check-circle"></i> @status</div>
+}
+@if (TempData["Error"] is string err)
+{
+    <div class="flash" style="margin-bottom:1rem;background:color-mix(in srgb,var(--red) 15%,var(--bg-elev));border-color:var(--red);color:var(--red);"><i class="bi bi-exclamation-circle"></i> @err</div>
+}
+
+<article style="max-width:780px;margin-bottom:1.5rem;">
+    <h3 style="margin-bottom:1rem;">Create schedule</h3>
+
+    @if (portfolios.Count == 0)
+    {
+        <p class="text-muted"><i class="bi bi-info-circle"></i> No portfolios yet. <a href="/Portfolios/Create">Create one first.</a></p>
+    }
+    else
+    {
+        <form method="post" action="/ReportSchedules/Create">
+            @Html.AntiForgeryToken()
+
+            <div class="grid-2" style="gap:.75rem;margin-bottom:.75rem;">
+                <label>Portfolio
+                    <select name="portfolioId" required>
+                        <option value="">— select portfolio —</option>
+                        @foreach (var p in portfolios)
+                        {
+                            <option value="@p.Id">@p.Name (@p.BaseCurrency)</option>
+                        }
+                    </select>
+                </label>
+
+                <label>Report type
+                    <select name="type">
+                        @foreach (var t in types)
+                        {
+                            <option value="@t">@t</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            <div class="grid-2" style="gap:.75rem;margin-bottom:.75rem;">
+                <label>Format
+                    <select name="format">
+                        @foreach (var f in formats)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </label>
+
+                <label>Cadence
+                    <select name="cadence">
+                        @foreach (var c in cadences)
+                        {
+                            <option value="@c">@c</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            <div class="grid-2" style="gap:.75rem;margin-bottom:1rem;">
+                <label>Delivery email <small class="text-muted">(optional — leave blank for inbox only)</small>
+                    <input name="email" type="email" placeholder="you@example.com" />
+                </label>
+                <label style="align-self:flex-end;padding-bottom:.5rem;">
+                    <input type="checkbox" name="enabled" value="true" checked /> Enable immediately
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Create schedule</button>
+        </form>
+    }
+</article>
+
+<article>
+    <h3 style="margin-bottom:1rem;">Active schedules</h3>
+    @if (Model.Count == 0)
+    {
+        <p class="text-muted">No schedules yet.</p>
+    }
+    else
+    {
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Portfolio</th>
+                        <th>Type</th>
+                        <th>Format</th>
+                        <th>Cadence</th>
+                        <th>Email</th>
+                        <th>Enabled</th>
+                        <th>Next run</th>
+                        <th>Last run</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in Model.OrderBy(s => s.NextRunUtc))
+                    {
+                        var pName = portfolioMap.TryGetValue(s.PortfolioId, out var n) ? n : s.PortfolioId.ToString("D")[..8] + "…";
+                        <tr>
+                            <td>
+                                <a href="/Portfolios/Detail/@s.PortfolioId" class="text-muted" style="font-size:.85em;">
+                                    <i class="bi bi-briefcase" style="margin-right:.25rem;"></i>@pName
+                                </a>
+                            </td>
+                            <td><span class="chip">@s.Type</span></td>
+                            <td>@s.Format</td>
+                            <td>@s.Cadence</td>
+                            <td style="font-size:.85em;color:var(--text-muted);">@(s.Email ?? "—")</td>
+                            <td>
+                                @if (s.Enabled)
+                                {
+                                    <span style="color:var(--green);"><i class="bi bi-check-circle-fill"></i></span>
+                                }
+                                else
+                                {
+                                    <span style="color:var(--text-muted);"><i class="bi bi-pause-circle"></i></span>
+                                }
+                            </td>
+                            <td>@s.NextRunUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td style="color:var(--text-muted);">@(s.LastRunUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                            <td>
+                                <div style="display:flex;gap:.35rem;align-items:center;">
+                                    <form method="post" action="/ReportSchedules/Run">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@s.Id" />
+                                        <button type="submit" class="btn btn-ghost btn-sm" title="Run now">
+                                            <i class="bi bi-play-fill"></i>
+                                        </button>
+                                    </form>
+                                    <form method="post" action="/ReportSchedules/Delete"
+                                          onsubmit="return confirm('Delete this schedule?');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@s.Id" />
+                                        <button type="submit" class="btn btn-ghost btn-sm" title="Delete"
+                                                style="color:var(--red);">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</article>
