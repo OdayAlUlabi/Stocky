@@ -73,6 +73,13 @@ public sealed class DataRefreshService(
             .Select(g => g.OrderByDescending(p => p.AsOf).First())
             .ToDictionaryAsync(p => p.Symbol, ct);
 
+        // PriceQuotes.Symbol has a FK to Instruments.Symbol. UI flows
+        // (Transactions/Watchlists) auto-create Instruments, but legacy
+        // imports or direct DB writes can leave orphan symbols — the
+        // force-refresh must defensively backfill placeholder rows or
+        // SaveChanges fails with FK_PriceQuotes_Instruments_Symbol.
+        await EnsureInstrumentsExistAsync(quotes.Select(q => q.Symbol), ct);
+
         int added = 0;
         foreach (var q in quotes)
         {
@@ -336,6 +343,52 @@ public sealed class DataRefreshService(
             })
             .OrderBy(r => r.Symbol)
             .ToList();
+    }
+
+    /// <summary>
+    /// Inserts placeholder <see cref="Instrument"/> rows for any symbol that
+    /// PriceQuotes/Holdings will FK to but is missing from the Instruments
+    /// table. Matches the on-the-fly creation pattern used by
+    /// TransactionsController / WatchlistsController / TransactionImportController.
+    /// </summary>
+    private async Task EnsureInstrumentsExistAsync(IEnumerable<string> symbols, CancellationToken ct)
+    {
+        var wanted = symbols
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (wanted.Count == 0) return;
+
+        var existing = await db.Instruments
+            .Where(i => wanted.Contains(i.Symbol))
+            .Select(i => i.Symbol)
+            .ToListAsync(ct);
+        var existingSet = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+
+        var missing = wanted.Where(s => !existingSet.Contains(s)).ToList();
+        if (missing.Count == 0) return;
+
+        foreach (var sym in missing)
+        {
+            db.Instruments.Add(new Instrument
+            {
+                Symbol = sym,
+                Name = sym,
+                Exchange = "UNKNOWN",
+                Currency = "USD",
+                AssetClass = "Equity"
+            });
+        }
+        try { await db.SaveChangesAsync(ct); }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Force-refresh: SaveChanges failed while inserting {Count} placeholder Instrument rows. Inner: {Inner}",
+                missing.Count, ex.InnerException?.Message);
+            throw;
+        }
+        logger.LogInformation("Force-refresh: created {Count} placeholder Instrument rows for orphan symbols", missing.Count);
     }
 
     /// <summary>
