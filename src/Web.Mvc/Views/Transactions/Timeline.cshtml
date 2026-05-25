@@ -1,0 +1,334 @@
+@model List<TransactionDto>
+@{
+    var pid = (Guid)ViewBag.PortfolioId;
+    var portfolio = ViewBag.Portfolio as PortfolioDto;
+    ViewData["Title"] = (portfolio?.Name ?? "Portfolio") + " · Transaction Timeline";
+    ViewBag.PickerPathTemplate = "/Portfolios/{0}/Transactions/Timeline";
+
+    static decimal CashDelta(string type, decimal qty, decimal price, decimal fee) =>
+        (type?.ToLowerInvariant()) switch
+        {
+            "buy"                                                => -(qty * price + fee),
+            "sell"                                               => qty * price - fee,
+            "deposit" or "dividend" or "interest" or "transfer" => qty * price,
+            "withdrawal" or "withdraw" or "fee"                  => -(qty * price),
+            _                                                    => 0m
+        };
+
+    decimal running = 0m;
+    var events = Model.Select(t => {
+        running += CashDelta(t.Type, t.Quantity, t.Price, t.Fee);
+        return new {
+            id        = t.Id.ToString(),
+            date      = t.ExecutedAt.ToString("yyyy-MM-dd HH:mm"),
+            type      = t.Type,
+            symbol    = t.Symbol ?? "",
+            qty       = t.Quantity,
+            price     = t.Price,
+            fee       = t.Fee,
+            currency  = t.Currency,
+            notes     = t.Notes ?? "",
+            cashAfter = running,
+            mv        = t.MarketValue
+        };
+    }).ToList();
+
+    var eventsJson = System.Text.Json.JsonSerializer.Serialize(events);
+    var pidJson    = System.Text.Json.JsonSerializer.Serialize(pid.ToString());
+}
+
+<div class="page-header">
+    <h2>
+        <i class="bi bi-diagram-3"></i> Transaction Timeline
+        @await Html.PartialAsync("_PortfolioPicker")
+    </h2>
+    <div class="actions">
+        <a href="/Portfolios/Detail/@pid" class="btn btn-ghost btn-sm"><i class="bi bi-arrow-left"></i> Portfolio</a>
+        <a href="/Portfolios/@pid/Transactions" class="btn btn-ghost btn-sm"><i class="bi bi-table"></i> Table view</a>
+        <a href="/Portfolios/@pid/Transactions/Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> New transaction</a>
+    </div>
+</div>
+
+@if (Model.Count == 0)
+{
+    <article style="text-align:center;padding:3rem;">
+        <div class="text-muted" style="font-size:2.5rem;margin-bottom:.75rem;"><i class="bi bi-diagram-3"></i></div>
+        <p class="text-muted">No transactions yet — add one to see the timeline.</p>
+        <a href="/Portfolios/@pid/Transactions/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add first transaction</a>
+    </article>
+    return;
+}
+
+<div class="tl-toolbar">
+    <div class="tl-chips" id="tlTypeChips">
+        <button class="tl-chip tl-chip-active" data-type="all"        onclick="tlSetType(this,'all')">All</button>
+        <button class="tl-chip" data-type="Deposit"    onclick="tlSetType(this,'Deposit')"    style="--chip:#16c784;">Deposit</button>
+        <button class="tl-chip" data-type="Withdrawal" onclick="tlSetType(this,'Withdrawal')" style="--chip:#ea3943;">Withdrawal</button>
+        <button class="tl-chip" data-type="Buy"        onclick="tlSetType(this,'Buy')"        style="--chip:#5b9dff;">Buy</button>
+        <button class="tl-chip" data-type="Sell"       onclick="tlSetType(this,'Sell')"       style="--chip:#f0b90b;">Sell</button>
+        <button class="tl-chip" data-type="Dividend"   onclick="tlSetType(this,'Dividend')"   style="--chip:#a78bfa;">Dividend</button>
+        <button class="tl-chip" data-type="Interest"   onclick="tlSetType(this,'Interest')"   style="--chip:#34d399;">Interest</button>
+        <button class="tl-chip" data-type="Fee"        onclick="tlSetType(this,'Fee')"        style="--chip:#94a3b8;">Fee</button>
+        <button class="tl-chip" data-type="Split"      onclick="tlSetType(this,'Split')"      style="--chip:#fb923c;">Split</button>
+        <button class="tl-chip" data-type="Transfer"   onclick="tlSetType(this,'Transfer')"   style="--chip:#38bdf8;">Transfer</button>
+    </div>
+    <input class="tl-search" id="tlSymSearch" placeholder="Filter symbol…" oninput="tlSetSymbol(this.value)" />
+</div>
+
+<article style="padding:0;overflow:hidden;">
+    <div style="padding:.75rem 1rem .25rem;display:flex;align-items:center;gap:.5rem;">
+        <i class="bi bi-graph-up" style="color:var(--primary);"></i>
+        <strong>Cash balance &amp; events</strong>
+        <small class="text-muted" id="tlCount" style="margin-left:auto;"></small>
+    </div>
+    <div class="chart-box" style="height:260px;padding:0 .75rem .75rem;">
+        <canvas id="tlChart"></canvas>
+    </div>
+</article>
+
+<div class="tl-body">
+    <div class="tl-stream" id="tlStream">
+        @{ int idx = 0; }
+        @foreach (var t in Model)
+        {
+            var ce      = CashDelta(t.Type, t.Quantity, t.Price, t.Fee);
+            var isBuy   = string.Equals(t.Type, "Buy",  StringComparison.OrdinalIgnoreCase);
+            var isSell  = string.Equals(t.Type, "Sell", StringComparison.OrdinalIgnoreCase);
+            var pillCls = isBuy ? "badge-up" : isSell ? "badge-down" : "pill";
+            <div class="tl-node" id="tln-@idx" data-idx="@idx" data-type="@t.Type"
+                 data-sym="@(t.Symbol?.ToUpperInvariant() ?? "")" onclick="tlSelect(@idx)">
+                <div class="tl-dot tl-dot-@t.Type.ToLowerInvariant()"></div>
+                <div class="tl-node-card">
+                    <div class="tl-node-top">
+                        <span class="@pillCls tl-type-badge">@t.Type</span>
+                        @if (!string.IsNullOrEmpty(t.Symbol)) { <strong class="tl-symbol">@t.Symbol</strong> }
+                        <span class="text-muted tl-date">@t.ExecutedAt.ToString("MMM d, yyyy · HH:mm")</span>
+                    </div>
+                    <div class="tl-node-bottom">
+                        @if (t.Quantity > 0 && (isBuy || isSell))
+                        {
+                            <span class="text-muted">@t.Quantity.Num(4) &times; @t.Price.Money(t.Currency)</span>
+                            <span class="text-subtle"> &middot; </span>
+                        }
+                        <span class="@ce.SignClass()">@ce.Money(t.Currency)</span>
+                        @if (!string.IsNullOrEmpty(t.Notes))
+                        {
+                            <span class="text-subtle"> &middot; @t.Notes</span>
+                        }
+                    </div>
+                </div>
+            </div>
+            idx++;
+        }
+    </div>
+
+    <aside class="tl-detail" id="tlDetail">
+        <button class="tl-detail-close" onclick="tlDeselect()" title="Close"><i class="bi bi-x-lg"></i></button>
+        <div id="tlDetailBody" class="tl-detail-body">
+            <div style="text-align:center;margin-top:3rem;color:var(--text-subtle);">
+                <i class="bi bi-hand-index" style="font-size:1.5rem;display:block;margin-bottom:.5rem;"></i>
+                Click an event to see details
+            </div>
+        </div>
+    </aside>
+</div>
+
+@section Scripts {
+    <partial name="_ChartScripts" />
+    <script>
+    (function () {
+        var TX  = @Html.Raw(eventsJson);
+        var PID = @Html.Raw(pidJson);
+
+        var COLORS = {
+            deposit:'#16c784', withdrawal:'#ea3943', buy:'#5b9dff',
+            sell:'#f0b90b', dividend:'#a78bfa', interest:'#34d399',
+            fee:'#94a3b8', split:'#fb923c', transfer:'#38bdf8'
+        };
+        function tc(t){ return COLORS[(t||'').toLowerCase()] || '#97a3b8'; }
+
+        var fType = 'all', fSym = '', chart;
+
+        function visible(){
+            return TX.filter(function(t){
+                return (fType==='all' || t.type.toLowerCase()===fType.toLowerCase())
+                    && (!fSym || (t.symbol||'').toUpperCase().includes(fSym.toUpperCase()));
+            });
+        }
+
+        /* ── chart ── */
+        function buildChart(){
+            var vis = visible();
+            document.getElementById('tlCount').textContent =
+                vis.length + ' event' + (vis.length===1?'':'s');
+
+            var labels = TX.map(function(t){ return t.date; });
+            var cash   = TX.map(function(t){ return t.cashAfter; });
+
+            var byType = {};
+            vis.forEach(function(t){
+                var k = (t.type||'').toLowerCase();
+                if(!byType[k]) byType[k]={label:t.type, color:tc(t.type), pts:[]};
+                byType[k].pts.push({x:t.date, y:t.cashAfter, tx:t});
+            });
+
+            var scatterSets = Object.values(byType).map(function(g){
+                return { type:'scatter', label:g.label, data:g.pts,
+                         backgroundColor:g.color, borderColor:'#0b1220', borderWidth:1.5,
+                         pointRadius:7, pointHoverRadius:11, order:0 };
+            });
+
+            var ds = [{
+                type:'line', label:'Cash balance', data:cash,
+                borderColor:'rgba(91,157,255,.5)', backgroundColor:'rgba(91,157,255,.07)',
+                fill:true, tension:.25, pointRadius:0, borderWidth:1.5, order:1
+            }].concat(scatterSets);
+
+            if(chart){
+                chart.data.labels   = labels;
+                chart.data.datasets = ds;
+                chart.update('none');
+                return;
+            }
+
+            chart = new Chart(document.getElementById('tlChart'), {
+                type:'line',
+                data:{ labels:labels, datasets:ds },
+                options:{
+                    responsive:true, maintainAspectRatio:false,
+                    interaction:{ mode:'nearest', axis:'x', intersect:false },
+                    plugins:{
+                        legend:{ position:'top', labels:{ color:'#97a3b8', boxWidth:10, font:{size:11}, padding:12 } },
+                        tooltip:{
+                            backgroundColor:'#1a2540', borderColor:'#243152', borderWidth:1,
+                            titleColor:'#e6ecf5', bodyColor:'#97a3b8', padding:10,
+                            callbacks:{
+                                title:function(items){
+                                    var ds2=items[0].dataset;
+                                    if(ds2.type==='scatter'){
+                                        var p=ds2.data[items[0].dataIndex];
+                                        return p.tx.type+(p.tx.symbol?' · '+p.tx.symbol:'');
+                                    }
+                                    return items[0].label;
+                                },
+                                label:function(item){
+                                    var ds2=item.dataset;
+                                    if(ds2.type==='scatter'){
+                                        var t=ds2.data[item.dataIndex].tx;
+                                        var lo=t.type.toLowerCase();
+                                        var lines=['📅 '+t.date, '💰 Balance: '+fmt(t.cashAfter,t.currency)];
+                                        if(t.qty&&(lo==='buy'||lo==='sell'))
+                                            lines.push('📦 '+fmtN(t.qty)+' × '+fmt(t.price,t.currency));
+                                        if(t.fee) lines.push('🏦 Fee: '+fmt(t.fee,t.currency));
+                                        if(t.notes) lines.push('📝 '+t.notes);
+                                        return lines;
+                                    }
+                                    return 'Cash: '+fmt(item.raw,'');
+                                }
+                            }
+                        }
+                    },
+                    scales:{
+                        x:{ ticks:{color:'#97a3b8',maxTicksLimit:8,font:{size:11}}, grid:{color:'rgba(255,255,255,.04)'} },
+                        y:{ ticks:{color:'#97a3b8',font:{size:11}}, grid:{color:'rgba(255,255,255,.04)'} }
+                    },
+                    onClick:function(_e, els){
+                        if(!els.length) return;
+                        var el=els[0];
+                        var ds2=chart.data.datasets[el.datasetIndex];
+                        if(ds2.type!=='scatter') return;
+                        var gi=TX.indexOf(ds2.data[el.dataIndex].tx);
+                        if(gi>=0) tlSelect(gi);
+                    }
+                }
+            });
+        }
+
+        /* ── helpers ── */
+        function fmt(v, ccy){
+            if(v==null) return '–';
+            return (ccy?ccy+' ':'')+Number(v).toLocaleString(undefined,
+                {minimumFractionDigits:2,maximumFractionDigits:2});
+        }
+        function fmtN(v){
+            if(v==null) return '–';
+            return Number(v).toLocaleString(undefined,
+                {minimumFractionDigits:0,maximumFractionDigits:4});
+        }
+        function esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+        /* ── cash-effect mirror ── */
+        function ce(t){
+            var v=t.qty*t.price;
+            switch((t.type||'').toLowerCase()){
+                case 'buy':        return -(v+t.fee);
+                case 'sell':       return v-t.fee;
+                case 'deposit': case 'dividend': case 'interest': case 'transfer': return v;
+                case 'withdrawal': case 'withdraw': case 'fee': return -v;
+                default: return 0;
+            }
+        }
+
+        /* ── detail panel ── */
+        window.tlSelect = function(idx){
+            document.querySelectorAll('.tl-node').forEach(function(n){
+                n.classList.toggle('tl-node-sel', +n.dataset.idx===idx);
+            });
+            var t=TX[idx]; if(!t) return;
+            var delta=ce(t), sgn=delta>=0?'text-green':'text-red';
+            var html=
+                '<div style="border-left:3px solid '+tc(t.type)+';padding-left:.75rem;margin-bottom:1rem;">'
+                +'<small style="text-transform:uppercase;letter-spacing:.06em;color:var(--text-subtle);">'+esc(t.type)+'</small><br>'
+                +'<strong style="font-size:1.1rem;">'+(t.symbol?esc(t.symbol):'Cash event')+'</strong>'
+                +'</div>'
+                +'<dl class="tl-dl">'
+                +dl('Date',          esc(t.date))
+                +dl('Currency',      esc(t.currency))
+                +(t.qty   ? dl('Quantity', fmtN(t.qty))             : '')
+                +(t.price ? dl('Price',    fmt(t.price, t.currency)) : '')
+                +(t.fee   ? dl('Fee',      fmt(t.fee,   t.currency)) : '')
+                +dl('Cash effect',   '<span class="'+sgn+'">'+fmt(delta,t.currency)+'</span>')
+                +dl('Balance after', fmt(t.cashAfter, t.currency))
+                +(t.mv!=null ? dl('Market value', fmt(t.mv, t.currency)) : '')
+                +(t.notes ? dl('Notes', esc(t.notes)) : '')
+                +'</dl>'
+                +'<div style="margin-top:.75rem;">'
+                +'<a href="/Portfolios/'+esc(PID)+'/Transactions/Edit/'+esc(t.id)+'" class="btn btn-ghost btn-sm">'
+                +'<i class="bi bi-pencil"></i> Edit</a></div>';
+            document.getElementById('tlDetailBody').innerHTML = html;
+            document.getElementById('tlDetail').classList.add('tl-detail-open');
+            var node=document.getElementById('tln-'+idx);
+            if(node) node.scrollIntoView({behavior:'smooth',block:'nearest'});
+        };
+
+        function dl(k,v){ return '<dt>'+k+'</dt><dd>'+v+'</dd>'; }
+
+        window.tlDeselect = function(){
+            document.querySelectorAll('.tl-node').forEach(function(n){n.classList.remove('tl-node-sel');});
+            document.getElementById('tlDetail').classList.remove('tl-detail-open');
+        };
+
+        /* ── filters ── */
+        window.tlSetType = function(btn, val){
+            fType=val;
+            document.querySelectorAll('#tlTypeChips .tl-chip').forEach(function(b){
+                b.classList.toggle('tl-chip-active', b.dataset.type===val);
+            });
+            applyStream(); buildChart();
+        };
+        window.tlSetSymbol = function(val){
+            fSym=val.trim(); applyStream(); buildChart();
+        };
+
+        function applyStream(){
+            document.querySelectorAll('.tl-node').forEach(function(n){
+                var ok=(fType==='all'||n.dataset.type.toLowerCase()===fType.toLowerCase())
+                    && (!fSym||(n.dataset.sym||'').toUpperCase().includes(fSym.toUpperCase()));
+                n.style.display=ok?'':'none';
+            });
+        }
+
+        buildChart();
+    })();
+    </script>
+}

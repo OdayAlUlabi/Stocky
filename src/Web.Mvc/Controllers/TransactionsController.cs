@@ -42,6 +42,19 @@ public class TransactionsController : Controller
     }
 
     [HttpGet]
+    public async Task<IActionResult> Timeline(Guid portfolioId)
+    {
+        var rows = await this.InvokeAsync<StockyApi.TransactionsController, IEnumerable<TransactionDto>>(
+            c => c.List(portfolioId)) ?? Array.Empty<TransactionDto>();
+        var portfolios = await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List()) ?? Array.Empty<PortfolioDto>();
+        ViewBag.PortfolioId = portfolioId;
+        ViewBag.Portfolios = portfolios.ToList();
+        ViewBag.Portfolio = portfolios.FirstOrDefault(p => p.Id == portfolioId);
+        return View(rows.OrderBy(t => t.ExecutedAt).ToList());
+    }
+
+    [HttpGet]
     public async Task<IActionResult> Create(Guid portfolioId)
     {
         await LoadPortfolioContext(portfolioId);
