@@ -1,12 +1,35 @@
 @{
     ViewData["Title"] = "Mean-Variance Optimizer";
     var result = (OptimizerResultDto?)ViewBag.Result;
+    var portfolios = ViewBag.Portfolios as List<PortfolioDto> ?? new();
+    var portfolioId = ViewBag.PortfolioId as Guid?;
+    var portfolioName = ViewBag.PortfolioName as string;
 }
-<h2>Portfolio Optimizer</h2>
+<div class="page-header">
+    <h2><i class="bi bi-bullseye"></i> Portfolio Optimizer</h2>
+    @if (portfolios.Count > 0)
+    {
+        <div class="portfolio-picker">
+            <i class="bi bi-briefcase"></i>
+            <select onchange="if(this.value)window.location.href='/Tools/Optimizer?portfolioId='+this.value;" aria-label="Load from portfolio">
+                <option value="">— load from portfolio —</option>
+                @foreach (var p in portfolios)
+                {
+                    <option value="@p.Id" selected="@(p.Id == portfolioId)">@p.Name (@p.BaseCurrency)</option>
+                }
+            </select>
+        </div>
+    }
+</div>
 <p class="text-muted">Markowitz mean-variance optimizer with box constraints. Picks tangency (max-Sharpe) and minimum-variance portfolios and traces the efficient frontier.</p>
+@if (portfolioName is not null)
+{
+    <div class="flash success" style="margin-bottom:.75rem;"><i class="bi bi-briefcase"></i> Symbols loaded from <strong>@portfolioName</strong> — edit the list below or click Optimize.</div>
+}
 
 <form method="post" action="/Tools/OptimizerRun" class="filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1rem;">
     @Html.AntiForgeryToken()
+    @if (portfolioId.HasValue) { <input type="hidden" name="portfolioId" value="@portfolioId" /> }
     <label style="grid-column:1 / -1;">Symbols (comma separated)
         <input type="text" name="symbols" value="@ViewBag.Symbols" placeholder="AAPL, MSFT, ..." />
     </label>

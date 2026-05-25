@@ -5,12 +5,35 @@
     var volScale = (bool)ViewBag.VolScale;
     var skipLatest = (bool)ViewBag.SkipLatest;
     var result = (MomentumScoreSetDto?)ViewBag.Result;
+    var portfolios = ViewBag.Portfolios as List<PortfolioDto> ?? new();
+    var portfolioId = ViewBag.PortfolioId as Guid?;
+    var portfolioName = ViewBag.PortfolioName as string;
 }
-<h2>Momentum Scoring</h2>
+<div class="page-header">
+    <h2><i class="bi bi-graph-up-arrow"></i> Momentum Scoring</h2>
+    @if (portfolios.Count > 0)
+    {
+        <div class="portfolio-picker">
+            <i class="bi bi-briefcase"></i>
+            <select onchange="if(this.value)window.location.href='/Tools/Momentum?portfolioId='+this.value;" aria-label="Load from portfolio">
+                <option value="">— load from portfolio —</option>
+                @foreach (var p in portfolios)
+                {
+                    <option value="@p.Id" selected="@(p.Id == portfolioId)">@p.Name (@p.BaseCurrency)</option>
+                }
+            </select>
+        </div>
+    }
+</div>
 <p class="text-muted">Cross-sectional momentum across an arbitrary universe. Per symbol: window returns &rarr; optional vol-scaling &rarr; cross-sectional percentile (0–100) &rarr; rank.</p>
+@if (portfolioName is not null)
+{
+    <div class="flash success" style="margin-bottom:.75rem;"><i class="bi bi-briefcase"></i> Symbols loaded from <strong>@portfolioName</strong> — edit the list below or click Score.</div>
+}
 
 <form method="post" action="/Tools/MomentumRun" class="filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin-bottom:1rem;">
     @Html.AntiForgeryToken()
+    @if (portfolioId.HasValue) { <input type="hidden" name="portfolioId" value="@portfolioId" /> }
     <label style="grid-column:1 / -1;">Universe (comma separated)
         <input type="text" name="symbols" value="@symbols" placeholder="AAPL, MSFT, GOOG" />
     </label>
@@ -19,7 +42,7 @@
     </label>
     <label><input type="checkbox" name="volScale" value="true" checked="@volScale" /> Vol-scale</label>
     <label><input type="checkbox" name="skipLatest" value="true" checked="@skipLatest" /> Skip latest month (1-12 momentum)</label>
-    <button type="submit" class="btn primary"><i class="bi bi-graph-up-arrow"></i> Score</button>
+    <button type="submit" class="btn btn-primary"><i class="bi bi-graph-up-arrow"></i> Score</button>
 </form>
 
 @if (result is null) { <p><em>Enter symbols and click <strong>Score</strong>.</em></p> return; }

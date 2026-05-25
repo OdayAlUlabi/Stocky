@@ -2,12 +2,66 @@
     ViewData["Title"] = "Position Sizing";
     var form = (PositionSizingRequest)ViewBag.Form;
     var result = (PositionSizingResultDto?)ViewBag.Result;
+    var portfolios = ViewBag.Portfolios as List<PortfolioDto> ?? new();
+    var portfolioId = ViewBag.PortfolioId as Guid?;
+    var portfolioName = ViewBag.PortfolioName as string;
+    var holdings = ViewBag.Holdings as List<HoldingDto> ?? new();
 }
-<h2>Position Sizing</h2>
+<div class="page-header">
+    <h2><i class="bi bi-rulers"></i> Position Sizing</h2>
+    @if (portfolios.Count > 0)
+    {
+        <div class="portfolio-picker">
+            <i class="bi bi-briefcase"></i>
+            <select onchange="if(this.value)window.location.href='/Tools/PositionSizing?portfolioId='+this.value;" aria-label="Load from portfolio">
+                <option value="">— load from portfolio —</option>
+                @foreach (var p in portfolios)
+                {
+                    <option value="@p.Id" selected="@(p.Id == portfolioId)">@p.Name (@p.BaseCurrency)</option>
+                }
+            </select>
+        </div>
+    }
+</div>
 <p class="text-muted">Calculates suggested share count using three methods: fixed-fractional (risk per trade vs stop), half-Kelly, and volatility-targeting. Recommendation = smallest non-zero method.</p>
+@if (portfolioName is not null)
+{
+    <div class="flash success" style="margin-bottom:.75rem;"><i class="bi bi-briefcase"></i> Account size loaded from <strong>@portfolioName</strong> equity.
+        @if (holdings.Count > 0) { <span>Pick a holding below to pre-fill entry price.</span> }
+    </div>
+}
+
+@if (holdings.Count > 0)
+{
+    <div style="margin-bottom:.75rem;">
+        <label>Pre-fill from holding &nbsp;
+            <select id="holdingPicker">
+                <option value="">— pick a holding —</option>
+                @foreach (var h in holdings.Where(x => x.LatestPrice.HasValue).OrderBy(x => x.Symbol))
+                {
+                    <option value="@h.LatestPrice!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                        @h.Symbol (@h.Quantity.ToString("G4") shares · latest @h.LatestPrice!.Value.ToString("N2"))
+                    </option>
+                }
+            </select>
+        </label>
+    </div>
+    <script>
+        document.getElementById('holdingPicker').addEventListener('change', function () {
+            var price = parseFloat(this.value);
+            if (!isNaN(price) && price > 0) {
+                document.querySelector('[name="EntryPrice"]').value = price.toFixed(2);
+                var stop = document.querySelector('[name="StopLossPrice"]');
+                if (!stop.value || parseFloat(stop.value) >= price)
+                    stop.value = (price * 0.95).toFixed(2);
+            }
+        });
+    </script>
+}
 
 <form method="post" action="/Tools/PositionSizingRun" class="filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin-bottom:1rem;">
     @Html.AntiForgeryToken()
+    @if (portfolioId.HasValue) { <input type="hidden" name="portfolioId" value="@portfolioId" /> }
     <label>Account size <input type="number" name="AccountSize" step="100" value="@form.AccountSize" /></label>
     <label>Entry price <input type="number" name="EntryPrice" step="0.01" value="@form.EntryPrice" /></label>
     <label>Stop-loss <input type="number" name="StopLossPrice" step="0.01" value="@form.StopLossPrice" /></label>
