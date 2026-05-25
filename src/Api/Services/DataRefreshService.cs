@@ -21,20 +21,35 @@ public sealed class DataRefreshService(
 {
     public async Task<QuoteRefreshResult> RefreshQuotesOnceAsync(CancellationToken ct)
     {
-        var symbols = await db.Holdings.Select(h => h.Symbol)
+        var rawSymbols = await db.Holdings.Select(h => h.Symbol)
             .Union(db.WatchlistItems.Select(w => w.Symbol))
             .Union(db.Transactions
                 .Where(t => t.Symbol != null && t.Symbol != "")
                 .Select(t => t.Symbol!))
-            .Distinct()
             .ToListAsync(ct);
+
+        var symbols = rawSymbols
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         if (symbols.Count == 0)
         {
             return new QuoteRefreshResult(0, 0, Array.Empty<PortfolioValueSnapshot>());
         }
 
-        var quotes = await provider.GetQuotesAsync(symbols, ct);
+        IReadOnlyList<Stocky.Api.Dtos.QuoteDto> quotes;
+        try
+        {
+            quotes = await provider.GetQuotesAsync(symbols, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Force-refresh: provider GetQuotesAsync failed for {Count} symbols; skipping unavailable quotes",
+                symbols.Count);
+            quotes = Array.Empty<Stocky.Api.Dtos.QuoteDto>();
+        }
 
         // Dedupe: skip writing a new PriceQuote row if the latest existing row
         // for the same symbol has identical Price/Change/ChangePercent.

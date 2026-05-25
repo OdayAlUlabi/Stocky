@@ -186,45 +186,63 @@ public class AdminController : Controller
     public async Task<IActionResult> DataRefresh(string scope, CancellationToken ct)
     {
         var refresher = HttpContext.RequestServices.GetRequiredService<Stocky.Api.Services.DataRefreshService>();
-        object payload;
+        var logger = HttpContext.RequestServices.GetRequiredService<ILogger<AdminController>>();
+        object payload = new { scope = scope ?? "all", error = (string?)null };
         IReadOnlyList<Stocky.Api.Services.PortfolioValueSnapshot> portfolios =
             Array.Empty<Stocky.Api.Services.PortfolioValueSnapshot>();
-        switch ((scope ?? "all").ToLowerInvariant())
+        string status = "Data refresh complete.";
+        try
         {
-            case "quotes":
-                {
-                    var q = await refresher.RefreshQuotesOnceAsync(ct);
-                    // Also backfill any missing daily closes from each symbol's earliest
-                    // transaction date through today so historical coverage stays complete.
-                    var h = await refresher.BackfillHistoricalOnceAsync(ct);
-                    portfolios = q.Portfolios;
-                    payload = new { scope = "quotes", quotes = q, history = h };
-                    break;
-                }
-            case "history":
-                {
-                    var h = await refresher.BackfillHistoricalOnceAsync(ct);
-                    // Even when only running history, refresh portfolio snapshots so the
-                    // displayed values match the freshest stored prices.
-                    portfolios = await refresher.RefreshPortfolioSnapshotsAsync(ct);
-                    payload = new { scope = "history", history = h, portfolios };
-                    break;
-                }
-            default:
-                {
-                    var q = await refresher.RefreshQuotesOnceAsync(ct);
-                    var h = await refresher.BackfillHistoricalOnceAsync(ct);
-                    portfolios = q.Portfolios;
-                    payload = new { scope = "all", quotes = q, history = h };
-                    break;
-                }
+            switch ((scope ?? "all").ToLowerInvariant())
+            {
+                case "quotes":
+                    {
+                        var q = await refresher.RefreshQuotesOnceAsync(ct);
+                        // Also backfill any missing daily closes from each symbol's earliest
+                        // transaction date through today so historical coverage stays complete.
+                        var h = await refresher.BackfillHistoricalOnceAsync(ct);
+                        portfolios = q.Portfolios;
+                        payload = new { scope = "quotes", quotes = q, history = h };
+                        break;
+                    }
+                case "history":
+                    {
+                        var h = await refresher.BackfillHistoricalOnceAsync(ct);
+                        // Even when only running history, refresh portfolio snapshots so the
+                        // displayed values match the freshest stored prices.
+                        portfolios = await refresher.RefreshPortfolioSnapshotsAsync(ct);
+                        payload = new { scope = "history", history = h, portfolios };
+                        break;
+                    }
+                default:
+                    {
+                        var q = await refresher.RefreshQuotesOnceAsync(ct);
+                        var h = await refresher.BackfillHistoricalOnceAsync(ct);
+                        portfolios = q.Portfolios;
+                        payload = new { scope = "all", quotes = q, history = h };
+                        break;
+                    }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Admin data refresh failed for scope {Scope}", scope);
+            status = $"Data refresh failed: {ex.Message}. Symbols without provider data are skipped — see container logs for details.";
+            payload = new { scope = scope ?? "all", error = ex.Message };
         }
         var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
         TempData["RefreshPayload"] = System.Text.Json.JsonSerializer.Serialize(payload, jsonOpts);
         TempData["PortfolioValues"] = System.Text.Json.JsonSerializer.Serialize(portfolios, jsonOpts);
-        TempData["Coverage"] = System.Text.Json.JsonSerializer.Serialize(
-            await refresher.GetHistoricalCoverageAsync(ct), jsonOpts);
-        TempData["Status"] = "Data refresh complete.";
+        try
+        {
+            TempData["Coverage"] = System.Text.Json.JsonSerializer.Serialize(
+                await refresher.GetHistoricalCoverageAsync(ct), jsonOpts);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Admin data refresh: failed to fetch historical coverage");
+        }
+        TempData["Status"] = status;
         return RedirectToAction(nameof(DataRefresh));
     }
 }
