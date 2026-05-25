@@ -19,6 +19,15 @@ public sealed class DataRefreshService(
     PriceTickBroadcaster? broadcaster,
     ILogger<DataRefreshService> logger)
 {
+    // Parallel fan-out: how many symbols to bundle into one provider call,
+    // and how many of those bundles to fire concurrently. Alpaca's
+    // multi-symbol endpoints are cheaper per call than N single-symbol calls,
+    // but a single mega-batch (a) hits URL-length limits and (b) gives no
+    // parallelism on the wire. ~25 symbols/chunk × 4 in flight = good
+    // throughput on hundreds of symbols without thundering-herd risk.
+    private const int ProviderChunkSize = 25;
+    private const int ProviderMaxParallel = 4;
+
     public async Task<QuoteRefreshResult> RefreshQuotesOnceAsync(CancellationToken ct)
     {
         var rawSymbols = await db.Holdings.Select(h => h.Symbol)
@@ -42,7 +51,7 @@ public sealed class DataRefreshService(
         IReadOnlyList<Stocky.Api.Dtos.QuoteDto> quotes;
         try
         {
-            quotes = await provider.GetQuotesAsync(symbols, ct);
+            quotes = await FetchQuotesInParallelAsync(symbols, ct);
         }
         catch (Exception ex)
         {
@@ -196,7 +205,7 @@ public sealed class DataRefreshService(
         IReadOnlyDictionary<string, IReadOnlyList<Dtos.DailyBarDto>> bars;
         try
         {
-            bars = await provider.GetDailyBarsAsync(symbols, globalStart, today, ct);
+            bars = await FetchBarsInParallelAsync(symbols, globalStart, today, ct);
         }
         catch (Exception ex)
         {
@@ -306,6 +315,88 @@ public sealed class DataRefreshService(
             })
             .OrderBy(r => r.Symbol)
             .ToList();
+    }
+
+    /// <summary>
+    /// Splits <paramref name="symbols"/> into chunks of <see cref="ProviderChunkSize"/>
+    /// and calls <see cref="IMarketDataProvider.GetQuotesAsync"/> concurrently
+    /// (up to <see cref="ProviderMaxParallel"/> in flight) so a refresh of N
+    /// symbols completes in roughly ceil(N/chunk)/parallel batches instead of
+    /// one serial mega-call.
+    /// </summary>
+    private async Task<IReadOnlyList<Stocky.Api.Dtos.QuoteDto>> FetchQuotesInParallelAsync(
+        IReadOnlyList<string> symbols, CancellationToken ct)
+    {
+        var chunks = Chunk(symbols, ProviderChunkSize);
+        var bag = new System.Collections.Concurrent.ConcurrentBag<Stocky.Api.Dtos.QuoteDto>();
+        using var gate = new SemaphoreSlim(ProviderMaxParallel, ProviderMaxParallel);
+
+        var tasks = chunks.Select(async chunk =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                var part = await provider.GetQuotesAsync(chunk, ct);
+                foreach (var q in part) bag.Add(q);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Force-refresh: GetQuotesAsync failed for chunk of {Count} symbols", chunk.Count);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
+        return bag.ToList();
+    }
+
+    private async Task<IReadOnlyDictionary<string, IReadOnlyList<Dtos.DailyBarDto>>> FetchBarsInParallelAsync(
+        IReadOnlyList<string> symbols, DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        var chunks = Chunk(symbols, ProviderChunkSize);
+        var merged = new System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<Dtos.DailyBarDto>>(StringComparer.OrdinalIgnoreCase);
+        using var gate = new SemaphoreSlim(ProviderMaxParallel, ProviderMaxParallel);
+
+        var tasks = chunks.Select(async chunk =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                var part = await provider.GetDailyBarsAsync(chunk, from, to, ct);
+                foreach (var kv in part)
+                {
+                    merged[kv.Key] = kv.Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Force-refresh: GetDailyBarsAsync failed for chunk of {Count} symbols ({From}..{To})",
+                    chunk.Count, from, to);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
+        return merged.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static List<List<string>> Chunk(IReadOnlyList<string> source, int size)
+    {
+        var result = new List<List<string>>((source.Count + size - 1) / size);
+        for (int i = 0; i < source.Count; i += size)
+        {
+            var len = Math.Min(size, source.Count - i);
+            var part = new List<string>(len);
+            for (int j = 0; j < len; j++) part.Add(source[i + j]);
+            result.Add(part);
+        }
+        return result;
     }
 }
 

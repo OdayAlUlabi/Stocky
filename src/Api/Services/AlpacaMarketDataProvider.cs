@@ -58,13 +58,31 @@ public sealed class AlpacaMarketDataProvider(
             {
                 quote = TryBuildQuote(sym, snap);
             }
-            if (quote is null)
+            if (quote is not null)
+            {
+                cache.Set($"quote:{sym}", quote, CacheTtl);
+                result.Add(quote);
+            }
+        }
+
+        // Any symbols Alpaca didn't return (or that built a null quote) get
+        // resolved against the stub provider. Do these in parallel — each call
+        // is independent and `StubMarketDataProvider` is thread-safe.
+        var stillMissing = missing
+            .Where(s => !cache.TryGetValue($"quote:{s}", out QuoteDto? _))
+            .ToList();
+        if (stillMissing.Count > 0)
+        {
+            var stubResults = await Task.WhenAll(stillMissing.Select(async sym =>
             {
                 var stub = await fallback.GetQuotesAsync(new[] { sym }, ct);
-                quote = stub[0];
+                return (sym, quote: stub[0]);
+            }));
+            foreach (var (sym, quote) in stubResults)
+            {
+                cache.Set($"quote:{sym}", quote, CacheTtl);
+                result.Add(quote);
             }
-            cache.Set($"quote:{sym}", quote, CacheTtl);
-            result.Add(quote);
         }
         return result;
     }

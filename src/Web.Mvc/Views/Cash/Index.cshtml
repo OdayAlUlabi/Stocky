@@ -5,6 +5,34 @@
     var balances = ViewBag.Balances as List<CashBalanceDto> ?? new();
     ViewData["Title"] = (portfolio?.Name ?? "Portfolio") + " · Cash";
     ViewBag.PickerPathTemplate = "/Portfolios/{0}/Cash";
+
+    // Display-only correction: rows entered as Deposit with a "cash out" hint in the
+    // notes (e.g. "Buy MSTR: 60 @ 170.0 — cash out") are rendered as outflows.
+    // No DB writes; original Type stays untouched server-side.
+    static bool IsCashOut(string? n) => n is not null && n.Contains("cash out", StringComparison.OrdinalIgnoreCase);
+    static bool IsCashIn(string? n)  => n is not null && n.Contains("cash in",  StringComparison.OrdinalIgnoreCase);
+    static decimal DisplayAmount(CashTransactionDto t)
+    {
+        var a = t.Amount;
+        if (IsCashOut(t.Notes) && a > 0) return -a;
+        if (IsCashIn(t.Notes)  && a < 0) return -a;
+        return a;
+    }
+    static string DisplayType(CashTransactionDto t)
+    {
+        if (IsCashOut(t.Notes)) return "Withdrawal";
+        if (IsCashIn(t.Notes))  return "Deposit";
+        return t.Type;
+    }
+
+    // Recompute balances per currency using display amounts so the KPI card matches
+    // what the user actually sees in the table.
+    var displayBalances = Model
+        .GroupBy(t => t.Currency)
+        .Select(g => new CashBalanceDto(pid, g.Key, g.Sum(DisplayAmount), g.Count()))
+        .OrderBy(b => b.Currency)
+        .ToList();
+    if (displayBalances.Count > 0) { balances = displayBalances; }
 }
 
 <div class="page-header">
@@ -66,7 +94,25 @@
     </article>
 
     <article>
-        <header><h3><i class="bi bi-list-ul"></i> Recent transactions</h3></header>
+        <header>
+            <h3><i class="bi bi-list-ul"></i> Recent transactions</h3>
+            @{
+                var netByCcy = Model.GroupBy(t => t.Currency)
+                    .Select(g => new { Currency = g.Key, Net = g.Sum(DisplayAmount) })
+                    .OrderBy(x => x.Currency)
+                    .ToList();
+            }
+            @if (netByCcy.Count > 0)
+            {
+                <div class="text-muted" style="font-size:.85rem;">
+                    Net:
+                    @foreach (var n in netByCcy)
+                    {
+                        <span class="@n.Net.SignClass()" style="margin-left:.4rem;"><strong>@n.Net.Money(n.Currency)</strong></span>
+                    }
+                </div>
+            }
+        </header>
         @if (Model.Count == 0)
         {
             <p class="text-muted"><em>No cash transactions yet.</em></p>
@@ -90,12 +136,14 @@
                     }
                     @foreach (var t in Model)
                     {
-                        netCash += t.Amount;
+                        var amt = DisplayAmount(t);
+                        var typeLabel = DisplayType(t);
+                        netCash += amt;
                         footerCcy ??= t.Currency;
                         <tr>
                             <td>@t.ExecutedAt.ToString("yyyy-MM-dd")</td>
-                            <td><span class="pill">@t.Type</span></td>
-                            <td style="text-align:right;" class="@t.Amount.SignClass()" data-sort-value="@t.Amount">@t.Amount.Money(t.Currency)</td>
+                            <td><span class="pill">@typeLabel</span></td>
+                            <td style="text-align:right;" class="@amt.SignClass()" data-sort-value="@amt">@amt.Money(t.Currency)</td>
                             <td>@t.Notes</td>
                             <td>
                                 <form method="post" action="/Portfolios/@pid/Cash/Delete" style="display:inline;" onsubmit="return confirm('Delete this cash transaction?');">
