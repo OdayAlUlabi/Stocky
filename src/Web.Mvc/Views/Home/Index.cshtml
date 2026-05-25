@@ -97,29 +97,10 @@
 
     <article>
         <header>
-            <span><i class="bi bi-bar-chart"></i> Sector allocation</span>
-            <small class="text-muted">@Model.SectorAllocation.Count sectors</small>
+            <span><i class="bi bi-graph-up-arrow"></i> Last 10 days changes</span>
+            <small class="text-muted">daily portfolio value change</small>
         </header>
-        <table>
-            <thead><tr><th>Sector</th><th style="text-align:right;">Value</th><th style="text-align:right;">%</th></tr></thead>
-            <tbody>
-                @foreach (var s in Model.SectorAllocation.Take(8))
-                {
-                    <tr>
-                        <td>@s.Label</td>
-                        <td style="text-align:right;">@s.Value.Money(Model.Currency)</td>
-                        <td style="text-align:right;">
-                            <div style="display:flex;align-items:center;gap:.4rem;justify-content:flex-end;">
-                                <div style="width:60px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;">
-                                    <div style="width:@(Math.Min(100m, Math.Abs(s.Percent)).ToString(System.Globalization.CultureInfo.InvariantCulture))%;height:100%;background:var(--primary);"></div>
-                                </div>
-                                <span style="min-width:50px;">@s.Percent.Pct()</span>
-                            </div>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        <div class="chart-box-sm"><canvas id="historyChart"></canvas></div>
     </article>
 </div>
 
@@ -296,6 +277,38 @@
                         },
                         scales: {
                             x: { ticks: { color: txtMuted, maxTicksLimit: 8 }, grid: { color: border } },
+                            y: { ticks: { color: txtMuted }, grid: { color: border } }
+                        }
+                    }
+                });
+            }
+
+            @{
+                var last11 = Model.ValueHistory.TakeLast(11).ToList();
+                var histDates = last11.Skip(1).Select(p => p.Date.ToString("MMM d")).ToList();
+                var histChanges = Enumerable.Range(1, last11.Count - 1)
+                    .Select(i => last11[i].Value - last11[i - 1].Value).ToList();
+            }
+            const historyCanvas = document.getElementById('historyChart');
+            if (historyCanvas && window.Chart && @(histChanges.Count > 0 ? "true" : "false")) {
+                const histLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(histDates));
+                const histDeltas = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(histChanges));
+                const histColors = histDeltas.map(v => v >= 0 ? 'rgba(22,199,132,.85)' : 'rgba(234,57,67,.85)');
+                new Chart(historyCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: histLabels,
+                        datasets: [{ label: 'Daily change', data: histDeltas, backgroundColor: histColors, borderRadius: 3, borderWidth: 0 }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { callbacks: { label: ctx => (ctx.raw >= 0 ? '+' : '') + ctx.raw.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } }
+                        },
+                        scales: {
+                            x: { ticks: { color: txtMuted }, grid: { display: false } },
                             y: { ticks: { color: txtMuted }, grid: { color: border } }
                         }
                     }

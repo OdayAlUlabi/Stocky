@@ -35,6 +35,13 @@
 
     var eventsJson = System.Text.Json.JsonSerializer.Serialize(events);
     var pidJson    = System.Text.Json.JsonSerializer.Serialize(pid.ToString());
+
+    // Group transactions by calendar day for box layout
+    var byDay = Model
+        .GroupBy(t => t.ExecutedAt.ToString("yyyy-MM-dd"))
+        .OrderBy(g => g.Key)
+        .Select(g => new { Key = g.Key, Txs = g.ToList() })
+        .ToList();
 }
 
 <div class="page-header">
@@ -61,16 +68,16 @@
 
 <div class="tl-toolbar">
     <div class="tl-chips" id="tlTypeChips">
-        <button class="tl-chip tl-chip-active" data-type="all"        onclick="tlSetType(this,'all')">All</button>
-        <button class="tl-chip" data-type="Deposit"    onclick="tlSetType(this,'Deposit')"    style="--chip:#16c784;">Deposit</button>
-        <button class="tl-chip" data-type="Withdrawal" onclick="tlSetType(this,'Withdrawal')" style="--chip:#ea3943;">Withdrawal</button>
-        <button class="tl-chip" data-type="Buy"        onclick="tlSetType(this,'Buy')"        style="--chip:#5b9dff;">Buy</button>
-        <button class="tl-chip" data-type="Sell"       onclick="tlSetType(this,'Sell')"       style="--chip:#f0b90b;">Sell</button>
-        <button class="tl-chip" data-type="Dividend"   onclick="tlSetType(this,'Dividend')"   style="--chip:#a78bfa;">Dividend</button>
-        <button class="tl-chip" data-type="Interest"   onclick="tlSetType(this,'Interest')"   style="--chip:#34d399;">Interest</button>
-        <button class="tl-chip" data-type="Fee"        onclick="tlSetType(this,'Fee')"        style="--chip:#94a3b8;">Fee</button>
-        <button class="tl-chip" data-type="Split"      onclick="tlSetType(this,'Split')"      style="--chip:#fb923c;">Split</button>
-        <button class="tl-chip" data-type="Transfer"   onclick="tlSetType(this,'Transfer')"   style="--chip:#38bdf8;">Transfer</button>
+        <button class="tl-chip tl-chip-active" data-type="all"        onclick="tlToggleType('all')" title="Clear filters">All</button>
+        <button class="tl-chip" data-type="Deposit"    onclick="tlToggleType('Deposit')"    style="--chip:#16c784;">Deposit</button>
+        <button class="tl-chip" data-type="Withdrawal" onclick="tlToggleType('Withdrawal')" style="--chip:#ea3943;">Withdrawal</button>
+        <button class="tl-chip" data-type="Buy"        onclick="tlToggleType('Buy')"        style="--chip:#5b9dff;">Buy</button>
+        <button class="tl-chip" data-type="Sell"       onclick="tlToggleType('Sell')"       style="--chip:#f0b90b;">Sell</button>
+        <button class="tl-chip" data-type="Dividend"   onclick="tlToggleType('Dividend')"   style="--chip:#a78bfa;">Dividend</button>
+        <button class="tl-chip" data-type="Interest"   onclick="tlToggleType('Interest')"   style="--chip:#34d399;">Interest</button>
+        <button class="tl-chip" data-type="Fee"        onclick="tlToggleType('Fee')"        style="--chip:#94a3b8;">Fee</button>
+        <button class="tl-chip" data-type="Split"      onclick="tlToggleType('Split')"      style="--chip:#fb923c;">Split</button>
+        <button class="tl-chip" data-type="Transfer"   onclick="tlToggleType('Transfer')"   style="--chip:#38bdf8;">Transfer</button>
     </div>
     <input class="tl-search" id="tlSymSearch" placeholder="Filter symbol…" oninput="tlSetSymbol(this.value)" />
 </div>
@@ -87,38 +94,56 @@
 </article>
 
 <div class="tl-body">
-    <div class="tl-stream" id="tlStream">
+    <div class="tl-grid" id="tlGrid">
         @{ int idx = 0; }
-        @foreach (var t in Model)
+        @foreach (var day in byDay)
         {
-            var ce      = CashDelta(t.Type, t.Quantity, t.Price, t.Fee);
-            var isBuy   = string.Equals(t.Type, "Buy",  StringComparison.OrdinalIgnoreCase);
-            var isSell  = string.Equals(t.Type, "Sell", StringComparison.OrdinalIgnoreCase);
-            var pillCls = isBuy ? "badge-up" : isSell ? "badge-down" : "pill";
-            <div class="tl-node" id="tln-@idx" data-idx="@idx" data-type="@t.Type"
-                 data-sym="@(t.Symbol?.ToUpperInvariant() ?? "")" onclick="tlSelect(@idx)">
-                <div class="tl-dot tl-dot-@t.Type.ToLowerInvariant()"></div>
-                <div class="tl-node-card">
-                    <div class="tl-node-top">
-                        <span class="@pillCls tl-type-badge">@t.Type</span>
-                        @if (!string.IsNullOrEmpty(t.Symbol)) { <strong class="tl-symbol">@t.Symbol</strong> }
-                        <span class="text-muted tl-date">@t.ExecutedAt.ToString("MMM d, yyyy · HH:mm")</span>
-                    </div>
-                    <div class="tl-node-bottom">
-                        @if (t.Quantity > 0 && (isBuy || isSell))
-                        {
-                            <span class="text-muted">@t.Quantity.Num(4) &times; @t.Price.Money(t.Currency)</span>
-                            <span class="text-subtle"> &middot; </span>
-                        }
-                        <span class="@ce.SignClass()">@ce.Money(t.Currency)</span>
-                        @if (!string.IsNullOrEmpty(t.Notes))
-                        {
-                            <span class="text-subtle"> &middot; @t.Notes</span>
-                        }
-                    </div>
+            var dayNet      = day.Txs.Sum(t => CashDelta(t.Type, t.Quantity, t.Price, t.Fee));
+            var dayCurrency = day.Txs[0].Currency;
+            var displayDate = DateTime.Parse(day.Key).ToString("ddd, MMM d, yyyy");
+            <div class="tl-day-box" data-date="@day.Key" id="tlday-@day.Key">
+                <div class="tl-day-hdr">
+                    <span class="tl-day-date"><i class="bi bi-calendar3"></i> @displayDate</span>
+                    <span class="tl-day-meta">
+                        @day.Txs.Count tx
+                        &nbsp;&middot;&nbsp;
+                        <span class="@dayNet.SignClass()">@dayNet.Money(dayCurrency)</span>
+                    </span>
+                </div>
+                <div class="tl-day-txs">
+                    @foreach (var t in day.Txs)
+                    {
+                        var ce      = CashDelta(t.Type, t.Quantity, t.Price, t.Fee);
+                        var isBuy   = string.Equals(t.Type, "Buy",  StringComparison.OrdinalIgnoreCase);
+                        var isSell  = string.Equals(t.Type, "Sell", StringComparison.OrdinalIgnoreCase);
+                        var pillCls = isBuy ? "badge-up" : isSell ? "badge-down" : "pill";
+                        <div class="tl-tx" id="tln-@idx" data-idx="@idx" data-type="@t.Type"
+                             data-sym="@(t.Symbol?.ToUpperInvariant() ?? "")" onclick="tlSelect(@idx)">
+                            <div class="tl-dot tl-dot-@t.Type.ToLowerInvariant()"></div>
+                            <div class="tl-tx-info">
+                                <div class="tl-tx-top">
+                                    <span class="@pillCls tl-type-badge">@t.Type</span>
+                                    @if (!string.IsNullOrEmpty(t.Symbol)) { <strong class="tl-symbol">@t.Symbol</strong> }
+                                    <span class="text-muted" style="margin-left:auto;font-size:.78rem;">@t.ExecutedAt.ToString("HH:mm")</span>
+                                </div>
+                                <div class="tl-tx-bot">
+                                    @if (t.Quantity > 0 && (isBuy || isSell))
+                                    {
+                                        <span class="text-muted">@t.Quantity.Num(4) &times; @t.Price.Money(t.Currency)</span>
+                                        <span class="text-subtle"> &middot; </span>
+                                    }
+                                    <span class="@ce.SignClass()">@ce.Money(t.Currency)</span>
+                                    @if (!string.IsNullOrEmpty(t.Notes))
+                                    {
+                                        <span class="text-subtle"> &middot; @t.Notes</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        idx++;
+                    }
                 </div>
             </div>
-            idx++;
         }
     </div>
 
@@ -127,7 +152,7 @@
         <div id="tlDetailBody" class="tl-detail-body">
             <div style="text-align:center;margin-top:3rem;color:var(--text-subtle);">
                 <i class="bi bi-hand-index" style="font-size:1.5rem;display:block;margin-bottom:.5rem;"></i>
-                Click an event to see details
+                Click a transaction to see details
             </div>
         </div>
     </aside>
@@ -147,12 +172,13 @@
         };
         function tc(t){ return COLORS[(t||'').toLowerCase()] || '#97a3b8'; }
 
-        var fType = 'all', fSym = '', chart;
+        var fTypes = new Set(), fSym = '', chart;
 
         function visible(){
             return TX.filter(function(t){
-                return (fType==='all' || t.type.toLowerCase()===fType.toLowerCase())
-                    && (!fSym || (t.symbol||'').toUpperCase().includes(fSym.toUpperCase()));
+                var typeOk = fTypes.size===0 || fTypes.has((t.type||'').toLowerCase());
+                var symOk  = !fSym || (t.symbol||'').toUpperCase().includes(fSym.toUpperCase());
+                return typeOk && symOk;
             });
         }
 
@@ -271,8 +297,8 @@
 
         /* ── detail panel ── */
         window.tlSelect = function(idx){
-            document.querySelectorAll('.tl-node').forEach(function(n){
-                n.classList.toggle('tl-node-sel', +n.dataset.idx===idx);
+            document.querySelectorAll('.tl-tx').forEach(function(n){
+                n.classList.toggle('tl-tx-sel', +n.dataset.idx===idx);
             });
             var t=TX[idx]; if(!t) return;
             var delta=ce(t), sgn=delta>=0?'text-green':'text-red';
@@ -304,27 +330,41 @@
         function dl(k,v){ return '<dt>'+k+'</dt><dd>'+v+'</dd>'; }
 
         window.tlDeselect = function(){
-            document.querySelectorAll('.tl-node').forEach(function(n){n.classList.remove('tl-node-sel');});
+            document.querySelectorAll('.tl-tx').forEach(function(n){n.classList.remove('tl-tx-sel');});
             document.getElementById('tlDetail').classList.remove('tl-detail-open');
         };
 
         /* ── filters ── */
-        window.tlSetType = function(btn, val){
-            fType=val;
+        window.tlToggleType = function(val){
+            if(val==='all'){
+                fTypes.clear();
+            } else {
+                var k=val.toLowerCase();
+                if(fTypes.has(k)) fTypes.delete(k); else fTypes.add(k);
+            }
             document.querySelectorAll('#tlTypeChips .tl-chip').forEach(function(b){
-                b.classList.toggle('tl-chip-active', b.dataset.type===val);
+                var btype=b.dataset.type;
+                if(btype==='all') b.classList.toggle('tl-chip-active', fTypes.size===0);
+                else              b.classList.toggle('tl-chip-active', fTypes.has(btype.toLowerCase()));
             });
-            applyStream(); buildChart();
-        };
-        window.tlSetSymbol = function(val){
-            fSym=val.trim(); applyStream(); buildChart();
+            applyGrid(); buildChart();
         };
 
-        function applyStream(){
-            document.querySelectorAll('.tl-node').forEach(function(n){
-                var ok=(fType==='all'||n.dataset.type.toLowerCase()===fType.toLowerCase())
-                    && (!fSym||(n.dataset.sym||'').toUpperCase().includes(fSym.toUpperCase()));
-                n.style.display=ok?'':'none';
+        window.tlSetSymbol = function(val){
+            fSym=val.trim(); applyGrid(); buildChart();
+        };
+
+        function applyGrid(){
+            document.querySelectorAll('.tl-day-box').forEach(function(box){
+                var anyVis=false;
+                box.querySelectorAll('.tl-tx').forEach(function(tx){
+                    var typeOk=fTypes.size===0||fTypes.has((tx.dataset.type||'').toLowerCase());
+                    var symOk =!fSym||(tx.dataset.sym||'').toUpperCase().includes(fSym.toUpperCase());
+                    var show=typeOk&&symOk;
+                    tx.style.display=show?'':'none';
+                    if(show) anyVis=true;
+                });
+                box.style.display=anyVis?'':'none';
             });
         }
 
