@@ -34,6 +34,16 @@ var baseUrl = (string.IsNullOrEmpty(rawBaseUrl)
 var pendingCodes = new ConcurrentDictionary<string,
     (string RedirectUri, string CodeChallenge, DateTime Expiry)>();
 
+// ── RFC 9207 Protected Resource Metadata ────────────────────────────────────
+// MCP spec requires resource_metadata in WWW-Authenticate to point HERE.
+// Client reads authorization_servers[], then fetches /.well-known/oauth-authorization-server
+// on that server to find registration_endpoint / authorization_endpoint / token_endpoint.
+app.MapGet("/.well-known/oauth-protected-resource", () => Results.Json(new
+{
+    resource              = baseUrl,
+    authorization_servers = new[] { baseUrl }
+}));
+
 // ── OAuth discovery (RFC 8414) ────────────────────────────────────────────────
 app.MapGet("/.well-known/oauth-authorization-server", () => Results.Json(new
 {
@@ -176,7 +186,7 @@ app.Use(async (ctx, next) =>
             ctx.Response.StatusCode = 401;
             ctx.Response.Headers.WWWAuthenticate =
                 $"Bearer realm=\"Stocky MCP\", " +
-                $"resource_metadata=\"{baseUrl}/.well-known/oauth-authorization-server\"";
+                $"resource_metadata=\"{baseUrl}/.well-known/oauth-protected-resource\"";
             return;
         }
         var token  = auth["Bearer ".Length..].Trim();
@@ -186,7 +196,7 @@ app.Use(async (ctx, next) =>
             ctx.Response.StatusCode = 401;
             ctx.Response.Headers.WWWAuthenticate =
                 $"Bearer error=\"invalid_token\", " +
-                $"resource_metadata=\"{baseUrl}/.well-known/oauth-authorization-server\"";
+                $"resource_metadata=\"{baseUrl}/.well-known/oauth-protected-resource\"";
             return;
         }
     }

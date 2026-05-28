@@ -63,6 +63,7 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
             operator: 'BeginsWith'
             negationConditon: false
             matchValues: [
+              '/.well-known/oauth-protected-resource'
               '/.well-known/oauth-authorization-server'
               '/authorize'
               '/token'
