@@ -297,6 +297,7 @@ module appgw 'modules/appGateway.bicep' = {
     subnetId: net.outputs.appGwSubnetId
     apiBackendFqdn: apps.outputs.apiFqdn
     webBackendFqdn: apps.outputs.webMvcFqdn
+    mcpBackendFqdn: apps.outputs.mcpFqdn
     agwIdentityId: ids.outputs.agwIdId
     tlsCertSecretUri: tlsCertSecretUri
     lawId: obs.outputs.lawId

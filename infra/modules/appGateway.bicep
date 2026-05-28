@@ -12,6 +12,8 @@ param subnetId string
 param apiBackendFqdn string
 @description('Web container app FQDN (private).')
 param webBackendFqdn string
+@description('MCP container app FQDN (external ACA ingress).')
+param mcpBackendFqdn string
 @description('User-assigned managed identity resource ID for App Gateway to pull TLS cert from Key Vault.')
 param agwIdentityId string
 @description('Key Vault secret URI of the TLS certificate. When non-empty, enables the HTTPS (443) listener and redirects HTTP→HTTPS. Format: https://kv-xxx.vault.azure.net/secrets/cert-name (omit version for always-latest).')
@@ -61,6 +63,21 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
           matchVariable: 'RequestHeaderNames'
           selectorMatchOperator: 'Equals'
           selector: 'authorization'
+          exclusionManagedRuleSets: [
+            {
+              ruleSetType: 'OWASP'
+              ruleSetVersion: '3.2'
+              ruleGroups: [
+                { ruleGroupName: 'REQUEST-942-APPLICATION-ATTACK-SQLI', rules: [] }
+                { ruleGroupName: 'REQUEST-941-APPLICATION-ATTACK-XSS', rules: [] }
+              ]
+            }
+          ]
+        }
+        {
+          matchVariable: 'RequestHeaderNames'
+          selectorMatchOperator: 'Equals'
+          selector: 'x-mcp-service-key'
           exclusionManagedRuleSets: [
             {
               ruleSetType: 'OWASP'
@@ -143,6 +160,10 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
         name: 'pool-web'
         properties: { backendAddresses: [ { fqdn: webBackendFqdn } ] }
       }
+      {
+        name: 'pool-mcp'
+        properties: { backendAddresses: [ { fqdn: mcpBackendFqdn } ] }
+      }
     ]
     backendHttpSettingsCollection: [
       {
@@ -166,6 +187,16 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
           probe: { id: resourceId('Microsoft.Network/applicationGateways/probes', agwName, 'probe-web') }
         }
       }
+      {
+        name: 'https-mcp'
+        properties: {
+          port: 443
+          protocol: 'Https'
+          pickHostNameFromBackendAddress: true
+          requestTimeout: 60
+          probe: { id: resourceId('Microsoft.Network/applicationGateways/probes', agwName, 'probe-mcp') }
+        }
+      }
     ]
     probes: [
       {
@@ -187,6 +218,19 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
           protocol: 'Https'
           path: '/'
           host: webBackendFqdn
+          interval: 30
+          timeout: 30
+          unhealthyThreshold: 3
+          pickHostNameFromBackendHttpSettings: false
+          match: { statusCodes: [ '200-399' ] }
+        }
+      }
+      {
+        name: 'probe-mcp'
+        properties: {
+          protocol: 'Https'
+          path: '/'
+          host: mcpBackendFqdn
           interval: 30
           timeout: 30
           unhealthyThreshold: 3
@@ -306,6 +350,15 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
                 paths: [ '/api/*', '/hubs/*', '/health', '/admin/refresh/*' ]
                 backendAddressPool: { id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'pool-api') }
                 backendHttpSettings: { id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', agwName, 'https-api') }
+                rewriteRuleSet: { id: resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', agwName, 'fix-location') }
+              }
+            }
+            {
+              name: 'mcp'
+              properties: {
+                paths: [ '/mcp', '/mcp/*' ]
+                backendAddressPool: { id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'pool-mcp') }
+                backendHttpSettings: { id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', agwName, 'https-mcp') }
                 rewriteRuleSet: { id: resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', agwName, 'fix-location') }
               }
             }
