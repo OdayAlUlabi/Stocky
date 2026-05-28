@@ -53,12 +53,15 @@ public class PositionDetailController(StockyDbContext db) : ControllerBase
         var unrealizedPct = qty * avgCost == 0 ? 0m : Math.Round(unrealized / (qty * avgCost) * 100m, 4);
 
         var since = DateTimeOffset.UtcNow.AddDays(-180);
-        var history = await db.PriceQuotes
+        var rawQuotes = await db.PriceQuotes
             .Where(q => q.Symbol == symbol && q.AsOf >= since)
             .OrderBy(q => q.AsOf)
+            .Select(q => new { q.AsOf, q.Price })
+            .ToListAsync();
+        var history = rawQuotes
             .GroupBy(q => q.AsOf.UtcDateTime.Date)
             .Select(g => new ValuePointDto(new DateTimeOffset(g.Key, TimeSpan.Zero), g.OrderByDescending(x => x.AsOf).First().Price))
-            .ToListAsync();
+            .ToList();
 
         return new PositionDetailDto(
             symbol,
