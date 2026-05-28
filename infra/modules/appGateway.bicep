@@ -47,6 +47,31 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
       maxRequestBodySizeInKb: 128
       fileUploadLimitInMb: 100
     }
+    // OAuth 2.0 endpoints: allow requests to bypass managed OWASP rules.
+    // Claude.ai sends URLs in redirect_uris (triggers RFI 931xxx), base64url
+    // code_challenge / code_verifier (triggers SQLI 942xxx), and other OAuth
+    // parameters that WAF incorrectly classifies as attacks.
+    customRules: [
+      {
+        name: 'AllowOAuthPaths'
+        priority: 10
+        ruleType: 'MatchRule'
+        action: 'Allow'
+        matchConditions: [
+          {
+            matchVariables: [ { variableName: 'RequestUri' } ]
+            operator: 'BeginsWith'
+            negationConditon: false
+            matchValues: [
+              '/.well-known/oauth-authorization-server'
+              '/authorize'
+              '/token'
+              '/register'
+            ]
+          }
+        ]
+      }
+    ]
     managedRules: {
       managedRuleSets: [
         {
