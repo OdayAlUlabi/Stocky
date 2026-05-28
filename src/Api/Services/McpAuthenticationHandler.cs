@@ -11,7 +11,7 @@ namespace Stocky.Api.Services;
 /// the value in <c>Mcp:ServiceKey</c> configuration, synthesises a
 /// <see cref="ClaimsPrincipal"/> whose <c>sub</c> claim equals <c>Mcp:OwnerId</c>.
 /// This lets the MCP server call every API endpoint as the configured owner
-/// without needing a Google OAuth token.
+/// without needing an OAuth token.
 /// </summary>
 public sealed class McpAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,

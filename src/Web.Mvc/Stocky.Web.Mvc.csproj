@@ -8,7 +8,7 @@
     <!--
       The referenced Api project ships its own appsettings.*.json with the
       same target path as ours, triggering NETSDK1152. This project's own
-      copies should win (they have host-specific Google auth defaults).
+      copies should win (they have host-specific auth defaults).
     -->
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>

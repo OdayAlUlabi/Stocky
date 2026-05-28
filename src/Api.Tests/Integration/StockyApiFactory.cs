@@ -13,8 +13,8 @@ namespace Stocky.Api.Tests.Integration;
 /// Spins up an in-process test server against the real ASP.NET Core pipeline.
 ///
 /// Environment: "Development"
-///   → appsettings.Development.json is loaded: Google:ClientId and AllowedOrigins
-///     are present, satisfying both startup validation guards in Program.cs.
+///   → appsettings.Development.json is loaded: AllowedOrigins is set,
+///     satisfying the non-Development startup guard in Program.cs.
 ///
 /// Authentication: <see cref="TestAuthHandler"/> is registered as the default
 ///   authentication scheme via PostConfigure so it wins over all other registrations
@@ -32,8 +32,8 @@ public class StockyApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // Development: appsettings.Development.json provides Google:ClientId and AllowedOrigins,
-        // satisfying both non-Development startup guards in Program.cs.
+        // Development: appsettings.Development.json provides AllowedOrigins,
+        // satisfying the non-Development startup guard in Program.cs.
         builder.UseEnvironment("Development");
 
         // ConfigureTestServices runs AFTER Program.cs's ConfigureServices calls.

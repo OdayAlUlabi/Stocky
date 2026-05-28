@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "1882440928709786249"
+      "templateHash": "15578769960334634198"
     }
   },
   "parameters": {
@@ -35,10 +35,18 @@
         "description": "Tags applied to all resources."
       }
     },
-    "googleClientId": {
-      "type": "string",
+    "mcpServiceKey": {
+      "type": "securestring",
+      "defaultValue": "",
       "metadata": {
-        "description": "Google OAuth client id used for JWT Bearer validation on the API."
+        "description": "Pre-shared key used by the MCP server when calling the Stocky API. Set once via: azd env set MCP_SERVICE_KEY <value>"
+      }
+    },
+    "mcpOwnerId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Google user-id (sub claim) the MCP server impersonates. Set via: azd env set MCP_OWNER_ID <your-google-sub>"
       }
     },
     "sqlEntraAdminObjectId": {
@@ -183,6 +191,24 @@
     "canDeployRunner": "[and(parameters('deployGitHubRunner'), or(and(not(empty(parameters('githubAppId'))), not(empty(parameters('githubInstallationId')))), true()))]"
   },
   "resources": {
+    "kvRef": {
+      "existing": true,
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[take(format('kv-{0}-{1}', variables('prefix'), variables('resourceToken')), 24)]"
+    },
+    "mcpServiceKeySecret": {
+      "condition": "[not(empty(parameters('mcpServiceKey')))]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/{1}', take(format('kv-{0}-{1}', variables('prefix'), variables('resourceToken')), 24), 'mcp-service-key')]",
+      "properties": {
+        "value": "[parameters('mcpServiceKey')]",
+        "attributes": {
+          "enabled": true
+        }
+      }
+    },
     "obs": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -913,7 +939,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "7080109948994144231"
+              "templateHash": "11369426036493885438"
             }
           },
           "parameters": {
@@ -992,6 +1018,13 @@
               "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
               "apiVersion": "2023-01-31",
               "name": "[format('id-{0}-api-sql', parameters('prefix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[format('id-{0}-mcp', parameters('prefix'))]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]"
             },
@@ -1089,6 +1122,18 @@
             "apiSqlIdClientId": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-api-sql', parameters('prefix'))), '2023-01-31').clientId]"
+            },
+            "mcpIdId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-mcp', parameters('prefix')))]"
+            },
+            "mcpIdPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-mcp', parameters('prefix'))), '2023-01-31').principalId]"
+            },
+            "mcpIdClientId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-mcp', parameters('prefix'))), '2023-01-31').clientId]"
             },
             "githubRepoOut": {
               "type": "string",
@@ -1679,6 +1724,9 @@
           },
           "agwPrincipalId": {
             "value": "[reference('ids').outputs.agwIdPrincipalId.value]"
+          },
+          "mcpPrincipalId": {
+            "value": "[reference('ids').outputs.mcpIdPrincipalId.value]"
           }
         },
         "template": {
@@ -1688,7 +1736,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "15744267912298309933"
+              "templateHash": "5934423546627468991"
             }
           },
           "parameters": {
@@ -1738,6 +1786,12 @@
               "type": "string",
               "metadata": {
                 "description": "App Gateway identity principal id (reads TLS cert from Key Vault)."
+              }
+            },
+            "mcpPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "MCP server identity principal id (ACR pull + KV service key)."
               }
             }
           },
@@ -1868,6 +1922,26 @@
               "name": "[guid(parameters('prefix'), parameters('kvId'), parameters('agwPrincipalId'), 'kvSecretsUser')]",
               "properties": {
                 "principalId": "[parameters('agwPrincipalId')]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleKvSecretsUser'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(parameters('prefix'), parameters('acrId'), parameters('mcpPrincipalId'), 'acrPull')]",
+              "properties": {
+                "principalId": "[parameters('mcpPrincipalId')]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleAcrPull'))]"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(parameters('prefix'), parameters('kvId'), parameters('mcpPrincipalId'), 'kvSecretsUser')]",
+              "properties": {
+                "principalId": "[parameters('mcpPrincipalId')]",
                 "principalType": "ServicePrincipal",
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleKvSecretsUser'))]"
               }
@@ -2142,9 +2216,6 @@
           "sqlDbName": {
             "value": "[reference('sql').outputs.dbName.value]"
           },
-          "googleClientId": {
-            "value": "[parameters('googleClientId')]"
-          },
           "appiConnectionString": {
             "value": "[reference('obs').outputs.appiConnectionString.value]"
           },
@@ -2157,6 +2228,12 @@
           "kvUri": {
             "value": "[reference('kv').outputs.kvUri.value]"
           },
+          "mcpIdentityId": {
+            "value": "[reference('ids').outputs.mcpIdId.value]"
+          },
+          "mcpOwnerId": {
+            "value": "[parameters('mcpOwnerId')]"
+          },
           "imageTag": {
             "value": "[parameters('imageTag')]"
           }
@@ -2168,7 +2245,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "2927535028078517002"
+              "templateHash": "4674181786670055130"
             }
           },
           "parameters": {
@@ -2238,12 +2315,6 @@
                 "description": "SQL database name."
               }
             },
-            "googleClientId": {
-              "type": "string",
-              "metadata": {
-                "description": "Google OAuth client id for JWT Bearer token validation."
-              }
-            },
             "appiConnectionString": {
               "type": "string",
               "metadata": {
@@ -2268,6 +2339,18 @@
                 "description": "Key Vault URI for fetching the SQL SP certificate."
               }
             },
+            "mcpIdentityId": {
+              "type": "string",
+              "metadata": {
+                "description": "User-assigned identity resource id for the MCP server (ACR pull + KV read)."
+              }
+            },
+            "mcpOwnerId": {
+              "type": "string",
+              "metadata": {
+                "description": "Google user-id (sub claim) the MCP server impersonates when calling the API."
+              }
+            },
             "imageTag": {
               "type": "string",
               "defaultValue": "placeholder",
@@ -2280,7 +2363,8 @@
             "isBootstrap": "[equals(parameters('imageTag'), 'placeholder')]",
             "bootstrapImage": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
             "apiImage": "[if(variables('isBootstrap'), variables('bootstrapImage'), format('{0}/stocky-api:{1}', parameters('acrLoginServer'), parameters('imageTag')))]",
-            "webMvcImage": "[if(variables('isBootstrap'), variables('bootstrapImage'), format('{0}/stocky-web-mvc:{1}', parameters('acrLoginServer'), parameters('imageTag')))]"
+            "webMvcImage": "[if(variables('isBootstrap'), variables('bootstrapImage'), format('{0}/stocky-web-mvc:{1}', parameters('acrLoginServer'), parameters('imageTag')))]",
+            "mcpImage": "[if(variables('isBootstrap'), variables('bootstrapImage'), format('{0}/stocky-mcp:{1}', parameters('acrLoginServer'), parameters('imageTag')))]"
           },
           "resources": [
             {
@@ -2303,6 +2387,21 @@
                     {
                       "name": "sql-cert-base64",
                       "keyVaultUrl": "[format('{0}secrets/stocky-api-sql-cert', parameters('kvUri'))]",
+                      "identity": "[parameters('apiIdentityId')]"
+                    },
+                    {
+                      "name": "alpaca-api-key-id",
+                      "keyVaultUrl": "[format('{0}secrets/alpaca-api-key-id', parameters('kvUri'))]",
+                      "identity": "[parameters('apiIdentityId')]"
+                    },
+                    {
+                      "name": "alpaca-secret-key",
+                      "keyVaultUrl": "[format('{0}secrets/alpaca-secret-key', parameters('kvUri'))]",
+                      "identity": "[parameters('apiIdentityId')]"
+                    },
+                    {
+                      "name": "mcp-service-key",
+                      "keyVaultUrl": "[format('{0}secrets/mcp-service-key', parameters('kvUri'))]",
                       "identity": "[parameters('apiIdentityId')]"
                     }
                   ],
@@ -2341,10 +2440,6 @@
                           "value": "~3"
                         },
                         {
-                          "name": "Google__ClientId",
-                          "value": "[parameters('googleClientId')]"
-                        },
-                        {
                           "name": "AZURE_CLIENT_ID",
                           "value": "[parameters('apiIdentityClientId')]"
                         },
@@ -2375,6 +2470,22 @@
                         {
                           "name": "AllowedOrigins__0",
                           "value": "[format('https://{0}', parameters('publicHostname'))]"
+                        },
+                        {
+                          "name": "MarketData__Alpaca__ApiKeyId",
+                          "secretRef": "alpaca-api-key-id"
+                        },
+                        {
+                          "name": "MarketData__Alpaca__ApiSecret",
+                          "secretRef": "alpaca-secret-key"
+                        },
+                        {
+                          "name": "Mcp__ServiceKey",
+                          "secretRef": "mcp-service-key"
+                        },
+                        {
+                          "name": "Mcp__OwnerId",
+                          "value": "[parameters('mcpOwnerId')]"
                         },
                         {
                           "name": "PORT",
@@ -2422,6 +2533,16 @@
                       "name": "sql-cert-base64",
                       "keyVaultUrl": "[format('{0}secrets/stocky-api-sql-cert', parameters('kvUri'))]",
                       "identity": "[parameters('apiIdentityId')]"
+                    },
+                    {
+                      "name": "alpaca-api-key-id",
+                      "keyVaultUrl": "[format('{0}secrets/alpaca-api-key-id', parameters('kvUri'))]",
+                      "identity": "[parameters('apiIdentityId')]"
+                    },
+                    {
+                      "name": "alpaca-secret-key",
+                      "keyVaultUrl": "[format('{0}secrets/alpaca-secret-key', parameters('kvUri'))]",
+                      "identity": "[parameters('apiIdentityId')]"
                     }
                   ],
                   "ingress": {
@@ -2459,10 +2580,6 @@
                           "value": "~3"
                         },
                         {
-                          "name": "Authentication__Google__ClientId",
-                          "value": "[parameters('googleClientId')]"
-                        },
-                        {
                           "name": "AZURE_CLIENT_ID",
                           "value": "[parameters('apiIdentityClientId')]"
                         },
@@ -2495,6 +2612,14 @@
                           "value": "[format('https://{0}', parameters('publicHostname'))]"
                         },
                         {
+                          "name": "MarketData__Alpaca__ApiKeyId",
+                          "secretRef": "alpaca-api-key-id"
+                        },
+                        {
+                          "name": "MarketData__Alpaca__ApiSecret",
+                          "secretRef": "alpaca-secret-key"
+                        },
+                        {
                           "name": "PORT",
                           "value": "8080"
                         }
@@ -2518,6 +2643,90 @@
                   }
                 }
               }
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-10-02-preview",
+              "name": "[format('ca-{0}-mcp', parameters('prefix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[union(parameters('tags'), createObject('azd-service-name', 'mcp'))]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('mcpIdentityId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[parameters('envId')]",
+                "configuration": {
+                  "secrets": [
+                    {
+                      "name": "mcp-service-key",
+                      "keyVaultUrl": "[format('{0}secrets/mcp-service-key', parameters('kvUri'))]",
+                      "identity": "[parameters('mcpIdentityId')]"
+                    }
+                  ],
+                  "ingress": {
+                    "external": true,
+                    "targetPort": "[if(variables('isBootstrap'), 80, 8080)]",
+                    "transport": "auto",
+                    "allowInsecure": false
+                  },
+                  "registries": "[if(variables('isBootstrap'), createArray(), createArray(createObject('server', parameters('acrLoginServer'), 'identity', parameters('mcpIdentityId'))))]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "mcp",
+                      "image": "[variables('mcpImage')]",
+                      "resources": {
+                        "cpu": "[json('0.25')]",
+                        "memory": "0.5Gi"
+                      },
+                      "env": [
+                        {
+                          "name": "ASPNETCORE_URLS",
+                          "value": "http://+:8080"
+                        },
+                        {
+                          "name": "ASPNETCORE_FORWARDEDHEADERS_ENABLED",
+                          "value": "true"
+                        },
+                        {
+                          "name": "StockyApi__BaseUrl",
+                          "value": "[format('https://{0}/', reference(resourceId('Microsoft.App/containerApps', format('ca-{0}-api', parameters('prefix'))), '2024-10-02-preview').configuration.ingress.fqdn)]"
+                        },
+                        {
+                          "name": "StockyApi__ServiceKey",
+                          "secretRef": "mcp-service-key"
+                        },
+                        {
+                          "name": "PORT",
+                          "value": "8080"
+                        }
+                      ],
+                      "probes": "[if(variables('isBootstrap'), createArray(), createArray(createObject('type', 'Liveness', 'httpGet', createObject('path', '/', 'port', 8080), 'periodSeconds', 30, 'initialDelaySeconds', 10)))]"
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 3,
+                    "rules": [
+                      {
+                        "name": "http",
+                        "http": {
+                          "metadata": {
+                            "concurrentRequests": "20"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/containerApps', format('ca-{0}-api', parameters('prefix')))]"
+              ]
             }
           ],
           "outputs": {
@@ -2536,6 +2745,14 @@
             "webMvcFqdn": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.App/containerApps', format('ca-{0}-web-mvc', parameters('prefix'))), '2024-10-02-preview').configuration.ingress.fqdn]"
+            },
+            "mcpAppName": {
+              "type": "string",
+              "value": "[format('ca-{0}-mcp', parameters('prefix'))]"
+            },
+            "mcpFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/containerApps', format('ca-{0}-mcp', parameters('prefix'))), '2024-10-02-preview').configuration.ingress.fqdn]"
             }
           }
         }
@@ -3099,7 +3316,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "2622262765038081045"
+              "templateHash": "2392253108197354767"
             }
           },
           "parameters": {
@@ -3327,8 +3544,8 @@
                   {
                     "name": "https-web",
                     "properties": {
-                      "port": 80,
-                      "protocol": "Http",
+                      "port": 443,
+                      "protocol": "Https",
                       "pickHostNameFromBackendAddress": true,
                       "requestTimeout": 60,
                       "probe": {
@@ -3358,7 +3575,7 @@
                   {
                     "name": "probe-web",
                     "properties": {
-                      "protocol": "Http",
+                      "protocol": "Https",
                       "path": "/",
                       "host": "[parameters('webBackendFqdn')]",
                       "interval": 30,
@@ -3425,7 +3642,8 @@
                             "paths": [
                               "/api/*",
                               "/hubs/*",
-                              "/health"
+                              "/health",
+                              "/admin/refresh/*"
                             ],
                             "backendAddressPool": {
                               "id": "[resourceId('Microsoft.Network/applicationGateways/backendAddressPools', variables('agwName'), 'pool-api')]"
@@ -3563,6 +3781,14 @@
     "WEB_MVC_INTERNAL_FQDN": {
       "type": "string",
       "value": "[reference('apps').outputs.webMvcFqdn.value]"
+    },
+    "MCP_APP_NAME": {
+      "type": "string",
+      "value": "[reference('apps').outputs.mcpAppName.value]"
+    },
+    "MCP_FQDN": {
+      "type": "string",
+      "value": "[reference('apps').outputs.mcpFqdn.value]"
     },
     "MIGRATOR_JOB_NAME": {
       "type": "string",

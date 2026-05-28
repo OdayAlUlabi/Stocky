@@ -11,11 +11,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 
 // -----------------------------------------------------------------------------
-// Auth — single-user passthrough. Google OAuth has been removed; every
-// request is signed in as a fixed local identity by AutoAuthenticationHandler
-// so existing [Authorize] attributes and owner-scoped queries keep working.
-// Override the owner id via the Auth:LocalOwnerId config key to keep
-// previously-owned rows visible.
+// Auth — single-user passthrough via AutoAuthenticationHandler.
+// Every request is signed in as a fixed local identity so [Authorize] attributes
+// and owner-scoped queries keep working.
+// Override the owner id via the Auth:LocalOwnerId config key.
 // -----------------------------------------------------------------------------
 builder.Services
     .AddAuthentication(AutoAuthenticationHandler.SchemeName)

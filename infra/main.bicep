@@ -18,7 +18,7 @@ param tags object = {
 @description('Pre-shared key used by the MCP server when calling the Stocky API. Set once via: azd env set MCP_SERVICE_KEY <value>')
 param mcpServiceKey string = ''
 
-@description('Google user-id (sub claim) the MCP server impersonates. Set via: azd env set MCP_OWNER_ID <your-google-sub>')
+@description('User id (sub claim) the MCP server impersonates when calling the API. Set via: azd env set MCP_OWNER_ID <sub>')
 param mcpOwnerId string = ''
 
 @description('Object id of the Entra group/user that will be SQL Entra admin (break-glass).')

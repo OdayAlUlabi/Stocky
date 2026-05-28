@@ -31,7 +31,7 @@ param sqlSpClientId string
 param kvUri string
 @description('User-assigned identity resource id for the MCP server (ACR pull + KV read).')
 param mcpIdentityId string
-@description('Google user-id (sub claim) the MCP server impersonates when calling the API.')
+@description('User id (sub claim) the MCP server impersonates when calling the API.')
 param mcpOwnerId string
 @description('Image tag (sha) — placeholder allowed so CI updates it later.')
 param imageTag string = 'placeholder'

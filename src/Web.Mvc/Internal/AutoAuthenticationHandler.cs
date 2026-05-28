@@ -6,13 +6,11 @@ using Microsoft.Extensions.Options;
 namespace Stocky.Web.Mvc.Internal;
 
 /// <summary>
-/// Single-user passthrough authentication. After Google OAuth was removed,
-/// every request is signed in as a fixed local identity so existing
-/// <c>[Authorize]</c> attributes keep working and owner-scoped queries
-/// (<c>User.GetOwnerId()</c>) continue to resolve a stable <c>sub</c>.
+/// Single-user passthrough authentication. Every request is signed in as a
+/// fixed local identity so <c>[Authorize]</c> attributes keep working and
+/// owner-scoped queries (<c>User.GetOwnerId()</c>) resolve a stable <c>sub</c>.
 ///
-/// The owner id can be overridden with <c>Auth:LocalOwnerId</c> so existing
-/// rows owned by a previous Google <c>sub</c> remain visible.
+/// Override the owner id with <c>Auth:LocalOwnerId</c> to keep existing rows visible.
 /// </summary>
 public sealed class AutoAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
