@@ -315,6 +315,7 @@ resource mcp 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'StockyApi__BaseUrl', value: 'https://${api.properties.configuration.ingress.fqdn}/' }
             // Key is injected from KV via the mcp UAMI.
             { name: 'StockyApi__ServiceKey', secretRef: 'mcp-service-key' }
+            { name: 'App__BaseUrl', value: 'https://${publicHostname}' }
             { name: 'PORT', value: '8080' }
           ]
           probes: isBootstrap ? [] : [
