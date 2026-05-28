@@ -36,15 +36,15 @@ var pendingCodes = new ConcurrentDictionary<string,
 app.MapGet("/.well-known/oauth-authorization-server", () => Results.Json(new
 {
     issuer                              = baseUrl,
-    authorization_endpoint              = $"{baseUrl}/oauth/authorize",
-    token_endpoint                      = $"{baseUrl}/oauth/token",
+    authorization_endpoint              = $"{baseUrl}/authorize",
+    token_endpoint                      = $"{baseUrl}/token",
     response_types_supported            = new[] { "code" },
     grant_types_supported               = new[] { "authorization_code" },
     code_challenge_methods_supported    = new[] { "S256" }
 }));
 
 // ── Authorization — GET: show login form ──────────────────────────────────────
-app.MapGet("/oauth/authorize", (HttpRequest req) =>
+app.MapGet("/authorize", (HttpRequest req) =>
 {
     var html = $$"""
         <!DOCTYPE html>
@@ -75,7 +75,7 @@ app.MapGet("/oauth/authorize", (HttpRequest req) =>
 });
 
 // ── Authorization — POST: validate key, issue code ────────────────────────────
-app.MapPost("/oauth/authorize", async (HttpRequest req) =>
+app.MapPost("/authorize", async (HttpRequest req) =>
 {
     var form          = await req.ReadFormAsync();
     var accessKey     = form["access_key"].ToString();
@@ -108,7 +108,7 @@ app.MapPost("/oauth/authorize", async (HttpRequest req) =>
 });
 
 // ── Token endpoint: exchange code → bearer token ──────────────────────────────
-app.MapPost("/oauth/token", async (HttpRequest req) =>
+app.MapPost("/token", async (HttpRequest req) =>
 {
     var form         = await req.ReadFormAsync();
     var code         = form["code"].ToString();

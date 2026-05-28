@@ -362,6 +362,15 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
                 rewriteRuleSet: { id: resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', agwName, 'fix-location') }
               }
             }
+            {
+              name: 'mcp-oauth'
+              properties: {
+                paths: [ '/.well-known/oauth-authorization-server', '/authorize', '/token' ]
+                backendAddressPool: { id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'pool-mcp') }
+                backendHttpSettings: { id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', agwName, 'https-mcp') }
+                rewriteRuleSet: { id: resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', agwName, 'fix-location') }
+              }
+            }
           ]
         }
       }
