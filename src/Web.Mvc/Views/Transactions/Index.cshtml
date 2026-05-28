@@ -4,7 +4,123 @@
     var portfolio = ViewBag.Portfolio as PortfolioDto;
     ViewData["Title"] = (portfolio?.Name ?? "Portfolio") + " · Transactions";
     ViewBag.PickerPathTemplate = "/Portfolios/{0}/Transactions";
+
+    // ── helpers ────────────────────────────────────────────────────────────────
+    static decimal TxCostBasis(string type, decimal qty, decimal price, decimal fee) =>
+        type?.ToLowerInvariant() switch
+        {
+            "buy"  => qty * price + fee,
+            "sell" => qty * price - fee,
+            _      => qty * price
+        };
+
+    static decimal CashEffect(string type, decimal qty, decimal price, decimal fee)
+    {
+        var gross = qty * price;
+        return type?.ToLowerInvariant() switch
+        {
+            "buy"                                             => -(gross + fee),
+            "sell"                                           => gross - fee,
+            "deposit" or "dividend" or "interest" or "transfer" => gross,
+            "withdrawal" or "withdraw" or "fee"              => -gross,
+            _                                                => 0m
+        };
+    }
+
+    // Running cash balance (chronological) → keyed by transaction id
+    var balanceById = new Dictionary<Guid, decimal>(Model.Count);
+    {
+        decimal running = 0m;
+        foreach (var t in Model.OrderBy(x => x.ExecutedAt))
+        {
+            running += CashEffect(t.Type, t.Quantity, t.Price, t.Fee);
+            balanceById[t.Id] = running;
+        }
+    }
+
+    // ── summary aggregates (Buy transactions only) ─────────────────────────────
+    decimal sumCost = 0m, sumMv = 0m, sumUnreal = 0m;
+    int buyCount = 0, sellCount = 0, otherCount = 0;
+    string? ccy = null;
+    foreach (var t in Model)
+    {
+        var isBuy  = string.Equals(t.Type, "Buy",  StringComparison.OrdinalIgnoreCase);
+        var isSell = string.Equals(t.Type, "Sell", StringComparison.OrdinalIgnoreCase);
+        ccy ??= t.Currency;
+        if (isBuy)
+        {
+            buyCount++;
+            var cost = TxCostBasis(t.Type, t.Quantity, t.Price, t.Fee);
+            sumCost += cost;
+            if (t.MarketValue.HasValue)
+            {
+                sumMv    += t.MarketValue.Value;
+                sumUnreal += t.MarketValue.Value - cost;
+            }
+        }
+        else if (isSell) sellCount++;
+        else             otherCount++;
+    }
+    ccy ??= "USD";
+    var unrealPct = sumCost > 0 ? Math.Round(sumUnreal / sumCost * 100m, 2) : 0m;
 }
+
+<style>
+/* ── transaction summary bar ───────────────────────────────────── */
+.tx-summary {
+    display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1.25rem;
+}
+.tx-stat {
+    flex: 1; min-width: 140px;
+    background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: .85rem 1.1rem;
+    display: flex; flex-direction: column; gap: .2rem;
+}
+.tx-stat .ts-label {
+    font-size: .7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text-subtle);
+}
+.tx-stat .ts-value {
+    font-size: 1.2rem; font-weight: 700;
+    font-variant-numeric: tabular-nums; line-height: 1.15;
+}
+.tx-stat .ts-sub {
+    font-size: .72rem; color: var(--text-muted);
+}
+
+/* ── filter tab bar ─────────────────────────────────────────────── */
+.tx-filter-bar {
+    display: flex; gap: .35rem; margin-bottom: .85rem;
+    flex-wrap: wrap; align-items: center;
+}
+.tx-filter-bar .tfbtn {
+    padding: .28rem .75rem; border-radius: 999px;
+    font-size: .78rem; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-elev-2); color: var(--text-muted);
+    transition: all .12s;
+}
+.tx-filter-bar .tfbtn:hover { color: var(--text); border-color: var(--text-muted); }
+.tx-filter-bar .tfbtn.active { background: var(--primary-600); border-color: var(--primary-600); color: #fff; }
+
+/* ── table tweaks ───────────────────────────────────────────────── */
+.tx-table td { vertical-align: middle; }
+.tx-table .td-date { white-space: nowrap; }
+.tx-table .td-date .dt-time { font-size: .72rem; color: var(--text-subtle); display: block; }
+.tx-table .td-sym  { font-weight: 700; }
+.tx-table .td-qty  { text-align: right; font-variant-numeric: tabular-nums; }
+.tx-table .td-mono { text-align: right; font-variant-numeric: tabular-nums; }
+.tx-table .td-pl { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tx-table .pl-pct {
+    display: inline-block; font-size: .72rem; font-weight: 600;
+    padding: .1rem .4rem; border-radius: 999px; margin-left: .3rem;
+}
+.pl-pct-up   { background: var(--green-soft); color: var(--green); }
+.pl-pct-down { background: var(--red-soft);   color: var(--red);   }
+.pl-pct-flat { background: var(--bg-elev-2);  color: var(--text-muted); }
+.tx-table .td-mv small { display: block; font-size: .71rem; color: var(--text-subtle); }
+.tx-table .td-cost small { display: block; font-size: .71rem; color: var(--text-subtle); }
+</style>
 
 <div class="page-header">
     <h2>
@@ -25,8 +141,46 @@
     <div class="flash success">@status</div>
 }
 
+@* ── summary stat cards ──────────────────────────────────────────────────────── *@
+@if (Model.Count > 0)
+{
+    <div class="tx-summary">
+        <div class="tx-stat">
+            <span class="ts-label">Transactions</span>
+            <span class="ts-value">@Model.Count</span>
+            <span class="ts-sub">@buyCount buy · @sellCount sell · @otherCount other</span>
+        </div>
+        <div class="tx-stat">
+            <span class="ts-label">Total Cost Basis</span>
+            <span class="ts-value">@sumCost.Money(ccy)</span>
+            <span class="ts-sub">Buy transactions (qty × price + fee)</span>
+        </div>
+        <div class="tx-stat">
+            <span class="ts-label">Current Market Value</span>
+            <span class="ts-value">@(sumMv > 0 ? sumMv.Money(ccy) : "—")</span>
+            <span class="ts-sub">At latest prices · open buys</span>
+        </div>
+        <div class="tx-stat">
+            <span class="ts-label">Total Unrealized P&amp;L</span>
+            <span class="ts-value @sumUnreal.SignClass()">@(sumMv > 0 ? sumUnreal.Money(ccy) : "—")</span>
+            <span class="ts-sub @unrealPct.SignClass()">@(sumMv > 0 ? unrealPct.Pct() : "—") on open buys</span>
+        </div>
+    </div>
+}
+
+@* ── filter tab bar ──────────────────────────────────────────────────────────── *@
+<div class="tx-filter-bar" id="txFilterBar">
+    <button class="tfbtn active" data-filter="all">All <span style="opacity:.6;">(@Model.Count)</span></button>
+    <button class="tfbtn" data-filter="buy">Buy <span style="opacity:.6;">(@buyCount)</span></button>
+    <button class="tfbtn" data-filter="sell">Sell <span style="opacity:.6;">(@sellCount)</span></button>
+    @if (otherCount > 0)
+    {
+        <button class="tfbtn" data-filter="other">Other <span style="opacity:.6;">(@otherCount)</span></button>
+    }
+</div>
+
 <article>
-    <table>
+    <table class="tx-table" id="txTable">
         <thead>
             <tr>
                 <th>Date</th>
@@ -34,90 +188,83 @@
                 <th>Symbol</th>
                 <th style="text-align:right;">Qty</th>
                 <th style="text-align:right;">Price</th>
-                <th style="text-align:right;" class="d-none-mobile">Fee</th>
-                <th style="text-align:right;" class="d-none-mobile">Cash effect</th>
-                <th style="text-align:right;" class="d-none-mobile">Cash balance</th>
-                <th style="text-align:right;" class="d-none-mobile">Current Price</th>
+                <th style="text-align:right;" class="d-none-mobile">Cost Basis</th>
                 <th style="text-align:right;" class="d-none-mobile">Market Value</th>
+                <th style="text-align:right;" class="d-none-mobile">Unrealized P&amp;L</th>
+                <th style="text-align:right;" class="d-none-mobile">Cash Balance</th>
                 <th class="d-none-mobile">Notes</th>
                 <th style="text-align:right;">Actions</th>
             </tr>
         </thead>
         <tbody>
-            @{
-                decimal totalMv = 0m;
-                decimal netSignedMv = 0m;
-                decimal netCash = 0m;
-                decimal investedCapital = 0m;
-                string? footerCcy = null;
-                static decimal CashEffect(string type, decimal qty, decimal price, decimal fee)
-                {
-                    var gross = qty * price;
-                    return type?.ToLowerInvariant() switch
-                    {
-                        "buy" => -(gross + fee),
-                        "sell" => gross - fee,
-                        "deposit" or "dividend" or "interest" or "transfer" => gross,
-                        "withdrawal" or "withdraw" or "fee" => -gross,
-                        _ => 0m
-                    };
-                }
-                static decimal CapitalEffect(string type, decimal qty, decimal price)
-                {
-                    // Invested capital = net cash the user contributed to the
-                    // account (deposits + external transfers in − withdrawals).
-                    // Dividends/Interest/trade P&L are NOT contributions.
-                    var gross = qty * price;
-                    return type?.ToLowerInvariant() switch
-                    {
-                        "deposit" or "transfer" => gross,
-                        "withdrawal" or "withdraw" => -gross,
-                        _ => 0m
-                    };
-                }
-                // Compute the running cash balance in chronological order so the
-                // value shown on each row reflects the post-transaction balance.
-                // The table itself is rendered newest-first, so we look up the
-                // pre-computed balance by transaction id.
-                var balanceById = new Dictionary<Guid, decimal>(Model.Count);
-                {
-                    decimal running = 0m;
-                    foreach (var t in Model.OrderBy(x => x.ExecutedAt))
-                    {
-                        running += CashEffect(t.Type, t.Quantity, t.Price, t.Fee);
-                        balanceById[t.Id] = running;
-                    }
-                }
-            }
             @foreach (var t in Model)
             {
-                var isBuy = string.Equals(t.Type, "Buy", StringComparison.OrdinalIgnoreCase);
+                var isBuy  = string.Equals(t.Type, "Buy",  StringComparison.OrdinalIgnoreCase);
                 var isSell = string.Equals(t.Type, "Sell", StringComparison.OrdinalIgnoreCase);
                 var pillCls = isBuy ? "badge-up" : isSell ? "badge-down" : "pill";
-                if (t.MarketValue.HasValue)
-                {
-                    totalMv += t.MarketValue.Value;
-                    if (isBuy) netSignedMv += t.MarketValue.Value;
-                    else if (isSell) netSignedMv -= t.MarketValue.Value;
-                    footerCcy ??= t.Currency;
-                }
-                var cashEffect = CashEffect(t.Type, t.Quantity, t.Price, t.Fee);
-                netCash += cashEffect;
-                investedCapital += CapitalEffect(t.Type, t.Quantity, t.Price);
-                footerCcy ??= t.Currency;
-                var runningBalance = balanceById[t.Id];
-                <tr>
-                    <td class="text-muted">@t.ExecutedAt.ToString("yyyy-MM-dd HH:mm")</td>
+
+                var cost    = TxCostBasis(t.Type, t.Quantity, t.Price, t.Fee);
+                var unreal  = (isBuy && t.MarketValue.HasValue) ? t.MarketValue.Value - cost : (decimal?)null;
+                var unlPct  = (unreal.HasValue && cost != 0) ? Math.Round(unreal.Value / cost * 100m, 2) : (decimal?)null;
+                var pctCls  = unlPct.HasValue ? (unlPct.Value > 0 ? "pl-pct-up" : unlPct.Value < 0 ? "pl-pct-down" : "pl-pct-flat") : "";
+                var runBal  = balanceById[t.Id];
+                var typeTag = t.Type.ToLowerInvariant();
+                <tr data-type="@typeTag">
+                    <td class="td-date">
+                        @t.ExecutedAt.ToString("yyyy-MM-dd")
+                        <span class="dt-time">@t.ExecutedAt.ToString("HH:mm")</span>
+                    </td>
                     <td><span class="@pillCls">@t.Type</span></td>
-                    <td><strong>@t.Symbol</strong></td>
-                    <td style="text-align:right;">@t.Quantity.Num(4)</td>
-                    <td style="text-align:right;">@t.Price.Money(t.Currency)</td>
-                    <td style="text-align:right;" class="d-none-mobile text-muted">@t.Fee.Money(t.Currency)</td>
-                    <td style="text-align:right;" class="d-none-mobile @cashEffect.SignClass()">@cashEffect.Money(t.Currency)</td>
-                    <td style="text-align:right;" class="d-none-mobile"><strong>@runningBalance.Money(t.Currency)</strong></td>
-                    <td style="text-align:right;" class="d-none-mobile">@t.LatestPrice.Money(t.Currency)</td>
-                    <td style="text-align:right;" class="d-none-mobile">@t.MarketValue.Money(t.Currency)</td>
-                    <td class="d-none-mobile text-muted">@t.Notes</td>
+                    <td class="td-sym">
+                        @if (!string.IsNullOrWhiteSpace(t.Symbol))
+                        {
+                            <a href="/Portfolios/@pid/Analytics/Position/@t.Symbol" style="color:var(--text);" title="View position">@t.Symbol</a>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td class="td-qty">@t.Quantity.Num(4)</td>
+                    <td class="td-mono">@t.Price.Money(t.Currency)</td>
+                    <td class="td-cost d-none-mobile">
+                        @if (isBuy || isSell)
+                        {
+                            <span>@cost.Money(t.Currency)</span>
+                            <small>fee: @t.Fee.Money(t.Currency)</small>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td class="td-mv d-none-mobile">
+                        @if (t.MarketValue.HasValue && isBuy)
+                        {
+                            <span>@t.MarketValue.Money(t.Currency)</span>
+                            <small>&#64; @t.LatestPrice.Money(t.Currency)</small>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td class="td-pl d-none-mobile">
+                        @if (unreal.HasValue)
+                        {
+                            <span class="@unreal.Value.SignClass()">@unreal.Value.Money(t.Currency)</span>
+                            @if (unlPct.HasValue)
+                            {
+                                <span class="pl-pct @pctCls">@unlPct.Value.Pct()</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td class="td-mono d-none-mobile"><strong>@runBal.Money(t.Currency)</strong></td>
+                    <td class="d-none-mobile text-muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@t.Notes">@t.Notes</td>
                     <td style="text-align:right;">
                         <a href="/Portfolios/@pid/Transactions/Edit/@t.Id" class="btn btn-ghost btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                         <form method="post" action="/Portfolios/@pid/Transactions/Delete/@t.Id" style="display:inline;" onsubmit="return confirm('Delete this transaction?');">
@@ -130,7 +277,7 @@
             @if (Model.Count == 0)
             {
                 <tr>
-                    <td colspan="12" style="text-align:center;padding:2rem;">
+                    <td colspan="11" style="text-align:center;padding:2rem;">
                         <div class="text-muted" style="margin-bottom:.75rem;"><i class="bi bi-inbox" style="font-size:2rem;"></i></div>
                         <p class="text-muted">No transactions yet.</p>
                         <a href="/Portfolios/@pid/Transactions/Create" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add first transaction</a>
@@ -138,25 +285,44 @@
                 </tr>
             }
         </tbody>
-        @if (Model.Count > 0 && footerCcy is not null)
+        @if (Model.Count > 0)
         {
             <tfoot>
                 <tr>
-                    <td colspan="6" style="text-align:right;" class="text-muted">Invested capital (Deposits + Transfers − Withdrawals)</td>
-                    <td colspan="2" style="text-align:right;"><strong>@investedCapital.Money(footerCcy)</strong></td>
-                    <td colspan="4"></td>
-                </tr>
-                <tr>
-                    <td colspan="6" style="text-align:right;" class="text-muted">Net cash effect (all transactions)</td>
-                    <td colspan="2" style="text-align:right;" class="@netCash.SignClass()"><strong>@netCash.Money(footerCcy)</strong></td>
-                    <td colspan="4"></td>
-                </tr>
-                <tr>
-                    <td colspan="9" style="text-align:right;" class="text-muted">Net market value (Buys − Sells)</td>
-                    <td style="text-align:right;"><strong>@netSignedMv.Money(footerCcy)</strong></td>
-                    <td colspan="2"></td>
+                    <td colspan="5" style="text-align:right;" class="text-muted">Open positions cost basis</td>
+                    <td style="text-align:right;"><strong>@sumCost.Money(ccy)</strong></td>
+                    <td style="text-align:right;"><strong>@(sumMv > 0 ? sumMv.Money(ccy) : "—")</strong></td>
+                    <td style="text-align:right;" class="@sumUnreal.SignClass()"><strong>@(sumMv > 0 ? sumUnreal.Money(ccy) : "—")</strong>@(sumMv > 0 && sumCost > 0 ? $" ({unrealPct.Pct()})" : "")</td>
+                    <td colspan="3"></td>
                 </tr>
             </tfoot>
         }
     </table>
 </article>
+
+<script>
+(function () {
+    var bar   = document.getElementById('txFilterBar');
+    var table = document.getElementById('txTable');
+    if (!bar || !table) return;
+
+    bar.addEventListener('click', function (e) {
+        var btn = e.target.closest('.tfbtn');
+        if (!btn) return;
+        var filter = btn.dataset.filter;
+
+        // Update active button
+        bar.querySelectorAll('.tfbtn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+
+        // Show / hide rows
+        table.querySelectorAll('tbody tr[data-type]').forEach(function (row) {
+            var type = row.dataset.type;
+            var show = filter === 'all'
+                || filter === type
+                || (filter === 'other' && type !== 'buy' && type !== 'sell');
+            row.style.display = show ? '' : 'none';
+        });
+    });
+}());
+</script>
