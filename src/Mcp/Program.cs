@@ -40,10 +40,36 @@ app.MapGet("/.well-known/oauth-authorization-server", () => Results.Json(new
     issuer                              = baseUrl,
     authorization_endpoint              = $"{baseUrl}/authorize",
     token_endpoint                      = $"{baseUrl}/token",
+    registration_endpoint               = $"{baseUrl}/register",
     response_types_supported            = new[] { "code" },
     grant_types_supported               = new[] { "authorization_code" },
     code_challenge_methods_supported    = new[] { "S256" }
 }));
+
+// ── Dynamic Client Registration (RFC 7591) ───────────────────────────────────
+// Claude.ai calls this before starting the auth flow. We issue a client_id
+// on the spot — no secret needed for PKCE flows.
+app.MapPost("/register", async (HttpRequest req) =>
+{
+    using var doc = await System.Text.Json.JsonDocument.ParseAsync(req.Body);
+    var root = doc.RootElement;
+
+    var clientId   = Guid.NewGuid().ToString("N");
+    var clientName = root.TryGetProperty("client_name", out var n) ? n.GetString() : "mcp-client";
+    var redirects  = root.TryGetProperty("redirect_uris", out var u)
+                     ? u.EnumerateArray().Select(x => x.GetString()).ToArray()
+                     : Array.Empty<string>();
+
+    return Results.Json(new
+    {
+        client_id                  = clientId,
+        client_name                = clientName,
+        redirect_uris              = redirects,
+        token_endpoint_auth_method = "none",
+        grant_types                = new[] { "authorization_code" },
+        response_types             = new[] { "code" }
+    }, statusCode: 201);
+});
 
 // ── Authorization — GET: show login form ──────────────────────────────────────
 app.MapGet("/authorize", (HttpRequest req) =>
