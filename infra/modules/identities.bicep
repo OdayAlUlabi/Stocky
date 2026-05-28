@@ -55,6 +55,13 @@ resource apiSqlId 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' 
   tags: tags
 }
 
+// MCP server identity: ACR pull + Key Vault Secrets User (to read the mcp-service-key).
+resource mcpId 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-${prefix}-mcp'
+  location: location
+  tags: tags
+}
+
 // Federated credentials: trust GitHub Actions OIDC issuer.
 // @batchSize(1) serializes FIC creation — Azure's UAMI service rejects
 // concurrent FIC writes for the same managed identity (ConcurrentFederatedIdentityCredentialsWritesForSingleManagedIdentity).
@@ -92,5 +99,9 @@ output agwIdClientId string = agwId.properties.clientId
 output apiSqlIdId string = apiSqlId.id
 output apiSqlIdPrincipalId string = apiSqlId.properties.principalId
 output apiSqlIdClientId string = apiSqlId.properties.clientId
+
+output mcpIdId string = mcpId.id
+output mcpIdPrincipalId string = mcpId.properties.principalId
+output mcpIdClientId string = mcpId.properties.clientId
 
 output githubRepoOut string = githubRepo

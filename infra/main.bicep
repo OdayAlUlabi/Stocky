@@ -17,6 +17,13 @@ param tags object = {
 @description('Google OAuth client id used for JWT Bearer validation on the API.')
 param googleClientId string
 
+@secure()
+@description('Pre-shared key used by the MCP server when calling the Stocky API. Set once via: azd env set MCP_SERVICE_KEY <value>')
+param mcpServiceKey string = ''
+
+@description('Google user-id (sub claim) the MCP server impersonates. Set via: azd env set MCP_OWNER_ID <your-google-sub>')
+param mcpOwnerId string = ''
+
 @description('Object id of the Entra group/user that will be SQL Entra admin (break-glass).')
 param sqlEntraAdminObjectId string
 
@@ -192,6 +199,7 @@ module rbac 'modules/rbac.bicep' = {
     migratorPrincipalId: ids.outputs.migratorIdPrincipalId
     runnerPrincipalId: ids.outputs.runnerIdPrincipalId
     agwPrincipalId: ids.outputs.agwIdPrincipalId
+    mcpPrincipalId: ids.outputs.mcpIdPrincipalId
   }
 }
 
@@ -238,6 +246,8 @@ module apps 'modules/containerApps.bicep' = {
     publicHostname: 'stocky.${location}.cloudapp.azure.com'
     sqlSpClientId: 'c5a4c107-a912-4d72-b513-513ced854386'
     kvUri: kv.outputs.kvUri
+    mcpIdentityId: ids.outputs.mcpIdId
+    mcpOwnerId: mcpOwnerId
     imageTag: imageTag
   }
   dependsOn: [ rbac ]
@@ -297,6 +307,17 @@ module appgw 'modules/appGateway.bicep' = {
   }
 }
 
+// MCP service key stored in Key Vault (ARM management-plane write works even
+// when publicNetworkAccess is Disabled, because AzureServices bypass is set).
+// Bicep creates/updates it on every 'azd up'; skipped when mcpServiceKey is empty.
+resource mcpServiceKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(mcpServiceKey)) {
+  name: '${kv.outputs.kvName}/mcp-service-key'
+  properties: {
+    value: mcpServiceKey
+    attributes: { enabled: true }
+  }
+}
+
 // ---------- Outputs ----------
 output GH_RUNNER_DEPLOYED bool = canDeployRunner
 output GH_RUNNER_VM_NAME string = canDeployRunner ? runner!.outputs.runnerVmName : ''
@@ -316,6 +337,8 @@ output ACA_ENV_NAME string = env.outputs.envName
 output API_APP_NAME string = apps.outputs.apiAppName
 output WEB_MVC_APP_NAME string = apps.outputs.webMvcAppName
 output WEB_MVC_INTERNAL_FQDN string = apps.outputs.webMvcFqdn
+output MCP_APP_NAME string = apps.outputs.mcpAppName
+output MCP_FQDN string = apps.outputs.mcpFqdn
 output MIGRATOR_JOB_NAME string = jobs.outputs.jobName
 output SQL_SERVER_FQDN string = sql.outputs.serverFqdn
 output SQL_DB_NAME string = sql.outputs.dbName

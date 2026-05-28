@@ -15,6 +15,8 @@ param migratorPrincipalId string
 param runnerPrincipalId string
 @description('App Gateway identity principal id (reads TLS cert from Key Vault).')
 param agwPrincipalId string
+@description('MCP server identity principal id (ACR pull + KV service key).')
+param mcpPrincipalId string
 
 var roleKvSecretsUser   = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
 var roleKvCertUser      = 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba' // Key Vault Certificate User
@@ -144,6 +146,28 @@ resource agwKvSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' =
   name: guid(prefix, kvId, agwPrincipalId, 'kvSecretsUser')
   properties: {
     principalId: agwPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleKvSecretsUser)
+  }
+}
+
+// mcp UAMI: AcrPull on ACR
+resource mcpAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: resourceGroup()
+  name: guid(prefix, acrId, mcpPrincipalId, 'acrPull')
+  properties: {
+    principalId: mcpPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleAcrPull)
+  }
+}
+
+// mcp UAMI: Key Vault Secrets User on KV (read mcp-service-key secret)
+resource mcpKvRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: resourceGroup()
+  name: guid(prefix, kvId, mcpPrincipalId, 'kvSecretsUser')
+  properties: {
+    principalId: mcpPrincipalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleKvSecretsUser)
   }

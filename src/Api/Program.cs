@@ -197,6 +197,9 @@ var authBuilder = builder.Services.AddAuthentication();
 // M14 #91 — API-key bearer scheme (sk_*) for /v1/public endpoints
 authBuilder.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
     ApiKeyAuthenticationHandler.SchemeName, _ => { });
+// MCP service-account scheme: X-Mcp-Service-Key header for the Stocky MCP server.
+authBuilder.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, McpAuthenticationHandler>(
+    McpAuthenticationHandler.SchemeName, _ => { });
 
 builder.Services.AddAuthorization();
 

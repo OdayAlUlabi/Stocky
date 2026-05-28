@@ -23,6 +23,7 @@ env:
   API_APP_NAME:          ${{ vars.API_APP_NAME }}
   WEB_MVC_APP_NAME:      ${{ vars.WEB_MVC_APP_NAME }}
   MIGRATOR_JOB_NAME:     ${{ vars.MIGRATOR_JOB_NAME }}
+  MCP_APP_NAME:          ${{ vars.MCP_APP_NAME }}
   PUBLIC_FQDN:           ${{ vars.PUBLIC_FQDN }}
   IMAGE_TAG:             ${{ github.sha }}
   # Override to '["self-hosted","linux","stocky"]' (JSON array as a single string)
@@ -120,6 +121,35 @@ jobs:
             .
           docker push "$ACR_LOGIN_SERVER/stocky-web-mvc:$IMAGE_TAG"
           docker push "$ACR_LOGIN_SERVER/stocky-web-mvc:cache"
+
+  # ── MCP server (Stocky.Mcp) ───────────────────────────────────────────────────────────
+  build-mcp:
+    runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login (OIDC)
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Build + push mcp image
+        run: |
+          DOCKER_BUILDKIT=1 docker build \
+            --cache-from "$ACR_LOGIN_SERVER/stocky-mcp:cache" \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            -f src/Mcp/Dockerfile \
+            -t "$ACR_LOGIN_SERVER/stocky-mcp:$IMAGE_TAG" \
+            -t "$ACR_LOGIN_SERVER/stocky-mcp:cache" \
+            .
+          docker push "$ACR_LOGIN_SERVER/stocky-mcp:$IMAGE_TAG"
+          docker push "$ACR_LOGIN_SERVER/stocky-mcp:cache"
 
   # ── Migration: waits only for the api image ───────────────────────────────────
   migrate:
@@ -269,9 +299,48 @@ jobs:
           echo "Run the next infra bicep deployment to create ca-stocky-prod-web-mvc,"
           echo "then set repo Variables: WEB_MVC_APP_NAME=ca-stocky-prod-web-mvc"
 
+  # ── MCP: deploy after build completes (no migration needed) ─────────────────
+  deploy-mcp:
+    needs: [build-mcp]
+    runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    environment: prod
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Update mcp container app
+        if: ${{ env.MCP_APP_NAME != '' }}
+        run: |
+          MCP_MI=$(az identity show \
+            --name "id-stocky-prod-mcp" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query id -o tsv)
+          az containerapp registry set \
+            --name "$MCP_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --server "$ACR_LOGIN_SERVER" \
+            --identity "$MCP_MI"
+          az containerapp update \
+            --name "$MCP_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$ACR_LOGIN_SERVER/stocky-mcp:$IMAGE_TAG"
+          az containerapp ingress update \
+            --name "$MCP_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --target-port 8080
+
+      - name: Skip (MCP_APP_NAME not set)
+        if: ${{ env.MCP_APP_NAME == '' }}
+        run: echo "MCP_APP_NAME not set — skipping MCP deploy. Add it from azd output after next azd up."
+
   # ── Smoke test: waits for both deploys ────────────────────────────────────────
   smoke-test:
-    needs: [deploy-api, deploy-web-mvc]
+    needs: [deploy-api, deploy-web-mvc, deploy-mcp]
     runs-on: ${{ fromJSON(vars.RUNS_ON_DEPLOY || '"ubuntu-latest"') }}
     timeout-minutes: 5
     steps:

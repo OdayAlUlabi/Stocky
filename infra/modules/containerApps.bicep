@@ -31,6 +31,10 @@ param publicHostname string
 param sqlSpClientId string
 @description('Key Vault URI for fetching the SQL SP certificate.')
 param kvUri string
+@description('User-assigned identity resource id for the MCP server (ACR pull + KV read).')
+param mcpIdentityId string
+@description('Google user-id (sub claim) the MCP server impersonates when calling the API.')
+param mcpOwnerId string
 @description('Image tag (sha) — placeholder allowed so CI updates it later.')
 param imageTag string = 'placeholder'
 
@@ -43,6 +47,7 @@ var bootstrapImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:lates
 var apiImage = isBootstrap ? bootstrapImage : '${acrLoginServer}/stocky-api:${imageTag}'
 // Server-rendered MVC app — replaced the legacy React SPA.
 var webMvcImage = isBootstrap ? bootstrapImage : '${acrLoginServer}/stocky-web-mvc:${imageTag}'
+var mcpImage = isBootstrap ? bootstrapImage : '${acrLoginServer}/stocky-mcp:${imageTag}'
 
 resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
   name: 'ca-${prefix}-api'
@@ -74,6 +79,12 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
         {
           name: 'alpaca-secret-key'
           keyVaultUrl: '${kvUri}secrets/alpaca-secret-key'
+          identity: apiIdentityId
+        }
+        {
+          // Pre-shared key validated by McpAuthenticationHandler in the API.
+          name: 'mcp-service-key'
+          keyVaultUrl: '${kvUri}secrets/mcp-service-key'
           identity: apiIdentityId
         }
       ]
@@ -116,6 +127,9 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
             // Alpaca market data — credentials injected from KV (see secrets above).
             { name: 'MarketData__Alpaca__ApiKeyId', secretRef: 'alpaca-api-key-id' }
             { name: 'MarketData__Alpaca__ApiSecret', secretRef: 'alpaca-secret-key' }
+            // MCP service account: key is fetched from KV, owner id maps the call to the right user.
+            { name: 'Mcp__ServiceKey', secretRef: 'mcp-service-key' }
+            { name: 'Mcp__OwnerId', value: mcpOwnerId }
             // PORT is read by the bootstrap helloworld image; the real ASP.NET
             // image ignores it (it honours ASPNETCORE_URLS instead).
             { name: 'PORT', value: '8080' }
@@ -256,7 +270,86 @@ resource webMvc 'Microsoft.App/containerApps@2024-10-02-preview' = {
   }
 }
 
+// ----------------------------------------------------------------------------
+// Stocky.Mcp — MCP server. External ingress so Claude.ai (remote MCP) can
+// reach it directly over HTTPS without going through the App Gateway.
+// ----------------------------------------------------------------------------
+resource mcp 'Microsoft.App/containerApps@2024-10-02-preview' = {
+  name: 'ca-${prefix}-mcp'
+  location: location
+  tags: union(tags, { 'azd-service-name': 'mcp' })
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${mcpIdentityId}': {}
+    }
+  }
+  properties: {
+    managedEnvironmentId: envId
+    configuration: {
+      secrets: [
+        {
+          // Shared key used by the MCP server when calling the Stocky API.
+          name: 'mcp-service-key'
+          keyVaultUrl: '${kvUri}secrets/mcp-service-key'
+          identity: mcpIdentityId
+        }
+      ]
+      ingress: {
+        external: true
+        targetPort: isBootstrap ? 80 : 8080
+        transport: 'auto'
+        allowInsecure: false
+      }
+      registries: isBootstrap ? [] : [
+        {
+          server: acrLoginServer
+          identity: mcpIdentityId
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'mcp'
+          image: mcpImage
+          resources: { cpu: json('0.25'), memory: '0.5Gi' }
+          env: [
+            { name: 'ASPNETCORE_URLS', value: 'http://+:8080' }
+            { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
+            // Internal ACA hostname of the API — avoids a round-trip through App Gateway.
+            { name: 'StockyApi__BaseUrl', value: 'https://${api.properties.configuration.ingress.fqdn}/' }
+            // Key is injected from KV via the mcp UAMI.
+            { name: 'StockyApi__ServiceKey', secretRef: 'mcp-service-key' }
+            { name: 'PORT', value: '8080' }
+          ]
+          probes: isBootstrap ? [] : [
+            {
+              type: 'Liveness'
+              httpGet: { path: '/', port: 8080 }
+              periodSeconds: 30
+              initialDelaySeconds: 10
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 3
+        rules: [
+          {
+            name: 'http'
+            http: { metadata: { concurrentRequests: '20' } }
+          }
+        ]
+      }
+    }
+  }
+}
+
 output apiAppName string = api.name
 output apiFqdn string = api.properties.configuration.ingress.fqdn
 output webMvcAppName string = webMvc.name
 output webMvcFqdn string = webMvc.properties.configuration.ingress.fqdn
+output mcpAppName string = mcp.name
+output mcpFqdn string = mcp.properties.configuration.ingress.fqdn
