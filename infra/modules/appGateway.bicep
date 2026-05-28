@@ -65,6 +65,7 @@ resource wafPolicy 'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPo
             matchValues: [
               '/.well-known/oauth-protected-resource'
               '/.well-known/oauth-authorization-server'
+              '/.well-known/acme-challenge/'
               '/authorize'
               '/token'
               '/register'
@@ -391,7 +392,7 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
             {
               name: 'mcp-oauth'
               properties: {
-                paths: [ '/.well-known/oauth-authorization-server', '/authorize', '/token', '/register' ]
+                paths: [ '/.well-known/oauth-protected-resource', '/.well-known/oauth-authorization-server', '/.well-known/acme-challenge/*', '/authorize', '/token', '/register' ]
                 backendAddressPool: { id: resourceId('Microsoft.Network/applicationGateways/backendAddressPools', agwName, 'pool-mcp') }
                 backendHttpSettings: { id: resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', agwName, 'https-mcp') }
                 rewriteRuleSet: { id: resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', agwName, 'fix-location') }

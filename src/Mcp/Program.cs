@@ -34,6 +34,21 @@ var baseUrl = (string.IsNullOrEmpty(rawBaseUrl)
 var pendingCodes = new ConcurrentDictionary<string,
     (string RedirectUri, string CodeChallenge, DateTime Expiry)>();
 
+// ── ACME HTTP-01 challenge (Let's Encrypt) ────────────────────────────────────
+// Set env vars Acme__ChallengeToken / Acme__ChallengeValue via:
+//   az containerapp update -n ca-stocky-prod-mcp -g rg-stocky-prod-sweden \
+//     --set-env-vars "Acme__ChallengeToken=<token>" "Acme__ChallengeValue=<value>"
+// AGW redirects HTTP->HTTPS; Let's Encrypt follows the redirect to reach this endpoint.
+app.MapGet("/.well-known/acme-challenge/{token}", (string token, IConfiguration config) =>
+{
+    var challengeToken = config["Acme:ChallengeToken"];
+    var challengeValue = config["Acme:ChallengeValue"];
+    if (!string.IsNullOrEmpty(challengeToken)
+        && string.Equals(token, challengeToken, StringComparison.Ordinal))
+        return Results.Text(challengeValue ?? string.Empty);
+    return Results.NotFound();
+});
+
 // ── RFC 9207 Protected Resource Metadata ────────────────────────────────────
 // MCP spec requires resource_metadata in WWW-Authenticate to point HERE.
 // Client reads authorization_servers[], then fetches /.well-known/oauth-authorization-server
