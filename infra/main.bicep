@@ -14,9 +14,6 @@ param tags object = {
   app: 'stocky'
 }
 
-@description('Google OAuth client id used for JWT Bearer validation on the API.')
-param googleClientId string
-
 @secure()
 @description('Pre-shared key used by the MCP server when calling the Stocky API. Set once via: azd env set MCP_SERVICE_KEY <value>')
 param mcpServiceKey string = ''
@@ -241,7 +238,6 @@ module apps 'modules/containerApps.bicep' = {
     apiSqlIdentityClientId: ids.outputs.apiSqlIdClientId
     sqlServerFqdn: sql.outputs.serverFqdn
     sqlDbName: sql.outputs.dbName
-    googleClientId: googleClientId
     appiConnectionString: obs.outputs.appiConnectionString
     publicHostname: 'stocky.${location}.cloudapp.azure.com'
     sqlSpClientId: 'c5a4c107-a912-4d72-b513-513ced854386'
@@ -310,8 +306,13 @@ module appgw 'modules/appGateway.bicep' = {
 // MCP service key stored in Key Vault (ARM management-plane write works even
 // when publicNetworkAccess is Disabled, because AzureServices bypass is set).
 // Bicep creates/updates it on every 'azd up'; skipped when mcpServiceKey is empty.
+resource kvRef 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: take('kv-${prefix}-${resourceToken}', 24)
+}
+
 resource mcpServiceKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(mcpServiceKey)) {
-  name: '${kv.outputs.kvName}/mcp-service-key'
+  parent: kvRef
+  name: 'mcp-service-key'
   properties: {
     value: mcpServiceKey
     attributes: { enabled: true }

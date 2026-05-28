@@ -21,8 +21,6 @@ param apiSqlIdentityClientId string
 param sqlServerFqdn string
 @description('SQL database name.')
 param sqlDbName string
-@description('Google OAuth client id for JWT Bearer token validation.')
-param googleClientId string
 @description('Application Insights connection string.')
 param appiConnectionString string
 @description('App Gateway public FQDN used for CORS AllowedOrigins.')
@@ -112,7 +110,6 @@ resource api 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appiConnectionString }
             { name: 'ApplicationInsightsAgent_EXTENSION_VERSION', value: '~3' }
-            { name: 'Google__ClientId', value: googleClientId }
             { name: 'AZURE_CLIENT_ID', value: apiIdentityClientId }
             // Path A: SP cert injected by ACA platform from KV — no IMDS from container.
             { name: 'Sql__CertBase64', secretRef: 'sql-cert-base64' }
@@ -224,9 +221,6 @@ resource webMvc 'Microsoft.App/containerApps@2024-10-02-preview' = {
             { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appiConnectionString }
             { name: 'ApplicationInsightsAgent_EXTENSION_VERSION', value: '~3' }
-            { name: 'Authentication__Google__ClientId', value: googleClientId }
-            // TODO: add Authentication__Google__ClientSecret via KV secretRef once
-            //       stocky-google-client-secret KV secret is created.
             { name: 'AZURE_CLIENT_ID', value: apiIdentityClientId }
             { name: 'Sql__CertBase64', secretRef: 'sql-cert-base64' }
             { name: 'Sql__SpClientId', value: sqlSpClientId }
