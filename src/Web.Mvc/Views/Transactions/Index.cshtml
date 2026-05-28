@@ -38,31 +38,26 @@
         }
     }
 
-    // ── summary aggregates (Buy transactions only) ─────────────────────────────
-    decimal sumCost = 0m, sumMv = 0m, sumUnreal = 0m;
+    // ── transaction type counts ────────────────────────────────────────────────
     int buyCount = 0, sellCount = 0, otherCount = 0;
     string? ccy = null;
     foreach (var t in Model)
     {
-        var isBuy  = string.Equals(t.Type, "Buy",  StringComparison.OrdinalIgnoreCase);
-        var isSell = string.Equals(t.Type, "Sell", StringComparison.OrdinalIgnoreCase);
         ccy ??= t.Currency;
-        if (isBuy)
-        {
-            buyCount++;
-            var cost = TxCostBasis(t.Type, t.Quantity, t.Price, t.Fee);
-            sumCost += cost;
-            if (t.MarketValue.HasValue)
-            {
-                sumMv    += t.MarketValue.Value;
-                sumUnreal += t.MarketValue.Value - cost;
-            }
-        }
-        else if (isSell) sellCount++;
-        else             otherCount++;
+        if      (string.Equals(t.Type, "Buy",  StringComparison.OrdinalIgnoreCase)) buyCount++;
+        else if (string.Equals(t.Type, "Sell", StringComparison.OrdinalIgnoreCase)) sellCount++;
+        else                                                                          otherCount++;
     }
     ccy ??= "USD";
-    var unrealPct = sumCost > 0 ? Math.Round(sumUnreal / sumCost * 100m, 2) : 0m;
+
+    // ── summary aggregates from net open holdings (accounts for sells) ─────────
+    // Using holdings (net open positions) avoids the bug of double-counting
+    // shares that were subsequently sold. AverageCost is per-share average cost.
+    var openHoldings = ViewBag.Holdings as List<HoldingDto> ?? new List<HoldingDto>();
+    decimal sumCost   = openHoldings.Sum(h => h.AverageCost * h.Quantity);
+    decimal sumMv     = openHoldings.Where(h => h.MarketValue.HasValue).Sum(h => h.MarketValue!.Value);
+    decimal sumUnreal = sumMv - sumCost;
+    var unrealPct     = sumCost > 0 ? Math.Round(sumUnreal / sumCost * 100m, 2) : 0m;
 }
 
 <style>
@@ -153,17 +148,17 @@
         <div class="tx-stat">
             <span class="ts-label">Total Cost Basis</span>
             <span class="ts-value">@sumCost.Money(ccy)</span>
-            <span class="ts-sub">Buy transactions (qty × price + fee)</span>
+            <span class="ts-sub">Avg cost × qty · open positions</span>
         </div>
         <div class="tx-stat">
             <span class="ts-label">Current Market Value</span>
             <span class="ts-value">@(sumMv > 0 ? sumMv.Money(ccy) : "—")</span>
-            <span class="ts-sub">At latest prices · open buys</span>
+            <span class="ts-sub">At latest prices · open positions</span>
         </div>
         <div class="tx-stat">
             <span class="ts-label">Total Unrealized P&amp;L</span>
             <span class="ts-value @sumUnreal.SignClass()">@(sumMv > 0 ? sumUnreal.Money(ccy) : "—")</span>
-            <span class="ts-sub @unrealPct.SignClass()">@(sumMv > 0 ? unrealPct.Pct() : "—") on open buys</span>
+            <span class="ts-sub @unrealPct.SignClass()">@(sumMv > 0 ? unrealPct.Pct() : "—") on open positions</span>
         </div>
     </div>
 }
