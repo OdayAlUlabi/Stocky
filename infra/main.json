@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "15578769960334634198"
+      "templateHash": "9007716881621743106"
     }
   },
   "parameters": {
@@ -46,7 +46,7 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Google user-id (sub claim) the MCP server impersonates. Set via: azd env set MCP_OWNER_ID <your-google-sub>"
+        "description": "User id (sub claim) the MCP server impersonates when calling the API. Set via: azd env set MCP_OWNER_ID <sub>"
       }
     },
     "sqlEntraAdminObjectId": {
@@ -2245,7 +2245,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "4674181786670055130"
+              "templateHash": "17924211999642559558"
             }
           },
           "parameters": {
@@ -2348,7 +2348,7 @@
             "mcpOwnerId": {
               "type": "string",
               "metadata": {
-                "description": "Google user-id (sub claim) the MCP server impersonates when calling the API."
+                "description": "User id (sub claim) the MCP server impersonates when calling the API."
               }
             },
             "imageTag": {
@@ -3299,6 +3299,9 @@
           "webBackendFqdn": {
             "value": "[reference('apps').outputs.webMvcFqdn.value]"
           },
+          "mcpBackendFqdn": {
+            "value": "[reference('apps').outputs.mcpFqdn.value]"
+          },
           "agwIdentityId": {
             "value": "[reference('ids').outputs.agwIdId.value]"
           },
@@ -3316,7 +3319,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "2392253108197354767"
+              "templateHash": "4003723764062296444"
             }
           },
           "parameters": {
@@ -3354,6 +3357,12 @@
               "type": "string",
               "metadata": {
                 "description": "Web container app FQDN (private)."
+              }
+            },
+            "mcpBackendFqdn": {
+              "type": "string",
+              "metadata": {
+                "description": "MCP container app FQDN (external ACA ingress)."
               }
             },
             "agwIdentityId": {
@@ -3426,6 +3435,27 @@
                       "matchVariable": "RequestHeaderNames",
                       "selectorMatchOperator": "Equals",
                       "selector": "authorization",
+                      "exclusionManagedRuleSets": [
+                        {
+                          "ruleSetType": "OWASP",
+                          "ruleSetVersion": "3.2",
+                          "ruleGroups": [
+                            {
+                              "ruleGroupName": "REQUEST-942-APPLICATION-ATTACK-SQLI",
+                              "rules": []
+                            },
+                            {
+                              "ruleGroupName": "REQUEST-941-APPLICATION-ATTACK-XSS",
+                              "rules": []
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "matchVariable": "RequestHeaderNames",
+                      "selectorMatchOperator": "Equals",
+                      "selector": "x-mcp-service-key",
                       "exclusionManagedRuleSets": [
                         {
                           "ruleSetType": "OWASP",
@@ -3526,6 +3556,16 @@
                         }
                       ]
                     }
+                  },
+                  {
+                    "name": "pool-mcp",
+                    "properties": {
+                      "backendAddresses": [
+                        {
+                          "fqdn": "[parameters('mcpBackendFqdn')]"
+                        }
+                      ]
+                    }
                   }
                 ],
                 "backendHttpSettingsCollection": [
@@ -3550,6 +3590,18 @@
                       "requestTimeout": 60,
                       "probe": {
                         "id": "[resourceId('Microsoft.Network/applicationGateways/probes', variables('agwName'), 'probe-web')]"
+                      }
+                    }
+                  },
+                  {
+                    "name": "https-mcp",
+                    "properties": {
+                      "port": 443,
+                      "protocol": "Https",
+                      "pickHostNameFromBackendAddress": true,
+                      "requestTimeout": 60,
+                      "probe": {
+                        "id": "[resourceId('Microsoft.Network/applicationGateways/probes', variables('agwName'), 'probe-mcp')]"
                       }
                     }
                   }
@@ -3578,6 +3630,23 @@
                       "protocol": "Https",
                       "path": "/",
                       "host": "[parameters('webBackendFqdn')]",
+                      "interval": 30,
+                      "timeout": 30,
+                      "unhealthyThreshold": 3,
+                      "pickHostNameFromBackendHttpSettings": false,
+                      "match": {
+                        "statusCodes": [
+                          "200-399"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "name": "probe-mcp",
+                    "properties": {
+                      "protocol": "Https",
+                      "path": "/",
+                      "host": "[parameters('mcpBackendFqdn')]",
                       "interval": 30,
                       "timeout": 30,
                       "unhealthyThreshold": 3,
@@ -3650,6 +3719,24 @@
                             },
                             "backendHttpSettings": {
                               "id": "[resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', variables('agwName'), 'https-api')]"
+                            },
+                            "rewriteRuleSet": {
+                              "id": "[resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', variables('agwName'), 'fix-location')]"
+                            }
+                          }
+                        },
+                        {
+                          "name": "mcp",
+                          "properties": {
+                            "paths": [
+                              "/mcp",
+                              "/mcp/*"
+                            ],
+                            "backendAddressPool": {
+                              "id": "[resourceId('Microsoft.Network/applicationGateways/backendAddressPools', variables('agwName'), 'pool-mcp')]"
+                            },
+                            "backendHttpSettings": {
+                              "id": "[resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', variables('agwName'), 'https-mcp')]"
                             },
                             "rewriteRuleSet": {
                               "id": "[resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', variables('agwName'), 'fix-location')]"
