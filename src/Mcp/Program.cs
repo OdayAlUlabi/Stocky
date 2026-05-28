@@ -25,8 +25,10 @@ builder.Services
 
 var app = builder.Build();
 
-var baseUrl = (app.Configuration["App:BaseUrl"] ?? "https://stocky.swedencentral.cloudapp.azure.com")
-              .TrimEnd('/');
+var rawBaseUrl = app.Configuration["App:BaseUrl"];
+var baseUrl = (string.IsNullOrEmpty(rawBaseUrl)
+               ? "https://stocky.swedencentral.cloudapp.azure.com"
+               : rawBaseUrl).TrimEnd('/');
 
 // In-memory pending authorization codes: code → (redirectUri, codeChallenge, expiry)
 var pendingCodes = new ConcurrentDictionary<string,
