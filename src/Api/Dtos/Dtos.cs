@@ -138,7 +138,16 @@ public record PositionDetailDto(
     decimal DividendsReceived,
     IReadOnlyList<TaxLotDto> Lots,
     IReadOnlyList<TransactionDto> Transactions,
-    IReadOnlyList<ValuePointDto> PriceHistory);
+    IReadOnlyList<ValuePointDto> PriceHistory,
+    // Extended market data (optional — null when market data provider not wired)
+    decimal? Change = null,
+    decimal? ChangePercent = null,
+    string? Industry = null,
+    string? Country = null,
+    string? Exchange = null,
+    decimal? MarketCap = null,
+    decimal? Beta = null,
+    decimal? DividendYield = null);
 
 public record TaxLotDto(
     Guid Id,

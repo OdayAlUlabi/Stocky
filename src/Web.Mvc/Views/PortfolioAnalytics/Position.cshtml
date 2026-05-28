@@ -1,55 +1,562 @@
 @model PositionDetailDto
+@using System.Text.Json
 @{
-    ViewData["Title"] = Model?.Symbol ?? "Position";
+    ViewData["Title"] = $"{Model.Symbol} · Position";
     var pid = (Guid)ViewBag.PortfolioId;
-}
-<h2>@Model.Symbol · <small>@Model.Name · <a href="/Portfolios/Detail/@pid">Back</a></small></h2>
+    var news      = ViewBag.News              as List<NewsItemDto>                  ?? new();
+    var filings   = ViewBag.Filings           as List<FilingDto>                   ?? new();
+    var surprises = ViewBag.EarningsSurprises as List<EarningsSurprisePointDto>    ?? new();
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;margin:1rem 0;">
-    <article><small>Asset class</small><h4>@Model.AssetClass</h4></article>
-    <article><small>Sector</small><h4>@(Model.Sector ?? "—")</h4></article>
-    <article><small>Quantity</small><h4>@Model.Quantity.Num(4)</h4></article>
-    <article><small>Avg cost</small><h4>@Model.AverageCost.Money(Model.Currency)</h4></article>
-    <article><small>Last</small><h4><span data-price-symbol="@Model.Symbol" data-price-currency="@Model.Currency">@(Model.LatestPrice?.Money(Model.Currency) ?? "—")</span></h4></article>
-    <article><small>Market value</small><h4>@(Model.MarketValue?.Money(Model.Currency) ?? "—")</h4></article>
-    <article><small>Unrealized P&amp;L</small><h4 class="@Model.UnrealizedPnL.SignClass()">@Model.UnrealizedPnL.Money(Model.Currency) (@Model.UnrealizedPnLPercent.Pct())</h4></article>
-    <article><small>Realized P&amp;L</small><h4 class="@Model.RealizedPnL.SignClass()">@Model.RealizedPnL.Money(Model.Currency)</h4></article>
-    <article><small>Dividends</small><h4>@Model.DividendsReceived.Money(Model.Currency)</h4></article>
+    var costBase    = Model.Quantity * Model.AverageCost;
+    var totalRet    = Model.UnrealizedPnL + Model.RealizedPnL + Model.DividendsReceived;
+    var totalRetPct = costBase != 0 ? Math.Round(totalRet / costBase * 100m, 2) : 0m;
+
+    var hi52 = Model.PriceHistory.Count > 0 ? Model.PriceHistory.Max(p => p.Value) : (decimal?)null;
+    var lo52 = Model.PriceHistory.Count > 0 ? Model.PriceHistory.Min(p => p.Value) : (decimal?)null;
+
+    var chartLabels = Model.PriceHistory.Select(p => p.Date.ToString("yyyy-MM-dd")).ToArray();
+    var chartPrices = Model.PriceHistory.Select(p => (double)p.Value).ToArray();
+
+    string Fmt(decimal? v, string ccy) => v.HasValue ? v.Value.Money(ccy) : "—";
+    string FmtLarge(decimal v) {
+        if (v >= 1_000_000_000_000m) return $"${v / 1_000_000_000_000m:0.##}T";
+        if (v >= 1_000_000_000m)     return $"${v / 1_000_000_000m:0.##}B";
+        if (v >= 1_000_000m)         return $"${v / 1_000_000m:0.##}M";
+        return v.Money();
+    }
+    static string TxBadge(string type) => type switch {
+        "Buy"      => "badge-up",
+        "Sell"     => "badge-down",
+        "Dividend" => "pill",
+        _          => "pill"
+    };
+}
+
+<style>
+.pos-hero {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 2rem;
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+.pos-hero .price { font-size: 2.6rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.pos-hero .price-change { margin-top: .4rem; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.pos-hero .meta-pills { display: flex; gap: 1rem; margin-top: .5rem; flex-wrap: wrap; font-size: .8rem; color: var(--text-muted); }
+.pos-hero .meta-pills span { display: flex; align-items: center; gap: .3rem; }
+.fundam-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: .55rem;
+    flex: 1;
+    min-width: 260px;
+}
+.fundam-cell { background: var(--bg-elev-2); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: .5rem .7rem; text-align: center; }
+.fundam-cell .fc-label { font-size: .67rem; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .05em; }
+.fundam-cell .fc-val   { font-size: .92rem; font-weight: 600; margin-top: .15rem; font-variant-numeric: tabular-nums; }
+
+.tab-bar { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; }
+.tab-btn {
+    padding: .5rem .9rem; font-size: .87rem; font-weight: 500;
+    color: var(--text-muted); background: none; border: none;
+    border-bottom: 2px solid transparent; cursor: pointer;
+    transition: color .12s, border-color .12s;
+    display: flex; align-items: center; gap: .4rem;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.range-btns { display: flex; gap: .3rem; }
+.range-btns .rbtn {
+    padding: .2rem .5rem; font-size: .73rem; font-weight: 600;
+    background: var(--bg-elev-2); border: 1px solid var(--border);
+    border-radius: 5px; cursor: pointer; color: var(--text-muted);
+    transition: background .12s, color .12s;
+}
+.range-btns .rbtn.active, .range-btns .rbtn:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+.eps-bar-wrap { display: flex; gap: .35rem; align-items: flex-end; height: 80px; padding: .25rem 0; }
+.eps-quarter { flex: 1; display: flex; flex-direction: column; align-items: center; gap: .15rem; height: 100%; justify-content: flex-end; position: relative; }
+.eps-bar { width: 100%; min-height: 3px; border-radius: 3px 3px 0 0; cursor: default; position: relative; }
+.eps-bar:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%);
+    background: var(--bg-elev-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: .25rem .5rem; font-size: .7rem;
+    white-space: nowrap; pointer-events: none; z-index: 10; color: var(--text);
+}
+.eps-bar.beat { background: var(--green); }
+.eps-bar.miss { background: var(--red); }
+.eps-bar.flat { background: var(--text-subtle); }
+.eps-quarter .eps-label { font-size: .62rem; color: var(--text-subtle); text-align: center; }
+
+.news-item { display: flex; flex-direction: column; gap: .2rem; padding: .75rem 0; border-bottom: 1px solid var(--border-soft); }
+.news-item:last-child { border-bottom: none; }
+.news-headline { font-size: .9rem; font-weight: 500; }
+.news-headline a { color: var(--text); }
+.news-headline a:hover { color: var(--primary); }
+.news-meta { font-size: .75rem; color: var(--text-muted); display: flex; gap: .75rem; flex-wrap: wrap; }
+.news-summary { font-size: .8rem; color: var(--text-muted); margin-top: .15rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+</style>
+
+@* Page header *@
+<div class="page-header">
+    <div>
+        <h2 style="margin:0;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+            <i class="bi bi-graph-up"></i>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:1.3rem;background:linear-gradient(135deg,var(--primary),var(--primary-600));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">@Model.Symbol</span>
+            <span style="font-weight:400;color:var(--text-muted);font-size:1rem;">@Model.Name</span>
+        </h2>
+        <div style="display:flex;gap:.6rem;margin-top:.3rem;flex-wrap:wrap;font-size:.8rem;color:var(--text-muted);">
+            <span style="padding:.15rem .5rem;border:1px solid var(--border);border-radius:4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--primary);">@Model.AssetClass</span>
+            @if (Model.Exchange is not null)  { <span><i class="bi bi-building"></i> @Model.Exchange</span> }
+            @if (Model.Sector is not null)    { <span><i class="bi bi-diagram-3"></i> @Model.Sector</span> }
+            @if (Model.Industry is not null)  { <span><i class="bi bi-briefcase"></i> @Model.Industry</span> }
+            @if (Model.Country is not null)   { <span><i class="bi bi-globe"></i> @Model.Country</span> }
+        </div>
+    </div>
+    <div class="actions">
+        <a class="btn btn-ghost btn-sm" href="/Portfolios/Detail/@pid"><i class="bi bi-arrow-left"></i> Portfolio</a>
+        <a class="btn btn-ghost btn-sm" href="/Portfolios/@pid/Transactions"><i class="bi bi-arrow-left-right"></i> Transactions</a>
+        <a class="btn btn-ghost btn-sm" href="/Alerts"><i class="bi bi-bell-plus"></i> Alert</a>
+        <a class="btn btn-ghost btn-sm" href="/Portfolios/@pid/CapitalGains"><i class="bi bi-file-earmark-bar-graph"></i> Cap. Gains</a>
+    </div>
 </div>
 
-<details open>
-    <summary><strong>Tax lots</strong></summary>
-    <table>
-        <thead><tr><th>Opened</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Remaining</th><th style="text-align:right;">Cost/share</th><th style="text-align:right;">Basis</th></tr></thead>
-        <tbody>
-            @foreach (var l in Model.Lots)
+@* Price hero + fundamentals *@
+<div class="pos-hero">
+    <div>
+        <div class="price">
+            <span data-price-symbol="@Model.Symbol" data-price-currency="@Model.Currency">@Fmt(Model.LatestPrice, Model.Currency)</span>
+        </div>
+        <div class="price-change">
+            @if (Model.Change.HasValue)
             {
-                <tr>
-                    <td>@l.OpenedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                    <td style="text-align:right;">@l.Quantity.Num(4)</td>
-                    <td style="text-align:right;">@l.RemainingQuantity.Num(4)</td>
-                    <td style="text-align:right;">@l.CostPerShare.Money(Model.Currency)</td>
-                    <td style="text-align:right;">@l.CostBasis.Money(Model.Currency)</td>
-                </tr>
+                var up = Model.Change.Value >= 0;
+                <span class="@(up ? "badge-up" : "badge-down")" style="font-size:.95rem;padding:.28rem .7rem;">
+                    <i class="bi @(up ? "bi-caret-up-fill" : "bi-caret-down-fill")"></i>
+                    @Model.Change.Value.Money(Model.Currency)
+                    @if (Model.ChangePercent.HasValue) { <span>(@Model.ChangePercent.Value.Pct())</span> }
+                </span>
             }
-        </tbody>
-    </table>
-</details>
+            <span class="pill" style="font-size:.73rem;padding:.22rem .55rem;">@Model.Currency</span>
+        </div>
+        <div class="meta-pills">
+            @if (hi52.HasValue) { <span><i class="bi bi-arrow-up-short text-green"></i>52W H&nbsp;@hi52.Value.Money(Model.Currency)</span> }
+            @if (lo52.HasValue) { <span><i class="bi bi-arrow-down-short text-red"></i>52W L&nbsp;@lo52.Value.Money(Model.Currency)</span> }
+        </div>
+    </div>
 
-<details>
-    <summary><strong>Transactions</strong></summary>
+    <div class="fundam-grid">
+        @if (Model.MarketCap.HasValue) {
+            <div class="fundam-cell"><div class="fc-label">Mkt Cap</div><div class="fc-val">@FmtLarge(Model.MarketCap.Value)</div></div>
+        }
+        @if (Model.Beta.HasValue) {
+            <div class="fundam-cell"><div class="fc-label">Beta</div><div class="fc-val">@Model.Beta.Value.Num(2)</div></div>
+        }
+        @if (Model.DividendYield.HasValue) {
+            <div class="fundam-cell"><div class="fc-label">Div Yield</div><div class="fc-val">@Model.DividendYield.Value.Pct()</div></div>
+        }
+        <div class="fundam-cell"><div class="fc-label">Quantity</div><div class="fc-val">@Model.Quantity.Num(4)</div></div>
+        <div class="fundam-cell"><div class="fc-label">Avg Cost</div><div class="fc-val">@Model.AverageCost.Money(Model.Currency)</div></div>
+        <div class="fundam-cell"><div class="fc-label">Cost Basis</div><div class="fc-val">@costBase.Money(Model.Currency)</div></div>
+        <div class="fundam-cell"><div class="fc-label">Open Lots</div><div class="fc-val">@Model.Lots.Count</div></div>
+        <div class="fundam-cell"><div class="fc-label">Transactions</div><div class="fc-val">@Model.Transactions.Count</div></div>
+    </div>
+</div>
+
+@* KPI cards *@
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="label"><i class="bi bi-wallet2"></i> Market Value</div>
+        <div class="value">@Fmt(Model.MarketValue, Model.Currency)</div>
+        <div class="delta text-muted" style="font-size:.75rem;">@Model.Quantity.Num(2) shares</div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-activity"></i> Unrealized P&amp;L</div>
+        <div class="value @Model.UnrealizedPnL.SignClass()">@Model.UnrealizedPnL.Money(Model.Currency)</div>
+        <div class="delta">
+            <span class="@(Model.UnrealizedPnL >= 0 ? "badge-up" : "badge-down")">
+                <i class="bi @(Model.UnrealizedPnL >= 0 ? "bi-caret-up-fill" : "bi-caret-down-fill")"></i>
+                @Model.UnrealizedPnLPercent.Pct()
+            </span>
+        </div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-check2-circle"></i> Realized P&amp;L</div>
+        <div class="value @Model.RealizedPnL.SignClass()">@Model.RealizedPnL.Money(Model.Currency)</div>
+        <div class="delta text-muted" style="font-size:.75rem;">from closed lots</div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-cash-coin"></i> Dividends</div>
+        <div class="value text-green">@Model.DividendsReceived.Money(Model.Currency)</div>
+        <div class="delta text-muted" style="font-size:.75rem;">total received</div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-graph-up-arrow"></i> Total Return</div>
+        <div class="value @totalRet.SignClass()">@totalRet.Money(Model.Currency)</div>
+        <div class="delta">
+            <span class="@(totalRet >= 0 ? "badge-up" : "badge-down")">
+                <i class="bi @(totalRet >= 0 ? "bi-caret-up-fill" : "bi-caret-down-fill")"></i>
+                @totalRetPct.Pct()
+            </span>
+        </div>
+    </div>
+</div>
+
+@* 180-day price history chart *@
+@if (Model.PriceHistory.Count > 0)
+{
+<article>
+    <header>
+        <span><i class="bi bi-chart-line-fill"></i> Price History <small class="text-muted">(180 days)</small></span>
+        <div class="range-btns" id="rangeGroup">
+            <button class="rbtn" onclick="setRange(30,this)">1M</button>
+            <button class="rbtn" onclick="setRange(90,this)">3M</button>
+            <button class="rbtn active" onclick="setRange(180,this)">6M</button>
+            <button class="rbtn" onclick="setRange(0,this)">All</button>
+        </div>
+    </header>
+    <div class="chart-box" style="height:300px;position:relative;">
+        <canvas id="priceChart"></canvas>
+    </div>
+</article>
+<partial name="_ChartScripts" />
+<script>
+(function () {
+    const ALL_LABELS = @Html.Raw(JsonSerializer.Serialize(chartLabels));
+    const ALL_PRICES = @Html.Raw(JsonSerializer.Serialize(chartPrices));
+    const AVG_COST   = @((double)Model.AverageCost);
+
+    const ctx  = document.getElementById('priceChart').getContext('2d');
+    const last = ALL_PRICES.at(-1) ?? AVG_COST;
+    const isUp = last >= AVG_COST;
+
+    const grad = ctx.createLinearGradient(0, 0, 0, 300);
+    grad.addColorStop(0, isUp ? 'rgba(22,199,132,.22)' : 'rgba(234,57,67,.22)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ALL_LABELS,
+            datasets: [
+                {
+                    label: '@Model.Symbol',
+                    data: ALL_PRICES,
+                    borderColor: isUp ? '#16c784' : '#ea3943',
+                    backgroundColor: grad,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 10,
+                    fill: true,
+                    tension: 0.25,
+                },
+                {
+                    label: 'Avg Cost $@Model.AverageCost.Num(2)',
+                    data: ALL_PRICES.map(() => AVG_COST),
+                    borderColor: 'rgba(240,185,11,.65)',
+                    borderWidth: 1.5,
+                    borderDash: [5, 4],
+                    pointRadius: 0,
+                    fill: false,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: '#97a3b8', boxWidth: 10, font: { size: 11 }, padding: 12 } },
+                tooltip: {
+                    backgroundColor: '#131c2e', borderColor: '#243152', borderWidth: 1,
+                    titleColor: '#e6ecf5', bodyColor: '#97a3b8',
+                    callbacks: { label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}` }
+                }
+            },
+            scales: {
+                x: { ticks: { color: '#6c7896', maxTicksLimit: 7, font: { size: 11 } }, grid: { color: 'rgba(255,255,255,.04)' } },
+                y: { ticks: { color: '#6c7896', font: { size: 11 }, callback: v => '$' + Number(v).toFixed(2) }, grid: { color: 'rgba(255,255,255,.04)' } }
+            }
+        }
+    });
+
+    window.setRange = function(days, btn) {
+        document.querySelectorAll('#rangeGroup .rbtn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const n = days === 0 ? ALL_PRICES.length : days;
+        chart.data.labels = ALL_LABELS.slice(-n);
+        chart.data.datasets[0].data = ALL_PRICES.slice(-n);
+        chart.data.datasets[1].data = ALL_PRICES.slice(-n).map(() => AVG_COST);
+        chart.update('none');
+    };
+})();
+</script>
+}
+
+@* Earnings surprises + Position summary *@
+<div class="grid-2">
+    @if (surprises.Count > 0)
+    {
+    <article>
+        <header><span><i class="bi bi-bar-chart-steps"></i> EPS Surprise History</span><small class="text-muted">Last @surprises.Count quarters</small></header>
+        @{
+            var maxAbsEps = surprises
+                .SelectMany(s => new[] { Math.Abs((double)(s.EpsActual ?? 0)), Math.Abs((double)(s.EpsEstimate ?? 0)) })
+                .DefaultIfEmpty(1.0).Max();
+            if (maxAbsEps == 0) maxAbsEps = 1.0;
+        }
+        <div class="eps-bar-wrap">
+            @foreach (var s in surprises.OrderBy(x => x.Date))
+            {
+                var actual  = (double)(s.EpsActual ?? 0);
+                var est     = (double)(s.EpsEstimate ?? 0);
+                var pct     = s.SurprisePercent;
+                var hpx     = (int)(Math.Abs(actual) / maxAbsEps * 72); if (hpx < 4) hpx = 4;
+                var cls     = pct.HasValue ? (pct.Value > 0 ? "beat" : pct.Value < 0 ? "miss" : "flat") : "flat";
+                var tipText = $"Q{s.Date.Month / 4 + 1} {s.Date.Year}: Est ${est:0.00} / Act ${actual:0.00}" +
+                              (pct.HasValue ? $" ({(pct.Value >= 0 ? "+" : "")}{pct.Value:0.1}%)" : "");
+                <div class="eps-quarter">
+                    <div class="eps-bar @cls" style="height:@(hpx)px;" data-tip="@tipText"></div>
+                    <div class="eps-label">@s.Date.ToString("MMM yy")</div>
+                </div>
+            }
+        </div>
+        <table style="margin-top:.75rem;font-size:.85rem;">
+            <thead><tr><th>Period</th><th class="num">EPS Est</th><th class="num">EPS Actual</th><th class="num">Surprise</th></tr></thead>
+            <tbody>
+                @foreach (var s in surprises.OrderByDescending(x => x.Date))
+                {
+                    var sup = s.SurprisePercent;
+                    <tr>
+                        <td>@s.Date.ToString("MMM yyyy")</td>
+                        <td class="num">@(s.EpsEstimate.HasValue ? "$" + s.EpsEstimate.Value.Num(2) : "—")</td>
+                        <td class="num @(s.EpsActual.HasValue ? (s.EpsActual.Value >= 0 ? "text-green" : "text-red") : "")">
+                            @(s.EpsActual.HasValue ? "$" + s.EpsActual.Value.Num(2) : "—")
+                        </td>
+                        <td class="num">
+                            @if (sup.HasValue)
+                            {
+                                <span class="@(sup.Value > 0 ? "badge-up" : "badge-down")" style="font-size:.73rem;padding:.13rem .42rem;">
+                                    @(sup.Value >= 0 ? "+" : "")@sup.Value.Num(1)%
+                                </span>
+                            }
+                            else { <span>—</span> }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </article>
+    }
+
+    <article>
+        <header><span><i class="bi bi-info-circle"></i> Position Summary</span></header>
+        <table style="font-size:.87rem;">
+            <tbody>
+                <tr><td class="text-muted">Symbol</td><td style="font-family:'JetBrains Mono',monospace;font-weight:600;">@Model.Symbol</td></tr>
+                <tr><td class="text-muted">Company</td><td>@Model.Name</td></tr>
+                <tr><td class="text-muted">Asset class</td><td>@Model.AssetClass</td></tr>
+                @if (Model.Exchange is not null) { <tr><td class="text-muted">Exchange</td><td>@Model.Exchange</td></tr> }
+                @if (Model.Sector is not null)   { <tr><td class="text-muted">Sector</td><td>@Model.Sector</td></tr> }
+                @if (Model.Industry is not null) { <tr><td class="text-muted">Industry</td><td>@Model.Industry</td></tr> }
+                @if (Model.Country is not null)  { <tr><td class="text-muted">Country</td><td>@Model.Country</td></tr> }
+                <tr><td class="text-muted">Currency</td><td>@Model.Currency</td></tr>
+                <tr><td class="text-muted">Quantity</td><td>@Model.Quantity.Num(4)</td></tr>
+                <tr><td class="text-muted">Avg cost / share</td><td>@Model.AverageCost.Money(Model.Currency)</td></tr>
+                <tr><td class="text-muted">Total cost basis</td><td>@costBase.Money(Model.Currency)</td></tr>
+                <tr><td class="text-muted">Current price</td><td>@Fmt(Model.LatestPrice, Model.Currency)</td></tr>
+                <tr><td class="text-muted">Market value</td><td><strong>@Fmt(Model.MarketValue, Model.Currency)</strong></td></tr>
+                <tr><td class="text-muted">Unrealized P&amp;L</td><td class="@Model.UnrealizedPnL.SignClass()">@Model.UnrealizedPnL.Money(Model.Currency) (@Model.UnrealizedPnLPercent.Pct())</td></tr>
+                <tr><td class="text-muted">Realized P&amp;L</td><td class="@Model.RealizedPnL.SignClass()">@Model.RealizedPnL.Money(Model.Currency)</td></tr>
+                <tr><td class="text-muted">Dividends received</td><td class="text-green">@Model.DividendsReceived.Money(Model.Currency)</td></tr>
+                <tr><td class="text-muted">Total return</td><td class="@totalRet.SignClass()"><strong>@totalRet.Money(Model.Currency) (@totalRetPct.Pct())</strong></td></tr>
+            </tbody>
+        </table>
+    </article>
+</div>
+
+@* Tabs: Transactions | Tax Lots | News | Filings *@
+<div class="tab-bar" role="tablist">
+    <button class="tab-btn active" onclick="switchTab('txTab',this)" role="tab">
+        <i class="bi bi-arrow-left-right"></i> Transactions
+        <span class="pill" style="font-size:.7rem;padding:.1rem .4rem;">@Model.Transactions.Count</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('lotsTab',this)" role="tab">
+        <i class="bi bi-layers"></i> Tax Lots
+        <span class="pill" style="font-size:.7rem;padding:.1rem .4rem;">@Model.Lots.Count</span>
+    </button>
+    @if (news.Count > 0) {
+        <button class="tab-btn" onclick="switchTab('newsTab',this)" role="tab">
+            <i class="bi bi-newspaper"></i> News
+            <span class="pill" style="font-size:.7rem;padding:.1rem .4rem;">@news.Count</span>
+        </button>
+    }
+    @if (filings.Count > 0) {
+        <button class="tab-btn" onclick="switchTab('filingsTab',this)" role="tab">
+            <i class="bi bi-file-earmark-text"></i> SEC Filings
+            <span class="pill" style="font-size:.7rem;padding:.1rem .4rem;">@filings.Count</span>
+        </button>
+    }
+</div>
+
+@* Transactions *@
+<div class="tab-pane active" id="txTab">
+<article>
+    @if (Model.Transactions.Count == 0)
+    {
+        <p class="text-muted" style="text-align:center;padding:1.5rem 0;margin:0;"><i class="bi bi-inbox"></i> No transactions for this symbol yet.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th><th>Type</th>
+                    <th class="num">Qty</th><th class="num">Price</th>
+                    <th class="num">Total</th><th class="num">Fee</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var t in Model.Transactions)
+                {
+                    var total = t.Quantity * t.Price;
+                    <tr>
+                        <td style="white-space:nowrap;font-size:.83rem;">@t.ExecutedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td><span class="@TxBadge(t.Type)" style="font-size:.76rem;padding:.18rem .5rem;">@t.Type</span></td>
+                        <td class="num">@t.Quantity.Num(4)</td>
+                        <td class="num">@t.Price.Money(t.Currency)</td>
+                        <td class="num @(t.Type == "Sell" ? "text-green" : (t.Type == "Buy" ? "text-red" : ""))">@total.Money(t.Currency)</td>
+                        <td class="num text-muted">@(t.Fee > 0 ? t.Fee.Money(t.Currency) : "—")</td>
+                        <td style="color:var(--text-muted);font-size:.8rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@t.Notes">@(t.Notes ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</article>
+</div>
+
+@* Tax Lots *@
+<div class="tab-pane" id="lotsTab">
+<article>
+    @if (Model.Lots.Count == 0)
+    {
+        <p class="text-muted" style="text-align:center;padding:1.5rem 0;margin:0;"><i class="bi bi-inbox"></i> No open tax lots.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Opened</th>
+                    <th class="num">Qty</th>
+                    <th class="num">Remaining</th>
+                    <th class="num">Cost/share</th>
+                    <th class="num">Cost basis</th>
+                    @if (Model.LatestPrice.HasValue) {
+                        <th class="num">Current value</th>
+                        <th class="num">Lot P&amp;L</th>
+                    }
+                    <th>Holding type</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in Model.Lots)
+                {
+                    var curVal = Model.LatestPrice.HasValue ? l.RemainingQuantity * Model.LatestPrice.Value : (decimal?)null;
+                    var lotPnl = curVal.HasValue ? curVal.Value - l.CostBasis : (decimal?)null;
+                    var days   = (DateTimeOffset.UtcNow - l.OpenedAt).Days;
+                    var isLong = days >= 365;
+                    <tr>
+                        <td style="white-space:nowrap;font-size:.83rem;">@l.OpenedAt.ToString("yyyy-MM-dd")</td>
+                        <td class="num">@l.Quantity.Num(4)</td>
+                        <td class="num">@l.RemainingQuantity.Num(4)</td>
+                        <td class="num">@l.CostPerShare.Money(Model.Currency)</td>
+                        <td class="num">@l.CostBasis.Money(Model.Currency)</td>
+                        @if (Model.LatestPrice.HasValue) {
+                            <td class="num">@Fmt(curVal, Model.Currency)</td>
+                            <td class="num @(lotPnl.HasValue ? (lotPnl.Value >= 0 ? "text-green" : "text-red") : "")">@Fmt(lotPnl, Model.Currency)</td>
+                        }
+                        <td>
+                            <span style="font-size:.72rem;padding:.15rem .45rem;border-radius:4px;border:1px solid var(--border-soft);background:@(isLong ? "var(--green-soft)" : "var(--bg-elev-2)");color:@(isLong ? "var(--green)" : "var(--text-muted)");">
+                                @(isLong ? "Long-term" : "Short-term") · @days d
+                            </span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</article>
+</div>
+
+@* News *@
+@if (news.Count > 0)
+{
+<div class="tab-pane" id="newsTab">
+<article>
+    @foreach (var n in news)
+    {
+        <div class="news-item">
+            <div class="news-headline">
+                @if (!string.IsNullOrEmpty(n.Url))
+                { <a href="@n.Url" target="_blank" rel="noopener noreferrer">@n.Headline &nbsp;<i class="bi bi-box-arrow-up-right" style="font-size:.72rem;opacity:.55;"></i></a> }
+                else { <span>@n.Headline</span> }
+            </div>
+            @if (!string.IsNullOrEmpty(n.Summary)) { <div class="news-summary">@n.Summary</div> }
+            <div class="news-meta">
+                <span><i class="bi bi-broadcast"></i> @n.Source</span>
+                <span><i class="bi bi-clock"></i> @n.PublishedAt.ToLocalTime().ToString("MMM d, yyyy · HH:mm")</span>
+                @if (!string.IsNullOrEmpty(n.Category)) { <span class="pill" style="font-size:.7rem;padding:.1rem .4rem;">@n.Category</span> }
+            </div>
+        </div>
+    }
+</article>
+</div>
+}
+
+@* SEC Filings *@
+@if (filings.Count > 0)
+{
+<div class="tab-pane" id="filingsTab">
+<article>
     <table>
-        <thead><tr><th>Date</th><th>Type</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th></tr></thead>
+        <thead><tr><th>Filed</th><th>Form</th><th>Title</th></tr></thead>
         <tbody>
-            @foreach (var t in Model.Transactions)
+            @foreach (var f in filings)
             {
                 <tr>
-                    <td>@t.ExecutedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                    <td>@t.Type</td>
-                    <td style="text-align:right;">@t.Quantity.Num(4)</td>
-                    <td style="text-align:right;">@t.Price.Money(t.Currency)</td>
+                    <td style="white-space:nowrap;font-size:.83rem;">@f.FiledAt.ToString("yyyy-MM-dd")</td>
+                    <td><span class="pill" style="font-size:.73rem;padding:.18rem .48rem;font-weight:600;">@f.Form</span></td>
+                    <td>
+                        <a href="@f.Url" target="_blank" rel="noopener noreferrer">
+                            @f.Title&nbsp;<i class="bi bi-box-arrow-up-right" style="font-size:.7rem;opacity:.5;"></i>
+                        </a>
+                    </td>
                 </tr>
             }
         </tbody>
     </table>
-</details>
+</article>
+</div>
+}
+
+<script>
+function switchTab(id, btn) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+}
+</script>
+

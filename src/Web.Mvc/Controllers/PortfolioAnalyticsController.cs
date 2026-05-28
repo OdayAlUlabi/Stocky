@@ -246,12 +246,23 @@ public class PortfolioAnalyticsController : Controller
     }
 
     [Route("/Portfolios/{portfolioId:guid}/Positions/{symbol}")]
-    public async Task<IActionResult> Position(Guid portfolioId, string symbol)
+    public async Task<IActionResult> Position(Guid portfolioId, string symbol, CancellationToken ct)
     {
         var dto = await this.InvokeAsync<StockyApi.PositionDetailController, PositionDetailDto>(
             c => c.Get(portfolioId, symbol));
         if (dto is null) return NotFound();
+
+        var news = await this.InvokeAsync<StockyApi.NewsController, IEnumerable<NewsItemDto>>(
+            c => c.Get(symbol, 10, ct)) ?? Array.Empty<NewsItemDto>();
+        var filings = await this.InvokeAsync<StockyApi.FilingsController, IEnumerable<FilingDto>>(
+            c => c.Get(symbol, 10, ct)) ?? Array.Empty<FilingDto>();
+        var surprises = this.Invoke<StockyApi.EarningsSurpriseController, IEnumerable<EarningsSurprisePointDto>>(
+            c => c.Get(symbol, 8)) ?? Array.Empty<EarningsSurprisePointDto>();
+
         ViewBag.PortfolioId = portfolioId;
+        ViewBag.News = news.ToList();
+        ViewBag.Filings = filings.ToList();
+        ViewBag.EarningsSurprises = surprises.ToList();
         return View(dto);
     }
 

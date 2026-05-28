@@ -70,6 +70,14 @@ public class PositionDetailController(StockyDbContext db) : ControllerBase
             realized, dividends,
             lots.Select(l => new TaxLotDto(l.Id, l.OpenedAt, l.Quantity, l.RemainingQuantity, l.CostPerShare, l.RemainingQuantity * l.CostPerShare)).ToList(),
             txs.Select(t => new TransactionDto(t.Id, t.Symbol, t.Type.ToString(), t.Quantity, t.Price, t.Fee, t.Currency, t.ExecutedAt, t.Notes)).ToList(),
-            history);
+            history,
+            latestQuote?.Change,
+            latestQuote?.ChangePercent,
+            metadata?.Industry,
+            metadata?.Country,
+            instrument?.Exchange,
+            metadata?.MarketCap,
+            metadata?.Beta,
+            metadata?.DividendYield);
     }
 }
