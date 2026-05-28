@@ -1,21 +1,22 @@
 @model PositionDetailDto
 @using System.Text.Json
 @{
-    ViewData["Title"] = $"{Model.Symbol} · Position";
+    var debugErrors = ViewBag.DebugErrors as List<string> ?? new List<string>();
+    ViewData["Title"] = $"{Model?.Symbol ?? "Position"} · Position";
     var pid = (Guid)ViewBag.PortfolioId;
     var news      = ViewBag.News              as List<NewsItemDto>                  ?? new();
     var filings   = ViewBag.Filings           as List<FilingDto>                   ?? new();
     var surprises = ViewBag.EarningsSurprises as List<EarningsSurprisePointDto>    ?? new();
 
-    var costBase    = Model.Quantity * Model.AverageCost;
-    var totalRet    = Model.UnrealizedPnL + Model.RealizedPnL + Model.DividendsReceived;
+    var costBase    = Model != null ? Model.Quantity * Model.AverageCost : 0m;
+    var totalRet    = Model != null ? Model.UnrealizedPnL + Model.RealizedPnL + Model.DividendsReceived : 0m;
     var totalRetPct = costBase != 0 ? Math.Round(totalRet / costBase * 100m, 2) : 0m;
 
-    var hi52 = Model.PriceHistory.Count > 0 ? Model.PriceHistory.Max(p => p.Value) : (decimal?)null;
-    var lo52 = Model.PriceHistory.Count > 0 ? Model.PriceHistory.Min(p => p.Value) : (decimal?)null;
+    var hi52 = Model?.PriceHistory?.Count > 0 ? Model.PriceHistory.Max(p => p.Value) : (decimal?)null;
+    var lo52 = Model?.PriceHistory?.Count > 0 ? Model.PriceHistory.Min(p => p.Value) : (decimal?)null;
 
-    var chartLabels = Model.PriceHistory.Select(p => p.Date.ToString("yyyy-MM-dd")).ToArray();
-    var chartPrices = Model.PriceHistory.Select(p => (double)p.Value).ToArray();
+    var chartLabels = Model?.PriceHistory?.Select(p => p.Date.ToString("yyyy-MM-dd")).ToArray() ?? Array.Empty<string>();
+    var chartPrices = Model?.PriceHistory?.Select(p => (double)p.Value).ToArray() ?? Array.Empty<double>();
 
     string Fmt(decimal? v, string ccy) => v.HasValue ? v.Value.Money(ccy) : "—";
     string FmtLarge(decimal v) {
@@ -106,20 +107,34 @@
 .news-summary { font-size: .8rem; color: var(--text-muted); margin-top: .15rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
 
+@* ── Debug error panel (shown whenever a controller call threw) ── *@
+@if (debugErrors.Count > 0)
+{
+    <div style="margin-bottom:1rem;border:2px solid #ea3943;border-radius:8px;overflow:hidden;">
+        <div style="background:#ea3943;color:#fff;padding:.6rem 1rem;font-weight:600;font-size:.9rem;">
+            ⚠ @debugErrors.Count diagnostic error(s) — remove this panel before production
+        </div>
+        @foreach (var err in debugErrors)
+        {
+            <pre style="margin:0;padding:.9rem 1rem;background:#1a0a0a;color:#ff8080;font-size:.75rem;white-space:pre-wrap;word-break:break-all;border-top:1px solid #3a1010;">@err</pre>
+        }
+    </div>
+}
+
 @* Page header *@
 <div class="page-header">
     <div>
         <h2 style="margin:0;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
             <i class="bi bi-graph-up"></i>
-            <span style="font-family:'JetBrains Mono',monospace;font-size:1.3rem;background:linear-gradient(135deg,var(--primary),var(--primary-600));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">@Model.Symbol</span>
-            <span style="font-weight:400;color:var(--text-muted);font-size:1rem;">@Model.Name</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:1.3rem;background:linear-gradient(135deg,var(--primary),var(--primary-600));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">@(Model?.Symbol ?? "(unknown)")</span>
+            <span style="font-weight:400;color:var(--text-muted);font-size:1rem;">@Model?.Name</span>
         </h2>
         <div style="display:flex;gap:.6rem;margin-top:.3rem;flex-wrap:wrap;font-size:.8rem;color:var(--text-muted);">
-            <span style="padding:.15rem .5rem;border:1px solid var(--border);border-radius:4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--primary);">@Model.AssetClass</span>
-            @if (Model.Exchange is not null)  { <span><i class="bi bi-building"></i> @Model.Exchange</span> }
-            @if (Model.Sector is not null)    { <span><i class="bi bi-diagram-3"></i> @Model.Sector</span> }
-            @if (Model.Industry is not null)  { <span><i class="bi bi-briefcase"></i> @Model.Industry</span> }
-            @if (Model.Country is not null)   { <span><i class="bi bi-globe"></i> @Model.Country</span> }
+            <span style="padding:.15rem .5rem;border:1px solid var(--border);border-radius:4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--primary);">@Model?.AssetClass</span>
+            @if (Model?.Exchange is not null)  { <span><i class="bi bi-building"></i> @Model.Exchange</span> }
+            @if (Model?.Sector is not null)    { <span><i class="bi bi-diagram-3"></i> @Model.Sector</span> }
+            @if (Model?.Industry is not null)  { <span><i class="bi bi-briefcase"></i> @Model.Industry</span> }
+            @if (Model?.Country is not null)   { <span><i class="bi bi-globe"></i> @Model.Country</span> }
         </div>
     </div>
     <div class="actions">
@@ -131,6 +146,8 @@
 </div>
 
 @* Price hero + fundamentals *@
+@if (Model != null)
+{
 <div class="pos-hero">
     <div>
         <div class="price">
@@ -549,7 +566,8 @@
     </table>
 </article>
 </div>
-}
+} @* end @if (filings.Count > 0) *@
+} @* end @if (Model != null) *@
 
 <script>
 function switchTab(id, btn) {

@@ -248,21 +248,59 @@ public class PortfolioAnalyticsController : Controller
     [Route("/Portfolios/{portfolioId:guid}/Positions/{symbol}")]
     public async Task<IActionResult> Position(Guid portfolioId, string symbol, CancellationToken ct)
     {
-        var dto = await this.InvokeAsync<StockyApi.PositionDetailController, PositionDetailDto>(
-            c => c.Get(portfolioId, symbol));
-        if (dto is null) return NotFound();
+        var errors = new List<string>();
 
-        var news = await this.InvokeAsync<StockyApi.NewsController, IEnumerable<NewsItemDto>>(
-            c => c.Get(symbol, 10, ct)) ?? Array.Empty<NewsItemDto>();
-        var filings = await this.InvokeAsync<StockyApi.FilingsController, IEnumerable<FilingDto>>(
-            c => c.Get(symbol, 10, ct)) ?? Array.Empty<FilingDto>();
-        var surprises = this.Invoke<StockyApi.EarningsSurpriseController, IEnumerable<EarningsSurprisePointDto>>(
-            c => c.Get(symbol, 8)) ?? Array.Empty<EarningsSurprisePointDto>();
+        PositionDetailDto? dto = null;
+        try
+        {
+            dto = await this.InvokeAsync<StockyApi.PositionDetailController, PositionDetailDto>(
+                c => c.Get(portfolioId, symbol));
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"[PositionDetailController.Get] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+        }
+
+        if (dto is null && errors.Count == 0) return NotFound();
+
+        IEnumerable<NewsItemDto> news = Array.Empty<NewsItemDto>();
+        try
+        {
+            news = await this.InvokeAsync<StockyApi.NewsController, IEnumerable<NewsItemDto>>(
+                c => c.Get(symbol, 10, ct)) ?? Array.Empty<NewsItemDto>();
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"[NewsController.Get] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+        }
+
+        IEnumerable<FilingDto> filings = Array.Empty<FilingDto>();
+        try
+        {
+            filings = await this.InvokeAsync<StockyApi.FilingsController, IEnumerable<FilingDto>>(
+                c => c.Get(symbol, 10, ct)) ?? Array.Empty<FilingDto>();
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"[FilingsController.Get] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+        }
+
+        IEnumerable<EarningsSurprisePointDto> surprises = Array.Empty<EarningsSurprisePointDto>();
+        try
+        {
+            surprises = this.Invoke<StockyApi.EarningsSurpriseController, IEnumerable<EarningsSurprisePointDto>>(
+                c => c.Get(symbol, 8)) ?? Array.Empty<EarningsSurprisePointDto>();
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"[EarningsSurpriseController.Get] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+        }
 
         ViewBag.PortfolioId = portfolioId;
         ViewBag.News = news.ToList();
         ViewBag.Filings = filings.ToList();
         ViewBag.EarningsSurprises = surprises.ToList();
+        ViewBag.DebugErrors = errors;
         return View(dto);
     }
 
