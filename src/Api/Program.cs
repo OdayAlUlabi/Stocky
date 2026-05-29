@@ -193,7 +193,12 @@ if (migrateOnly)
     return;
 }
 
-var authBuilder = builder.Services.AddAuthentication();
+// Default scheme = MCP so UseAuthentication() evaluates X-Mcp-Service-Key on every
+// direct HTTP request to the API. McpAuthenticationHandler returns NoResult when
+// the header is absent, leaving the user unauthenticated (fine — only the MCP
+// server makes direct calls; Web.Mvc invokes API controllers in-process and
+// forwards its own HttpContext.User).
+var authBuilder = builder.Services.AddAuthentication(McpAuthenticationHandler.SchemeName);
 // M14 #91 — API-key bearer scheme (sk_*) for /v1/public endpoints
 authBuilder.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
     ApiKeyAuthenticationHandler.SchemeName, _ => { });
