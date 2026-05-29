@@ -104,6 +104,74 @@ public sealed class TransactionTools(IHttpClientFactory http)
     }
 
     [McpServerTool]
+    [Description(
+        "Update an existing transaction in a portfolio. " +
+        "All fields are replaced — supply the full updated values, not just what changed. " +
+        "Returns the updated transaction. Use ListTransactions to get the transaction ID first.")]
+    public async Task<string> UpdateTransaction(
+        [Description("Portfolio GUID.")] string portfolioId,
+        [Description("Transaction GUID to update.")] string transactionId,
+        [Description("Ticker symbol (e.g. 'AAPL'). Leave empty for cash transactions.")] string? symbol,
+        [Description("Transaction type: Buy | Sell | Deposit | Withdrawal | Dividend")] string type,
+        [Description("Number of shares / units (positive value).")] decimal quantity,
+        [Description("Price per share / unit in base currency.")] decimal price,
+        [Description("Brokerage fee / commission.")] decimal fee = 0m,
+        [Description("ISO currency code, e.g. 'USD'.")] string currency = "USD",
+        [Description("ISO 8601 date-time of execution.")] string? executedAt = null,
+        [Description("Optional free-text notes.")] string? notes = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(portfolioId)) return "Error: portfolioId is required.";
+        if (string.IsNullOrWhiteSpace(transactionId)) return "Error: transactionId is required.";
+
+        var executedAtParsed = string.IsNullOrWhiteSpace(executedAt)
+            ? (DateTimeOffset?)null
+            : DateTimeOffset.Parse(executedAt);
+
+        var body = new
+        {
+            symbol = string.IsNullOrWhiteSpace(symbol) ? null : symbol.ToUpperInvariant(),
+            type,
+            quantity,
+            price,
+            fee,
+            currency,
+            executedAt = executedAtParsed,
+            notes
+        };
+
+        var resp = await Api.PutAsJsonAsync(
+            $"api/portfolios/{Uri.EscapeDataString(portfolioId)}/transactions/{Uri.EscapeDataString(transactionId)}", body, ct);
+        if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return $"Transaction {transactionId} not found in portfolio {portfolioId}.";
+        if (resp.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            return $"Bad request: {await resp.Content.ReadAsStringAsync(ct)}";
+        resp.EnsureSuccessStatusCode();
+        var json = await resp.Content.ReadFromJsonAsync<JsonElement>(ct);
+        return JsonSerializer.Serialize(json, PrettyJson);
+    }
+
+    [McpServerTool]
+    [Description(
+        "Delete a transaction from a portfolio. Holdings and tax lots are recomputed immediately. " +
+        "Use ListTransactions to get the transaction ID first. This action cannot be undone.")]
+    public async Task<string> DeleteTransaction(
+        [Description("Portfolio GUID.")] string portfolioId,
+        [Description("Transaction GUID to delete.")] string transactionId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(portfolioId)) return "Error: portfolioId is required.";
+        if (string.IsNullOrWhiteSpace(transactionId)) return "Error: transactionId is required.";
+
+        var resp = await Api.DeleteAsync(
+            $"api/portfolios/{Uri.EscapeDataString(portfolioId)}/transactions/{Uri.EscapeDataString(transactionId)}", ct);
+        if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return $"Transaction {transactionId} not found in portfolio {portfolioId}.";
+        resp.EnsureSuccessStatusCode();
+        return $"Transaction {transactionId} deleted successfully.";
+    }
+
+    [McpServerTool]
     [Description("Get realized wash-sale adjustments for a portfolio to identify disallowed losses.")]
     public async Task<string> GetWashSales(
         [Description("Portfolio GUID.")] string portfolioId,
