@@ -2,13 +2,38 @@
 @model StrategyBreakdownViewModel
 @{
     ViewData["Title"] = "Strategy Breakdown";
+    var selectedName = Model.SelectedPortfolioId.HasValue
+        ? Model.Portfolios.FirstOrDefault(p => p.Id == Model.SelectedPortfolioId)?.Name ?? "Selected"
+        : "All portfolios";
 }
 
 <header style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:.5rem;">
     <h2>Strategy Breakdown</h2>
     <small>Total market value: <strong>@Model.TotalMarketValue.ToString("N2")</strong></small>
 </header>
-<p>Holdings across all portfolios, grouped by position strategy.</p>
+
+@* Portfolio filter *@
+<form method="get" style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+    <label for="portfolioId" style="font-weight:500;white-space:nowrap;">Filter by portfolio:</label>
+    <select id="portfolioId" name="portfolioId" onchange="this.form.submit()" style="min-width:16rem;">
+        <option value="">All portfolios</option>
+        @foreach (var p in Model.Portfolios)
+        {
+            if (Model.SelectedPortfolioId == p.Id)
+            {
+                <option value="@p.Id" selected>@p.Name (@p.BaseCurrency)</option>
+            }
+            else
+            {
+                <option value="@p.Id">@p.Name (@p.BaseCurrency)</option>
+            }
+        }
+    </select>
+    @if (Model.SelectedPortfolioId.HasValue)
+    {
+        <a href="/Strategy/Breakdown" class="btn btn-ghost btn-sm">Clear filter</a>
+    }
+</form>
 
 @if (!Model.Groups.Any())
 {
@@ -18,8 +43,22 @@ else
 {
     @foreach (var group in Model.Groups)
     {
-        <section style="margin-bottom:2rem;">
-            <h3>@group.Key <small style="font-weight:normal;font-size:.8em;">(@group.Count() position@(group.Count() == 1 ? "" : "s"))</small></h3>
+        var groupList   = group.ToList();
+        var totalCost   = groupList.Sum(h => h.Quantity * h.AverageCost);
+        var totalValue  = groupList.Sum(h => h.MarketValue ?? 0m);
+        var totalPnl    = totalValue - totalCost;
+        var totalPnlPct = totalCost > 0 ? Math.Round(totalPnl / totalCost * 100m, 2) : 0m;
+        var groupPnlUp  = totalPnl >= 0;
+
+        <section style="margin-bottom:2.5rem;">
+            <h3 style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;">
+                @group.Key
+                <small style="font-weight:normal;font-size:.8em;">@groupList.Count position@(groupList.Count == 1 ? "" : "s")</small>
+                <span class="@(groupPnlUp ? "text-green" : "text-red")" style="font-size:.85em;font-weight:600;">
+                    <i class="bi @(groupPnlUp ? "bi-caret-up-fill" : "bi-caret-down-fill")" style="font-size:.75em;"></i>
+                    @totalPnl.ToString("N2") (@totalPnlPct%)
+                </span>
+            </h3>
             <table>
                 <thead>
                     <tr>
@@ -27,27 +66,47 @@ else
                         <th>Symbol</th>
                         <th style="text-align:right;">Qty</th>
                         <th style="text-align:right;">Avg cost</th>
-                        <th style="text-align:right;">Last</th>
+                        <th style="text-align:right;">Last price</th>
+                        <th style="text-align:right;">Cost basis</th>
                         <th style="text-align:right;">Market value</th>
+                        <th style="text-align:right;">P&amp;L $</th>
+                        <th style="text-align:right;">P&amp;L %</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var h in group.OrderBy(x => x.Symbol))
+                    @foreach (var h in groupList.OrderByDescending(x => (x.MarketValue ?? 0m) - x.Quantity * x.AverageCost))
                     {
+                        var costBasis = h.Quantity * h.AverageCost;
+                        var mv        = h.MarketValue ?? 0m;
+                        var pnl       = mv - costBasis;
+                        var pnlPct    = costBasis > 0 ? Math.Round(pnl / costBasis * 100m, 2) : 0m;
+                        var pnlUp     = pnl >= 0;
                         <tr>
-                            <td>@h.PortfolioName</td>
-                            <td>@h.Symbol</td>
-                            <td style="text-align:right;">@h.Quantity.ToString("N4")</td>
-                            <td style="text-align:right;">@h.AverageCost.ToString("N2")</td>
-                            <td style="text-align:right;">@(h.LatestPrice.HasValue ? h.LatestPrice.Value.ToString("N2") : "—")</td>
-                            <td style="text-align:right;">@(h.MarketValue.HasValue ? h.MarketValue.Value.ToString("N2") : "—")</td>
+                            <td class="text-muted" style="font-size:.9em;">@h.PortfolioName</td>
+                            <td><strong>@h.Symbol</strong></td>
+                            <td style="text-align:right;" class="text-muted">@h.Quantity.ToString("N4")</td>
+                            <td style="text-align:right;" class="text-muted">@h.AverageCost.ToString("N2")</td>
+                            <td style="text-align:right;" class="text-muted">@(h.LatestPrice.HasValue ? h.LatestPrice.Value.ToString("N2") : "—")</td>
+                            <td style="text-align:right;" class="text-muted">@costBasis.ToString("N2")</td>
+                            <td style="text-align:right;">@(h.MarketValue.HasValue ? mv.ToString("N2") : "—")</td>
+                            <td style="text-align:right;" class="@(pnlUp ? "text-green" : "text-red")">
+                                <i class="bi @(pnlUp ? "bi-caret-up-fill" : "bi-caret-down-fill")" style="font-size:.7em;"></i>
+                                @pnl.ToString("N2")
+                            </td>
+                            <td style="text-align:right;" class="@(pnlUp ? "text-green" : "text-red")">@pnlPct%</td>
                         </tr>
                     }
                 </tbody>
                 <tfoot>
-                    <tr>
-                        <td colspan="5" style="text-align:right;"><strong>Group total</strong></td>
-                        <td style="text-align:right;"><strong>@group.Where(x => x.MarketValue.HasValue).Sum(x => x.MarketValue!.Value).ToString("N2")</strong></td>
+                    <tr style="font-weight:600;border-top:2px solid var(--border,#e0e0e0);">
+                        <td colspan="5" style="text-align:right;">Group total</td>
+                        <td style="text-align:right;">@totalCost.ToString("N2")</td>
+                        <td style="text-align:right;">@totalValue.ToString("N2")</td>
+                        <td style="text-align:right;" class="@(groupPnlUp ? "text-green" : "text-red")">
+                            <i class="bi @(groupPnlUp ? "bi-caret-up-fill" : "bi-caret-down-fill")" style="font-size:.7em;"></i>
+                            @totalPnl.ToString("N2")
+                        </td>
+                        <td style="text-align:right;" class="@(groupPnlUp ? "text-green" : "text-red")">@totalPnlPct%</td>
                     </tr>
                 </tfoot>
             </table>

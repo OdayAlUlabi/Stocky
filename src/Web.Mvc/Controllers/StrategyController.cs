@@ -10,10 +10,17 @@ namespace Stocky.Web.Mvc.Controllers;
 [Authorize]
 public class StrategyController : Controller
 {
-    public async Task<IActionResult> Breakdown(CancellationToken ct = default)
+    public async Task<IActionResult> Breakdown(Guid? portfolioId = null, CancellationToken ct = default)
     {
-        var holdings = (await this.InvokeAsync<StockyApi.StrategyController, IEnumerable<StrategyHoldingDto>>(
+        var portfolios = ((await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
+            c => c.List())) ?? Array.Empty<PortfolioDto>()).ToList();
+
+        var allHoldings = (await this.InvokeAsync<StockyApi.StrategyController, IEnumerable<StrategyHoldingDto>>(
             c => c.ByStrategy(ct)) ?? Array.Empty<StrategyHoldingDto>()).ToList();
+
+        var holdings = portfolioId.HasValue
+            ? allHoldings.Where(h => h.PortfolioId == portfolioId.Value).ToList()
+            : allHoldings;
 
         var groups = holdings
             .GroupBy(h => h.Strategy)
@@ -26,7 +33,9 @@ public class StrategyController : Controller
 
         var vm = new StrategyBreakdownViewModel(
             groups.Cast<IGrouping<string, StrategyHoldingDto>>().ToList(),
-            totalMarketValue);
+            totalMarketValue,
+            portfolios.AsReadOnly(),
+            portfolioId);
 
         return View(vm);
     }
