@@ -15,6 +15,16 @@ public class StrategyController : Controller
         var portfolios = ((await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
             c => c.List())) ?? Array.Empty<PortfolioDto>()).ToList();
 
+        // When no explicit portfolioId is in the query string, default to "Shared Portfolio" / "Shared"
+        if (!portfolioId.HasValue && !Request.Query.ContainsKey("portfolioId"))
+        {
+            var shared = portfolios.FirstOrDefault(p =>
+                p.Name.Equals("Shared Portfolio", StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Equals("Shared", StringComparison.OrdinalIgnoreCase));
+            if (shared is not null)
+                portfolioId = shared.Id;
+        }
+
         var allHoldings = (await this.InvokeAsync<StockyApi.StrategyController, IEnumerable<StrategyHoldingDto>>(
             c => c.ByStrategy(ct)) ?? Array.Empty<StrategyHoldingDto>()).ToList();
 
