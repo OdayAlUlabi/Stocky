@@ -96,34 +96,77 @@
                     <th>Strategy</th>
                     <th style="text-align:right;">Holdings</th>
                     <th style="text-align:right;">Market value</th>
-                    <th style="text-align:right;">%</th>
-                    <th>Symbols</th>
+                    <th style="text-align:right;">Cost basis</th>
+                    <th style="text-align:right;">Unrealized P&amp;L</th>
+                    <th style="text-align:right;">P&amp;L %</th>
+                    <th style="text-align:right;">Alloc %</th>
+                    <th>Top symbols</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var (strategy, items) in strategyGroups)
                 {
-                    var groupValue = items.Sum(h => h.MarketValue ?? 0m);
-                    var pct = strategyTotalValue > 0 ? Math.Round(groupValue / strategyTotalValue * 100m, 1) : 0m;
-                    var icon = strategy switch { "Hodl" => "bi-lock", "LongTerm" => "bi-hourglass-split", _ => "bi-grid" };
+                    var groupValue   = items.Sum(h => h.MarketValue ?? 0m);
+                    var groupCost    = items.Sum(h => h.Quantity * h.AverageCost);
+                    var groupPnl     = groupValue - groupCost;
+                    var pnlPct       = groupCost > 0 ? Math.Round(groupPnl / groupCost * 100m, 2) : 0m;
+                    var allocPct     = strategyTotalValue > 0 ? Math.Round(groupValue / strategyTotalValue * 100m, 1) : 0m;
+                    var pnlUp        = groupPnl >= 0;
+                    var icon         = strategy switch { "Hodl" => "bi-lock", "LongTerm" => "bi-hourglass-split", _ => "bi-grid" };
+                    var pnlClass     = pnlUp ? "text-green" : "text-red";
+                    var pnlArrow     = pnlUp ? "bi-caret-up-fill" : "bi-caret-down-fill";
+                    // Sort by individual P&L descending to surface best performers first
+                    var sorted       = items.OrderByDescending(h => (h.MarketValue ?? 0m) - h.Quantity * h.AverageCost).ToList();
                     <tr>
-                        <td><i class="bi @icon"></i> @strategy</td>
+                        <td><i class="bi @icon"></i> <strong>@strategy</strong></td>
                         <td style="text-align:right;" class="text-muted">@items.Count</td>
                         <td style="text-align:right;">@groupValue.Money(Model.Currency)</td>
-                        <td style="text-align:right;" class="text-muted">@pct%</td>
+                        <td style="text-align:right;" class="text-muted">@groupCost.Money(Model.Currency)</td>
+                        <td style="text-align:right;" class="@pnlClass">
+                            <i class="bi @pnlArrow" style="font-size:.75em;"></i>
+                            @groupPnl.Money(Model.Currency)
+                        </td>
+                        <td style="text-align:right;" class="@pnlClass">@pnlPct%</td>
+                        <td style="text-align:right;" class="text-muted">@allocPct%</td>
                         <td>
-                            @foreach (var h in items.Take(8))
+                            @foreach (var h in sorted.Take(6))
                             {
-                                <span class="badge">@h.Symbol</span>
+                                var hPnl  = (h.MarketValue ?? 0m) - h.Quantity * h.AverageCost;
+                                var hUp   = hPnl >= 0;
+                                <span class="badge" title="@h.Symbol · P&amp;L: @hPnl.ToString("N2")" style="border-color:@(hUp ? "var(--green,#2a9d5c)" : "var(--red,#e63946)");">
+                                    @h.Symbol
+                                </span>
                             }
-                            @if (items.Count > 8)
+                            @if (items.Count > 6)
                             {
-                                <span class="text-muted" style="font-size:.8em;">+@(items.Count - 8) more</span>
+                                <span class="text-muted" style="font-size:.8em;">+@(items.Count - 6) more</span>
                             }
                         </td>
                     </tr>
                 }
             </tbody>
+            <tfoot>
+                <tr style="font-weight:600;border-top:2px solid var(--border,#e0e0e0);">
+                    <td>Total</td>
+                    <td style="text-align:right;" class="text-muted">
+                        @strategyGroups.Values.Sum(g => g.Count)
+                    </td>
+                    <td style="text-align:right;">@strategyTotalValue.Money(Model.Currency)</td>
+                    @{
+                        var totalCost = strategyGroups.Values.SelectMany(g => g).Sum(h => h.Quantity * h.AverageCost);
+                        var totalPnl  = strategyTotalValue - totalCost;
+                        var totalPnlPct = totalCost > 0 ? Math.Round(totalPnl / totalCost * 100m, 2) : 0m;
+                        var stratTotUp     = totalPnl >= 0;
+                    }
+                    <td style="text-align:right;" class="text-muted">@totalCost.Money(Model.Currency)</td>
+                    <td style="text-align:right;" class="@(stratTotUp ? "text-green" : "text-red")">
+                        <i class="bi @(stratTotUp ? "bi-caret-up-fill" : "bi-caret-down-fill")" style="font-size:.75em;"></i>
+                        @totalPnl.Money(Model.Currency)
+                    </td>
+                    <td style="text-align:right;" class="@(stratTotUp ? "text-green" : "text-red")">@totalPnlPct%</td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
         </table>
     </article>
 }
