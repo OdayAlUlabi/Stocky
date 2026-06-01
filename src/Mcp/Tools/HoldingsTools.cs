@@ -101,12 +101,74 @@ public sealed class HoldingsTools(IHttpClientFactory http)
     [Description(
         "Get all holdings across every portfolio owned by the caller, grouped by PositionStrategy. " +
         "Strategies are: General (default), LongTerm (buy-and-hold), Hodl (crypto-style hold), MomentumPlays (short-term momentum trades). " +
-        "Useful for understanding how positions are classified across the entire account.")]
+        "Each holding also includes optional position targets (Target1/TP1, Target2/TP2, Target3/TP3) and a StopLoss price, if set. " +
+        "Useful for understanding how positions are classified and what price levels are being tracked across the entire account.")]
     public async Task<string> GetHoldingsByStrategy(CancellationToken ct = default)
     {
         var resp = await Api.GetAsync("api/holdings/by-strategy", ct);
         resp.EnsureSuccessStatusCode();
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>(ct);
         return JsonSerializer.Serialize(json, PrettyJson);
+    }
+
+    [McpServerTool]
+    [Description(
+        "Set the PositionStrategy for a holding in a portfolio. " +
+        "Valid strategies: General, LongTerm, Hodl, MomentumPlays.")]
+    public async Task<string> SetHoldingStrategy(
+        [Description("Portfolio GUID.")] string portfolioId,
+        [Description("Ticker symbol, e.g. 'AAPL'.")] string symbol,
+        [Description("Strategy to assign: General, LongTerm, Hodl, or MomentumPlays.")] string strategy,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(portfolioId) || string.IsNullOrWhiteSpace(symbol) || string.IsNullOrWhiteSpace(strategy))
+            return "Error: portfolioId, symbol, and strategy are all required.";
+
+        var resp = await Api.PatchAsJsonAsync(
+            $"api/portfolios/{Uri.EscapeDataString(portfolioId)}/holdings/{Uri.EscapeDataString(symbol.ToUpperInvariant())}/strategy",
+            new { strategy },
+            ct);
+
+        if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return $"Portfolio {portfolioId} not found.";
+        if (!resp.IsSuccessStatusCode)
+            return $"Error: {resp.StatusCode} — {await resp.Content.ReadAsStringAsync(ct)}";
+        return $"Strategy for {symbol.ToUpperInvariant()} set to {strategy}.";
+    }
+
+    [McpServerTool]
+    [Description(
+        "Set position targets (take-profit levels) and/or a stop-loss price for a holding. " +
+        "Up to three take-profit targets can be set (Target1/TP1, Target2/TP2, Target3/TP3). " +
+        "Pass null or omit a value to clear it. All prices should be in the portfolio's base currency.")]
+    public async Task<string> SetHoldingTargets(
+        [Description("Portfolio GUID.")] string portfolioId,
+        [Description("Ticker symbol, e.g. 'AAPL'.")] string symbol,
+        [Description("First take-profit target price. Pass null to clear.")] decimal? target1 = null,
+        [Description("Second take-profit target price. Pass null to clear.")] decimal? target2 = null,
+        [Description("Third take-profit target price. Pass null to clear.")] decimal? target3 = null,
+        [Description("Stop-loss price. Pass null to clear.")] decimal? stopLoss = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(portfolioId) || string.IsNullOrWhiteSpace(symbol))
+            return "Error: portfolioId and symbol are both required.";
+
+        var resp = await Api.PatchAsJsonAsync(
+            $"api/portfolios/{Uri.EscapeDataString(portfolioId)}/holdings/{Uri.EscapeDataString(symbol.ToUpperInvariant())}/targets",
+            new { target1, target2, target3, stopLoss },
+            ct);
+
+        if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return $"Portfolio {portfolioId} not found.";
+        if (!resp.IsSuccessStatusCode)
+            return $"Error: {resp.StatusCode} — {await resp.Content.ReadAsStringAsync(ct)}";
+
+        var parts = new List<string>();
+        if (target1.HasValue) parts.Add($"TP1={target1}");
+        if (target2.HasValue) parts.Add($"TP2={target2}");
+        if (target3.HasValue) parts.Add($"TP3={target3}");
+        if (stopLoss.HasValue) parts.Add($"StopLoss={stopLoss}");
+        var summary = parts.Count > 0 ? string.Join(", ", parts) : "all cleared";
+        return $"Targets for {symbol.ToUpperInvariant()} updated: {summary}.";
     }
 }
