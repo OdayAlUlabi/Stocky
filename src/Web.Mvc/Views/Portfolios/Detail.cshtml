@@ -79,7 +79,7 @@
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
-                    'RequestVerificationToken': csrfToken
+                    'X-CSRF-TOKEN': csrfToken
                 },
                 body: JSON.stringify({ strategy: strategy })
             }).then(function (r) {
