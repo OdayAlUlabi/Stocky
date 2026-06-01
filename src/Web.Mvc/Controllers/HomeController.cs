@@ -9,7 +9,7 @@ namespace Stocky.Web.Mvc.Controllers;
 [Authorize]
 public class HomeController : Controller
 {
-    public async Task<IActionResult> Index(Guid? portfolioId)
+    public async Task<IActionResult> Index(Guid? portfolioId, CancellationToken ct = default)
     {
         var portfolios = ((await this.InvokeAsync<StockyApi.PortfoliosController, IEnumerable<PortfolioDto>>(
             c => c.List())) ?? Array.Empty<PortfolioDto>()).ToList();
@@ -25,6 +25,18 @@ public class HomeController : Controller
 
         var dashboard = await this.InvokeAsync<StockyApi.DashboardController, DashboardDto>(
             c => c.Get(portfolioId));
+
+        var strategyHoldings = ((await this.InvokeAsync<StockyApi.StrategyController, IEnumerable<StrategyHoldingDto>>(
+            c => c.ByStrategy(ct))) ?? Array.Empty<StrategyHoldingDto>()).ToList();
+        if (portfolioId.HasValue)
+            strategyHoldings = strategyHoldings.Where(h => h.PortfolioId == portfolioId.Value).ToList();
+        ViewBag.StrategyGroups = strategyHoldings
+            .GroupBy(h => h.Strategy)
+            .OrderBy(g => g.Key)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(h => h.MarketValue ?? 0m).ToList());
+
         ViewBag.Portfolios = portfolios;
         ViewBag.SelectedPortfolioId = portfolioId;
         return View(dashboard);

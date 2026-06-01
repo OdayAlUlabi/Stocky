@@ -79,6 +79,55 @@
     </div>
 </div>
 
+@{
+    var strategyGroups = ViewBag.StrategyGroups as Dictionary<string, List<StrategyHoldingDto>>;
+    var strategyTotalValue = strategyGroups?.Values.SelectMany(x => x).Sum(h => h.MarketValue ?? 0m) ?? 0m;
+}
+@if (strategyGroups is { Count: > 0 })
+{
+    <article>
+        <header>
+            <span><i class="bi bi-flag"></i> Position strategy</span>
+            <a class="btn btn-ghost btn-sm" href="/Strategy/Breakdown">View breakdown</a>
+        </header>
+        <table>
+            <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th style="text-align:right;">Holdings</th>
+                    <th style="text-align:right;">Market value</th>
+                    <th style="text-align:right;">%</th>
+                    <th>Symbols</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var (strategy, items) in strategyGroups)
+                {
+                    var groupValue = items.Sum(h => h.MarketValue ?? 0m);
+                    var pct = strategyTotalValue > 0 ? Math.Round(groupValue / strategyTotalValue * 100m, 1) : 0m;
+                    var icon = strategy switch { "Hodl" => "bi-lock", "LongTerm" => "bi-hourglass-split", _ => "bi-grid" };
+                    <tr>
+                        <td><i class="bi @icon"></i> @strategy</td>
+                        <td style="text-align:right;" class="text-muted">@items.Count</td>
+                        <td style="text-align:right;">@groupValue.Money(Model.Currency)</td>
+                        <td style="text-align:right;" class="text-muted">@pct%</td>
+                        <td>
+                            @foreach (var h in items.Take(8))
+                            {
+                                <span class="badge">@h.Symbol</span>
+                            }
+                            @if (items.Count > 8)
+                            {
+                                <span class="text-muted" style="font-size:.8em;">+@(items.Count - 8) more</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </article>
+}
+
 <div class="grid-2">
     <article>
         <header>
