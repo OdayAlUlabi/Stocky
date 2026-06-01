@@ -59,7 +59,7 @@ else
                     @totalPnl.ToString("N2") (@totalPnlPct%)
                 </span>
             </h3>
-            <table>
+            <table style="font-size:.9em;">
                 <thead>
                     <tr>
                         <th>Portfolio</th>
@@ -71,6 +71,10 @@ else
                         <th style="text-align:right;">Market value</th>
                         <th style="text-align:right;">P&amp;L $</th>
                         <th style="text-align:right;">P&amp;L %</th>
+                        <th style="text-align:center;" title="Take Profit 1">TP 1</th>
+                        <th style="text-align:center;" title="Take Profit 2">TP 2</th>
+                        <th style="text-align:center;" title="Take Profit 3">TP 3</th>
+                        <th style="text-align:center;" title="Stop Loss">Stop Loss</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -81,7 +85,14 @@ else
                         var pnl       = mv - costBasis;
                         var pnlPct    = costBasis > 0 ? Math.Round(pnl / costBasis * 100m, 2) : 0m;
                         var pnlUp     = pnl >= 0;
-                        <tr>
+                        var last      = h.LatestPrice;
+                        // TP is "hit" (crossed) if last >= target; style struck-through
+                        // StopLoss is "triggered" if last <= stoploss; style red
+                        string TpClass(decimal? tp) =>
+                            (last.HasValue && tp.HasValue && last.Value >= tp.Value) ? "tp-hit" : "tp-pending";
+                        string SlClass() =>
+                            (last.HasValue && h.StopLoss.HasValue && last.Value <= h.StopLoss.Value) ? "sl-triggered" : "sl-safe";
+                        <tr data-portfolio-id="@h.PortfolioId" data-symbol="@h.Symbol">
                             <td class="text-muted" style="font-size:.9em;">@h.PortfolioName</td>
                             <td><strong>@h.Symbol</strong></td>
                             <td style="text-align:right;" class="text-muted">@h.Quantity.ToString("N4")</td>
@@ -94,6 +105,10 @@ else
                                 @pnl.ToString("N2")
                             </td>
                             <td style="text-align:right;" class="@(pnlUp ? "text-green" : "text-red")">@pnlPct%</td>
+                            <td style="text-align:center;"><input type="number" class="target-input @TpClass(h.Target1)" data-field="target1" value="@(h.Target1.HasValue ? h.Target1.Value.ToString("F2") : "")" step="0.01" min="0" placeholder="—" /></td>
+                            <td style="text-align:center;"><input type="number" class="target-input @TpClass(h.Target2)" data-field="target2" value="@(h.Target2.HasValue ? h.Target2.Value.ToString("F2") : "")" step="0.01" min="0" placeholder="—" /></td>
+                            <td style="text-align:center;"><input type="number" class="target-input @TpClass(h.Target3)" data-field="target3" value="@(h.Target3.HasValue ? h.Target3.Value.ToString("F2") : "")" step="0.01" min="0" placeholder="—" /></td>
+                            <td style="text-align:center;"><input type="number" class="target-input @SlClass()" data-field="stoploss" value="@(h.StopLoss.HasValue ? h.StopLoss.Value.ToString("F2") : "")" step="0.01" min="0" placeholder="—" /></td>
                         </tr>
                     }
                 </tbody>
@@ -107,9 +122,139 @@ else
                             @totalPnl.ToString("N2")
                         </td>
                         <td style="text-align:right;" class="@(groupPnlUp ? "text-green" : "text-red")">@totalPnlPct%</td>
+                        <td colspan="4"></td>
                     </tr>
                 </tfoot>
             </table>
         </section>
     }
 }
+
+<style>
+.target-input {
+    width: 6rem;
+    padding: 0.2rem 0.3rem;
+    font-size: .85em;
+    text-align: right;
+    border: 1px solid var(--border, #d0d0d0);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    transition: border-color .15s, background .15s;
+}
+.target-input:focus {
+    outline: none;
+    border-color: var(--accent, #0066cc);
+    background: var(--surface-raised, #fff);
+}
+.target-input.tp-hit {
+    text-decoration: line-through;
+    opacity: .55;
+    border-color: var(--green, #28a745);
+    color: var(--green, #28a745);
+}
+.target-input.tp-pending {
+    border-color: var(--border, #d0d0d0);
+}
+.target-input.sl-triggered {
+    border-color: var(--red, #dc3545);
+    color: var(--red, #dc3545);
+    background: rgba(220,53,69,.07);
+}
+.target-input.sl-safe {
+    border-color: var(--border, #d0d0d0);
+}
+.target-input.saving {
+    opacity: .5;
+}
+@@keyframes flash-ok {
+    0%   { background-color: rgba(40,167,69,.35); }
+    100% { background-color: transparent; }
+}
+@@keyframes flash-err {
+    0%   { background-color: rgba(220,53,69,.35); }
+    100% { background-color: transparent; }
+}
+.target-input.flash-ok  { animation: flash-ok  .6s ease-out forwards; }
+.target-input.flash-err { animation: flash-err .6s ease-out forwards; }
+</style>
+
+<script>
+(function () {
+    var csrfToken = document.querySelector('meta[name="x-csrf-token"]')?.getAttribute('content') || '';
+
+    function getRowInputs(input) {
+        var row = input.closest('tr');
+        var inputs = row.querySelectorAll('.target-input');
+        var map = {};
+        inputs.forEach(function (i) { map[i.dataset.field] = i; });
+        return map;
+    }
+
+    function saveRow(input) {
+        var row = input.closest('tr');
+        var portfolioId = row.dataset.portfolioId;
+        var symbol = row.dataset.symbol;
+        var fields = getRowInputs(input);
+
+        function parseVal(inp) {
+            var v = inp ? inp.value.trim() : '';
+            return v === '' ? null : parseFloat(v);
+        }
+
+        var body = {
+            target1:  parseVal(fields['target1']),
+            target2:  parseVal(fields['target2']),
+            target3:  parseVal(fields['target3']),
+            stopLoss: parseVal(fields['stoploss'])
+        };
+
+        row.querySelectorAll('.target-input').forEach(function (i) { i.classList.add('saving'); });
+
+        fetch('/Portfolios/' + portfolioId + '/Holdings/' + encodeURIComponent(symbol) + '/Targets', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify(body)
+        }).then(function (r) {
+            row.querySelectorAll('.target-input').forEach(function (i) { i.classList.remove('saving'); });
+            if (r.ok) {
+                row.querySelectorAll('.target-input').forEach(function (i) {
+                    i.classList.remove('flash-err');
+                    void i.offsetWidth;
+                    i.classList.add('flash-ok');
+                    setTimeout(function () { i.classList.remove('flash-ok'); }, 700);
+                });
+            } else {
+                row.querySelectorAll('.target-input').forEach(function (i) {
+                    i.classList.remove('flash-ok');
+                    void i.offsetWidth;
+                    i.classList.add('flash-err');
+                    setTimeout(function () { i.classList.remove('flash-err'); }, 700);
+                });
+            }
+        }).catch(function () {
+            row.querySelectorAll('.target-input').forEach(function (i) {
+                i.classList.remove('saving');
+                i.classList.add('flash-err');
+                setTimeout(function () { i.classList.remove('flash-err'); }, 700);
+            });
+        });
+    }
+
+    document.querySelectorAll('.target-input').forEach(function (input) {
+        var prev = input.value;
+        input.addEventListener('focus', function () { prev = input.value; });
+        input.addEventListener('blur', function () {
+            if (input.value !== prev) { saveRow(input); }
+        });
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { input.blur(); }
+            if (e.key === 'Escape') { input.value = prev; input.blur(); }
+        });
+    });
+})();
+</script>

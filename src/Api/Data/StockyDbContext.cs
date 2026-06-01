@@ -86,6 +86,10 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
             e.Property(x => x.Quantity).HasPrecision(18, 8);
             e.Property(x => x.AverageCost).HasPrecision(18, 8);
             e.Property(x => x.Strategy).HasConversion<string>().HasMaxLength(32).HasDefaultValue(PositionStrategy.General);
+            e.Property(x => x.Target1).HasPrecision(18, 8);
+            e.Property(x => x.Target2).HasPrecision(18, 8);
+            e.Property(x => x.Target3).HasPrecision(18, 8);
+            e.Property(x => x.StopLoss).HasPrecision(18, 8);
             e.HasOne(x => x.Instrument).WithMany().HasForeignKey(x => x.Symbol).OnDelete(DeleteBehavior.Restrict);
         });
 

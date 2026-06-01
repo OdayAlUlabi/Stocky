@@ -117,4 +117,14 @@ public class PortfoliosController : Controller
         return await this.InvokeRawAsync<StockyApi.HoldingsController>(
             c => c.SetStrategy(portfolioId, symbol, request, ct));
     }
+
+    // PATCH /Portfolios/{portfolioId}/Holdings/{symbol}/Targets  (AJAX; called from Breakdown.cshtml)
+    [HttpPatch("Portfolios/{portfolioId:guid}/Holdings/{symbol}/Targets")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetHoldingTargets(Guid portfolioId, string symbol,
+        [FromBody] SetHoldingTargetsRequest request, CancellationToken ct = default)
+    {
+        return await this.InvokeRawAsync<StockyApi.HoldingsController>(
+            c => c.SetTargets(portfolioId, symbol, request, ct));
+    }
 }

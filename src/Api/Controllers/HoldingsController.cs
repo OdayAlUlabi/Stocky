@@ -70,4 +70,27 @@ public class HoldingsController(StockyDbContext db, HoldingsCalculator calculato
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
+
+    [HttpPatch("{symbol}/targets")]
+    public async Task<IActionResult> SetTargets(Guid portfolioId, string symbol, [FromBody] SetHoldingTargetsRequest request, CancellationToken ct = default)
+    {
+        var ownerId = User.GetOwnerId();
+        var portfolio = await db.Portfolios.FirstOrDefaultAsync(p => p.Id == portfolioId && p.OwnerId == ownerId, ct);
+        if (portfolio is null) return NotFound();
+
+        var holding = await db.Holdings.FirstOrDefaultAsync(h => h.PortfolioId == portfolioId && h.Symbol == symbol, ct);
+        if (holding is null)
+        {
+            holding = new Holding { PortfolioId = portfolioId, Symbol = symbol };
+            db.Holdings.Add(holding);
+        }
+
+        holding.Target1 = request.Target1;
+        holding.Target2 = request.Target2;
+        holding.Target3 = request.Target3;
+        holding.StopLoss = request.StopLoss;
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
 }

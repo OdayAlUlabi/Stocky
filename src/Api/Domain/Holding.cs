@@ -18,4 +18,8 @@ public class Holding
     public decimal Quantity { get; set; }
     public decimal AverageCost { get; set; }
     public PositionStrategy Strategy { get; set; } = PositionStrategy.General;
+    public decimal? Target1 { get; set; }
+    public decimal? Target2 { get; set; }
+    public decimal? Target3 { get; set; }
+    public decimal? StopLoss { get; set; }
 }

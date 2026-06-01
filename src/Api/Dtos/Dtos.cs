@@ -14,7 +14,8 @@ public record UpdatePortfolioRequest(
 
 public record HoldingDto(Guid Id, string Symbol, decimal Quantity, decimal AverageCost, decimal? LatestPrice, decimal? MarketValue, string Strategy = "General");
 public record SetHoldingStrategyRequest([param: Required] string Strategy);
-public record StrategyHoldingDto(string Strategy, string Symbol, Guid PortfolioId, string PortfolioName, decimal Quantity, decimal AverageCost, decimal? LatestPrice, decimal? MarketValue);
+public record SetHoldingTargetsRequest(decimal? Target1, decimal? Target2, decimal? Target3, decimal? StopLoss);
+public record StrategyHoldingDto(string Strategy, string Symbol, Guid PortfolioId, string PortfolioName, decimal Quantity, decimal AverageCost, decimal? LatestPrice, decimal? MarketValue, decimal? Target1 = null, decimal? Target2 = null, decimal? Target3 = null, decimal? StopLoss = null);
 
 public record TransactionDto(
     Guid Id,

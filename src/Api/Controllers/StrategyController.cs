@@ -34,7 +34,7 @@ public class StrategyController(StockyDbContext db, HoldingsCalculator calculato
         var portfolioIds = portfolios.Select(p => p.Id).ToList();
         var strategyMap = await db.Holdings
             .Where(h => portfolioIds.Contains(h.PortfolioId))
-            .ToDictionaryAsync(h => (h.PortfolioId, h.Symbol), h => h.Strategy, ct);
+            .ToDictionaryAsync(h => (h.PortfolioId, h.Symbol), h => h, ct);
 
         // Collect all symbols to fetch latest prices in one query.
         var allHoldings = new List<(Guid PortfolioId, string PortfolioName, Holding Computed)>();
@@ -56,8 +56,8 @@ public class StrategyController(StockyDbContext db, HoldingsCalculator calculato
 
         var result = allHoldings.Select(x =>
         {
-            var strategy = strategyMap.TryGetValue((x.PortfolioId, x.Computed.Symbol), out var s)
-                ? s : PositionStrategy.General;
+            var sidecar = strategyMap.TryGetValue((x.PortfolioId, x.Computed.Symbol), out var sc) ? sc : null;
+            var strategy = sidecar?.Strategy ?? PositionStrategy.General;
             decimal? latestPrice = latest.TryGetValue(x.Computed.Symbol, out var p) ? p : null;
             decimal? marketValue = latestPrice.HasValue ? latestPrice.Value * x.Computed.Quantity : null;
             return new StrategyHoldingDto(
@@ -68,7 +68,11 @@ public class StrategyController(StockyDbContext db, HoldingsCalculator calculato
                 x.Computed.Quantity,
                 x.Computed.AverageCost,
                 latestPrice,
-                marketValue);
+                marketValue,
+                sidecar?.Target1,
+                sidecar?.Target2,
+                sidecar?.Target3,
+                sidecar?.StopLoss);
         }).OrderBy(x => x.Strategy).ThenBy(x => x.Symbol);
 
         return Ok(result);
