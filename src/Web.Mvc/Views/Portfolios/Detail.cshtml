@@ -39,7 +39,7 @@
 
 <h3>Holdings</h3>
 <table>
-    <thead><tr><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Avg cost</th><th style="text-align:right;">Last</th><th style="text-align:right;">Value</th></tr></thead>
+    <thead><tr><th>Symbol</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Avg cost</th><th style="text-align:right;">Last</th><th style="text-align:right;">Value</th><th>Strategy</th></tr></thead>
     <tbody>
         @foreach (var h in Model)
         {
@@ -49,8 +49,41 @@
                 <td style="text-align:right;">@h.AverageCost.Money(p?.BaseCurrency ?? "USD")</td>
                 <td style="text-align:right;">@(h.LatestPrice?.Money(p?.BaseCurrency ?? "USD") ?? "—")</td>
                 <td style="text-align:right;">@(h.MarketValue?.Money(p?.BaseCurrency ?? "USD") ?? "—")</td>
+                <td>
+                    <select class="strategy-select"
+                            data-portfolio-id="@p?.Id"
+                            data-symbol="@h.Symbol"
+                            title="Position strategy for @h.Symbol">
+                        @foreach (var opt in new[] { "General", "LongTerm", "Hodl", "MomentumPlays" })
+                        {
+                            <option value="@opt" selected="@(h.Strategy == opt ? "selected" : null)">@opt</option>
+                        }
+                    </select>
+                </td>
             </tr>
         }
-        @if (Model.Count == 0) { <tr><td colspan="5"><em>No holdings.</em></td></tr> }
+        @if (Model.Count == 0) { <tr><td colspan="6"><em>No holdings.</em></td></tr> }
     </tbody>
 </table>
+
+<script>
+(function () {
+    document.querySelectorAll('.strategy-select').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+            var portfolioId = sel.dataset.portfolioId;
+            var symbol = sel.dataset.symbol;
+            var strategy = sel.value;
+            fetch('/api/portfolios/' + portfolioId + '/holdings/' + symbol + '/strategy', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ strategy: strategy })
+            }).then(function (r) {
+                if (!r.ok) {
+                    alert('Failed to save strategy for ' + symbol);
+                    location.reload();
+                }
+            });
+        });
+    });
+})();
+</script>

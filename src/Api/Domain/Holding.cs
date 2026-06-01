@@ -1,5 +1,13 @@
 namespace Stocky.Api.Domain;
 
+public enum PositionStrategy
+{
+    General = 0,
+    LongTerm = 1,
+    Hodl = 2,
+    MomentumPlays = 3
+}
+
 public class Holding
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -9,4 +17,5 @@ public class Holding
     public Instrument Instrument { get; set; } = default!;
     public decimal Quantity { get; set; }
     public decimal AverageCost { get; set; }
+    public PositionStrategy Strategy { get; set; } = PositionStrategy.General;
 }

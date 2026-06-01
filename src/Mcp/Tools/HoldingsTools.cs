@@ -19,7 +19,8 @@ public sealed class HoldingsTools(IHttpClientFactory http)
     [McpServerTool]
     [Description(
         "List all current holdings (open positions) for a portfolio. " +
-        "Returns symbol, quantity, average cost basis, latest market price, and total market value for each position.")]
+        "Returns symbol, quantity, average cost basis, latest market price, total market value, " +
+        "and the assigned PositionStrategy (General, LongTerm, Hodl, or MomentumPlays) for each position.")]
     public async Task<string> GetHoldings(
         [Description("Portfolio GUID (from list_portfolios).")] string portfolioId,
         CancellationToken ct = default)
@@ -91,6 +92,19 @@ public sealed class HoldingsTools(IHttpClientFactory http)
 
         var encoded = Uri.EscapeDataString(symbols.ToUpperInvariant());
         var resp = await Api.GetAsync($"api/quotes?symbols={encoded}", ct);
+        resp.EnsureSuccessStatusCode();
+        var json = await resp.Content.ReadFromJsonAsync<JsonElement>(ct);
+        return JsonSerializer.Serialize(json, PrettyJson);
+    }
+
+    [McpServerTool]
+    [Description(
+        "Get all holdings across every portfolio owned by the caller, grouped by PositionStrategy. " +
+        "Strategies are: General (default), LongTerm (buy-and-hold), Hodl (crypto-style hold), MomentumPlays (short-term momentum trades). " +
+        "Useful for understanding how positions are classified across the entire account.")]
+    public async Task<string> GetHoldingsByStrategy(CancellationToken ct = default)
+    {
+        var resp = await Api.GetAsync("api/holdings/by-strategy", ct);
         resp.EnsureSuccessStatusCode();
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>(ct);
         return JsonSerializer.Serialize(json, PrettyJson);

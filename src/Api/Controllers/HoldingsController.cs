@@ -4,6 +4,7 @@ using Stocky.Api.Data;
 using Stocky.Api.Domain;
 using Stocky.Api.Dtos;
 using Stocky.Api.Services;
+using System.ComponentModel.DataAnnotations;
 
 namespace Stocky.Api.Controllers;
 
@@ -30,12 +31,43 @@ public class HoldingsController(StockyDbContext db, HoldingsCalculator calculato
                 .Select(g => g.OrderByDescending(x => x.AsOf).First())
                 .ToDictionaryAsync(q => q.Symbol, q => q.Price, ct);
 
+        // Load strategy sidecar — keyed by symbol.
+        var strategyMap = await db.Holdings
+            .Where(h => h.PortfolioId == portfolioId)
+            .ToDictionaryAsync(h => h.Symbol, h => h.Strategy, ct);
+
         var result = holdings.Select(h =>
         {
             decimal? latestPrice = latest.TryGetValue(h.Symbol, out var p) ? p : null;
             decimal? marketValue = latestPrice.HasValue ? latestPrice.Value * h.Quantity : null;
-            return new HoldingDto(h.Id, h.Symbol, h.Quantity, h.AverageCost, latestPrice, marketValue);
+            var strategy = strategyMap.TryGetValue(h.Symbol, out var s) ? s.ToString() : "General";
+            return new HoldingDto(h.Id, h.Symbol, h.Quantity, h.AverageCost, latestPrice, marketValue, strategy);
         });
         return Ok(result);
+    }
+
+    [HttpPatch("{symbol}/strategy")]
+    public async Task<IActionResult> SetStrategy(Guid portfolioId, string symbol, [FromBody] SetHoldingStrategyRequest request, CancellationToken ct = default)
+    {
+        var ownerId = User.GetOwnerId();
+        var portfolio = await db.Portfolios.FirstOrDefaultAsync(p => p.Id == portfolioId && p.OwnerId == ownerId, ct);
+        if (portfolio is null) return NotFound();
+
+        if (!Enum.TryParse<PositionStrategy>(request.Strategy, ignoreCase: true, out var strategy))
+            return BadRequest(new { error = $"Unknown strategy '{request.Strategy}'. Valid values: {string.Join(", ", Enum.GetNames<PositionStrategy>())}" });
+
+        var holding = await db.Holdings.FirstOrDefaultAsync(h => h.PortfolioId == portfolioId && h.Symbol == symbol, ct);
+        if (holding is null)
+        {
+            holding = new Holding { PortfolioId = portfolioId, Symbol = symbol, Strategy = strategy };
+            db.Holdings.Add(holding);
+        }
+        else
+        {
+            holding.Strategy = strategy;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
     }
 }

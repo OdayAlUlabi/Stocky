@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Stocky.Api.Data;
 
@@ -11,9 +12,11 @@ using Stocky.Api.Data;
 namespace Stocky.Api.Migrations
 {
     [DbContext(typeof(StockyDbContext))]
-    partial class StockyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260531221916_AddPortfolioType")]
+    partial class AddPortfolioType
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -425,13 +428,6 @@ namespace Stocky.Api.Migrations
                         .HasPrecision(18, 8)
                         .HasColumnType("decimal(18,8)");
 
-                    b.Property<string>("Strategy")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)")
-                        .HasDefaultValue("General");
-
                     b.Property<string>("Symbol")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -442,8 +438,7 @@ namespace Stocky.Api.Migrations
                     b.HasIndex("Symbol");
 
                     b.HasIndex("PortfolioId", "Symbol")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Holdings_PortfolioId_Symbol");
+                        .IsUnique();
 
                     b.ToTable("Holdings");
                 });

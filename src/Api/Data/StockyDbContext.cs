@@ -81,10 +81,11 @@ public class StockyDbContext(DbContextOptions<StockyDbContext> options) : DbCont
 
         modelBuilder.Entity<Holding>(e =>
         {
-            e.HasIndex(x => new { x.PortfolioId, x.Symbol }).IsUnique();
+            e.HasIndex(x => new { x.PortfolioId, x.Symbol }).IsUnique().HasDatabaseName("IX_Holdings_PortfolioId_Symbol");
             e.Property(x => x.Symbol).HasMaxLength(16).IsRequired();
             e.Property(x => x.Quantity).HasPrecision(18, 8);
             e.Property(x => x.AverageCost).HasPrecision(18, 8);
+            e.Property(x => x.Strategy).HasConversion<string>().HasMaxLength(32).HasDefaultValue(PositionStrategy.General);
             e.HasOne(x => x.Instrument).WithMany().HasForeignKey(x => x.Symbol).OnDelete(DeleteBehavior.Restrict);
         });
 

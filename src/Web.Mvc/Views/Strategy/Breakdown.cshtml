@@ -1,0 +1,56 @@
+@using Stocky.Web.Mvc.ViewModels
+@model StrategyBreakdownViewModel
+@{
+    ViewData["Title"] = "Strategy Breakdown";
+}
+
+<header style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:.5rem;">
+    <h2>Strategy Breakdown</h2>
+    <small>Total market value: <strong>@Model.TotalMarketValue.ToString("N2")</strong></small>
+</header>
+<p>Holdings across all portfolios, grouped by position strategy.</p>
+
+@if (!Model.Groups.Any())
+{
+    <p><em>No holdings found. Open a portfolio and assign strategies via the Holdings table.</em></p>
+}
+else
+{
+    @foreach (var group in Model.Groups)
+    {
+        <section style="margin-bottom:2rem;">
+            <h3>@group.Key <small style="font-weight:normal;font-size:.8em;">(@group.Count() position@(group.Count() == 1 ? "" : "s"))</small></h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Portfolio</th>
+                        <th>Symbol</th>
+                        <th style="text-align:right;">Qty</th>
+                        <th style="text-align:right;">Avg cost</th>
+                        <th style="text-align:right;">Last</th>
+                        <th style="text-align:right;">Market value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var h in group.OrderBy(x => x.Symbol))
+                    {
+                        <tr>
+                            <td>@h.PortfolioName</td>
+                            <td>@h.Symbol</td>
+                            <td style="text-align:right;">@h.Quantity.ToString("N4")</td>
+                            <td style="text-align:right;">@h.AverageCost.ToString("N2")</td>
+                            <td style="text-align:right;">@(h.LatestPrice.HasValue ? h.LatestPrice.Value.ToString("N2") : "—")</td>
+                            <td style="text-align:right;">@(h.MarketValue.HasValue ? h.MarketValue.Value.ToString("N2") : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5" style="text-align:right;"><strong>Group total</strong></td>
+                        <td style="text-align:right;"><strong>@group.Where(x => x.MarketValue.HasValue).Sum(x => x.MarketValue!.Value).ToString("N2")</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </section>
+    }
+}

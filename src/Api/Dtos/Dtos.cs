@@ -12,7 +12,9 @@ public record UpdatePortfolioRequest(
     [param: Required, StringLength(8)] string BaseCurrency,
     string? CostBasisMethod = null);
 
-public record HoldingDto(Guid Id, string Symbol, decimal Quantity, decimal AverageCost, decimal? LatestPrice, decimal? MarketValue);
+public record HoldingDto(Guid Id, string Symbol, decimal Quantity, decimal AverageCost, decimal? LatestPrice, decimal? MarketValue, string Strategy = "General");
+public record SetHoldingStrategyRequest([param: Required] string Strategy);
+public record StrategyHoldingDto(string Strategy, string Symbol, Guid PortfolioId, string PortfolioName, decimal Quantity, decimal AverageCost, decimal? LatestPrice, decimal? MarketValue);
 
 public record TransactionDto(
     Guid Id,
