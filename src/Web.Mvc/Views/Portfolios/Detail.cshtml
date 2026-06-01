@@ -68,14 +68,19 @@
 
 <script>
 (function () {
+    var csrfToken = document.querySelector('meta[name="x-csrf-token"]')?.getAttribute('content') || '';
     document.querySelectorAll('.strategy-select').forEach(function (sel) {
         sel.addEventListener('change', function () {
             var portfolioId = sel.dataset.portfolioId;
             var symbol = sel.dataset.symbol;
             var strategy = sel.value;
-            fetch('/api/portfolios/' + portfolioId + '/holdings/' + symbol + '/strategy', {
+            fetch('/Portfolios/' + portfolioId + '/Holdings/' + symbol + '/Strategy', {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'RequestVerificationToken': csrfToken
+                },
                 body: JSON.stringify({ strategy: strategy })
             }).then(function (r) {
                 if (!r.ok) {
