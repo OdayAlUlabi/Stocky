@@ -559,6 +559,126 @@ public record BenchmarkComparisonDto(
     decimal Beta,
     IReadOnlyList<BenchmarkPointDto> Series);
 
+// Single-stock analysis
+public record SingleStockStrategyConfigDto(
+    int HistoryYears = 5,
+    int FastRsiPeriod = 14,
+    int TrendSmaPeriod = 50,
+    int SetupLookbackPeriod = 20,
+    decimal EntryAtrBandMultiplier = 0.5m,
+    decimal TakeProfitPercent = 5m,
+    decimal StopLossPercent = 2.5m,
+    int TimeStopBars = 10,
+    bool UseTrailingStop = false,
+    decimal TrailingStopAtrMultiplier = 1m,
+    decimal TrailingActivationPercent = 2.5m,
+    int MinimumConditionsToTrigger = 3,
+    decimal VolumeConfirmationMultiplier = 1.5m,
+    bool EnablePartialExit = false,
+    decimal PartialExitTargetPercent = 3m,
+    decimal PartialExitQuantityPercent = 50m,
+    int EarningsBlockDaysBefore = 2,
+    int EarningsBlockDaysAfter = 1,
+    decimal MaxRiskPerTradePercent = 1m,
+    decimal RoundTripCost = 40m,
+    decimal SlippagePercent = 0m);
+
+public record SingleStockAnalysisRequest(
+    string Symbol,
+    string Timeframe = "1D",
+    SingleStockStrategyConfigDto? Strategy = null);
+
+public record SetupConditionDto(string Key, string Label, bool IsMet, string? Detail = null);
+
+public record SetupSnapshotDto(
+    string Direction,
+    string State,
+    decimal? EntryPrice,
+    decimal? EntryLowerBound,
+    decimal? EntryUpperBound,
+    decimal? StopLossPrice,
+    decimal? TakeProfitPrice,
+    decimal? RiskRewardRatio,
+    decimal Confidence,
+    IReadOnlyList<SetupConditionDto> Conditions);
+
+public record SingleStockAnalysisDto(
+    string Symbol,
+    string Timeframe,
+    decimal? CurrentPrice,
+    DateTimeOffset? AsOf,
+    DateOnly HistoryFrom,
+    DateOnly HistoryTo,
+    int BarCount,
+    decimal? Sma50,
+    decimal? Rsi14,
+    bool EarningsBlackoutActive,
+    DateOnly? NextEarningsDate,
+    SetupSnapshotDto Setup,
+    SingleStockStrategyConfigDto Strategy,
+    IReadOnlyList<string> Warnings);
+
+public record SingleStockTradeDto(
+    DateOnly EntryDate,
+    DateOnly ExitDate,
+    decimal Quantity,
+    decimal EntryPrice,
+    decimal ExitPrice,
+    string ExitReason,
+    decimal GrossPnL,
+    decimal NetPnL,
+    decimal ReturnPercent,
+    bool IsPartialExit = false,
+    bool GapThroughStop = false);
+
+public record SingleStockEquityPointDto(
+    DateOnly Date,
+    decimal Equity,
+    decimal Cash,
+    decimal PositionValue,
+    decimal BenchmarkEquity);
+
+public record SingleStockBacktestRequest(
+    string Symbol,
+    string Timeframe = "1D",
+    SingleStockStrategyConfigDto? Strategy = null,
+    decimal InitialCash = 10_000m);
+
+public record SingleStockBacktestDto(
+    string Symbol,
+    string Timeframe,
+    decimal InitialCash,
+    decimal FinalEquity,
+    decimal NetPnL,
+    decimal TotalReturnPercent,
+    decimal WinRate,
+    decimal ProfitFactor,
+    decimal ExpectancyPerTrade,
+    decimal MaxDrawdown,
+    int TradeCount,
+    int TargetHits,
+    int StopHits,
+    int ExpiredTrades,
+    decimal Sharpe,
+    string Verdict,
+    IReadOnlyList<SingleStockTradeDto> TradeLog,
+    IReadOnlyList<SingleStockEquityPointDto> EquityCurve,
+    IReadOnlyList<string> Warnings);
+
+public record SingleStockWalkForwardRequest(
+    string Symbol,
+    string Timeframe = "1D",
+    SingleStockStrategyConfigDto? Strategy = null,
+    decimal InitialCash = 10_000m,
+    decimal InSamplePercent = 70m);
+
+public record SingleStockWalkForwardDto(
+    string Symbol,
+    SingleStockBacktestDto InSample,
+    SingleStockBacktestDto OutOfSample,
+    string Verdict,
+    IReadOnlyList<string> Warnings);
+
 // #104 Goals & target NAV tracking
 public record GoalCreateDto(
     Guid? PortfolioId,

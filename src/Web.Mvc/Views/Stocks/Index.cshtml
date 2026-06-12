@@ -1,0 +1,215 @@
+@model Stocky.Web.Mvc.ViewModels.SingleStockDashboardViewModel
+@{
+    ViewData["Title"] = $"{Model.Symbol} Research";
+    var analysis = Model.Analysis;
+    var backtest = Model.Backtest;
+    var wf = Model.WalkForward;
+    var setup = analysis.Setup;
+    var closes = Model.Bars.Select(b => (double)b.Close).ToList();
+    var equity = backtest.EquityCurve.Select(p => (double)p.Equity).ToList();
+    var chartWidth = 920;
+    var chartHeight = 260;
+
+    string BuildPolyline(IReadOnlyList<double> values, int width, int height)
+    {
+        if (values.Count == 0) return string.Empty;
+        var min = values.Min();
+        var max = values.Max();
+        var span = Math.Max(0.0001, max - min);
+        return string.Join(" ", values.Select((value, index) =>
+        {
+            var x = values.Count == 1 ? width / 2.0 : (index * (width - 20.0) / (values.Count - 1)) + 10;
+            var y = height - 12 - ((value - min) / span * (height - 24));
+            return $"{x:F1},{y:F1}";
+        }));
+    }
+
+    var pricePoints = BuildPolyline(closes, chartWidth, chartHeight);
+    var equityPoints = BuildPolyline(equity, chartWidth, chartHeight);
+}
+
+<section class="page-header" style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
+    <div>
+        <h2>@Model.Symbol single-stock research</h2>
+        <p class="text-muted" style="margin:0;">Research-only dashboard. No order execution. All figures are for one ticker and one regime.</p>
+    </div>
+    <form method="get" action="/stocks/@Model.Symbol" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end;">
+        <label>
+            Symbol<br />
+            <input name="symbol" value="@Model.Symbol" />
+        </label>
+        <label>
+            Timeframe<br />
+            <select name="timeframe">
+                <option value="1D" selected="@(Model.Timeframe == "1D")">1D</option>
+            </select>
+        </label>
+        <label>
+            History years<br />
+            <input name="historyYears" type="number" min="1" max="10" value="@Model.Strategy.HistoryYears" />
+        </label>
+        <label>
+            Take profit %<br />
+            <input name="takeProfitPercent" type="number" step="0.1" value="@Model.Strategy.TakeProfitPercent" />
+        </label>
+        <label>
+            Stop loss %<br />
+            <input name="stopLossPercent" type="number" step="0.1" value="@Model.Strategy.StopLossPercent" />
+        </label>
+        <button class="btn btn-primary" type="submit">Run</button>
+    </form>
+</section>
+
+<div class="kpi-grid">
+    <div class="kpi"><div class="label">Current price</div><div class="value">@((analysis.CurrentPrice ?? 0m).ToString("N2"))</div><div class="delta text-muted">@analysis.AsOf?.ToLocalTime().ToString("MMM d · HH:mm")</div></div>
+    <div class="kpi"><div class="label">Setup state</div><div class="value">@setup.State</div><div class="delta text-muted">@analysis.BarCount bars</div></div>
+    <div class="kpi"><div class="label">Confidence</div><div class="value">@setup.Confidence.ToString("P0")</div><div class="delta text-muted">R:R @(setup.RiskRewardRatio?.ToString("N2") ?? "n/a")</div></div>
+    <div class="kpi"><div class="label">Backtest trades</div><div class="value">@backtest.TradeCount</div><div class="delta text-muted">Win rate @backtest.WinRate.ToString("N1")%</div></div>
+</div>
+
+<article>
+    <header>
+        <span>Live setup card</span>
+        <small class="text-muted">Entry zone, stop, target, and checklist</small>
+    </header>
+    <div class="grid-2" style="grid-template-columns:1.1fr .9fr;align-items:start;">
+        <div>
+            <p style="margin-top:0;">@setup.State with @setup.Conditions.Count conditions checked.</p>
+            <table>
+                <tbody>
+                    <tr><td>Entry zone</td><td>@(setup.EntryLowerBound?.ToString("N2") ?? "n/a") - @(setup.EntryUpperBound?.ToString("N2") ?? "n/a")</td></tr>
+                    <tr><td>Stop loss</td><td>@(setup.StopLossPrice?.ToString("N2") ?? "n/a")</td></tr>
+                    <tr><td>Target</td><td>@(setup.TakeProfitPrice?.ToString("N2") ?? "n/a")</td></tr>
+                    <tr><td>Confidence</td><td>@setup.Confidence.ToString("P0")</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div>
+            <ul style="margin:0;padding-left:1.2rem;">
+                @foreach (var condition in setup.Conditions)
+                {
+                    <li>@condition.Label - @(condition.IsMet ? "Met" : "Not met")</li>
+                }
+            </ul>
+            @if (analysis.Warnings.Count > 0)
+            {
+                <div class="alert alert-warning" style="margin-top:1rem;">
+                    @foreach (var warning in analysis.Warnings)
+                    {
+                        <div>@warning</div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</article>
+
+<article>
+    <header>
+        <span>Price chart</span>
+        <small class="text-muted">Daily close series with simple server-rendered SVG</small>
+    </header>
+    <svg viewBox="0 0 @chartWidth @chartHeight" width="100%" height="@chartHeight" role="img" aria-label="price chart" style="background:rgba(0,0,0,.02);border:1px solid rgba(0,0,0,.08);border-radius:12px;">
+        <polyline fill="none" stroke="currentColor" stroke-width="2.5" points="@pricePoints" />
+    </svg>
+</article>
+
+<div class="grid-2">
+    <article>
+        <header>
+            <span>Profitability panel</span>
+            <small class="text-muted">After costs and slippage</small>
+        </header>
+        <table>
+            <tbody>
+                <tr><td>Verdict</td><td>@backtest.Verdict</td></tr>
+                <tr><td>Final equity</td><td>@backtest.FinalEquity.ToString("N2")</td></tr>
+                <tr><td>Net P&amp;L</td><td>@backtest.NetPnL.ToString("N2")</td></tr>
+                <tr><td>Total return</td><td>@backtest.TotalReturnPercent.ToString("N2")%</td></tr>
+                <tr><td>Profit factor</td><td>@backtest.ProfitFactor.ToString("N2")</td></tr>
+                <tr><td>Expectancy / trade</td><td>@backtest.ExpectancyPerTrade.ToString("N2")</td></tr>
+                <tr><td>Max drawdown</td><td>@backtest.MaxDrawdown.ToString("N2")%</td></tr>
+                <tr><td>Sharpe</td><td>@backtest.Sharpe.ToString("N2")</td></tr>
+            </tbody>
+        </table>
+        <h4>Walk-forward</h4>
+        <p>@wf.Verdict</p>
+        <p class="text-muted">In-sample net P&amp;L: @wf.InSample.NetPnL.ToString("N2") | Out-of-sample net P&amp;L: @wf.OutOfSample.NetPnL.ToString("N2")</p>
+    </article>
+
+    <article>
+        <header>
+            <span>Parameters</span>
+            <small class="text-muted">Adjust and rerun</small>
+        </header>
+        <form method="get" action="/stocks/@Model.Symbol" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;">
+            <input type="hidden" name="symbol" value="@Model.Symbol" />
+            <input type="hidden" name="timeframe" value="@Model.Timeframe" />
+            <label>History years<input name="historyYears" type="number" min="1" max="10" value="@Model.Strategy.HistoryYears" /></label>
+            <label>Take profit %<input name="takeProfitPercent" type="number" step="0.1" value="@Model.Strategy.TakeProfitPercent" /></label>
+            <label>Stop loss %<input name="stopLossPercent" type="number" step="0.1" value="@Model.Strategy.StopLossPercent" /></label>
+            <label>Time stop bars<input name="timeStopBars" type="number" min="1" max="90" value="@Model.Strategy.TimeStopBars" /></label>
+            <label>Initial cash<input name="initialCash" type="number" step="100" value="10000" /></label>
+            <label>Max risk %<input name="maxRiskPerTradePercent" type="number" step="0.1" value="@Model.Strategy.MaxRiskPerTradePercent" /></label>
+            <label>Trailing stop<input name="useTrailingStop" type="checkbox" value="true" @(Model.Strategy.UseTrailingStop ? "checked" : null) /></label>
+            <label>Partial exit<input name="enablePartialExit" type="checkbox" value="true" @(Model.Strategy.EnablePartialExit ? "checked" : null) /></label>
+            <label>Partial target %<input name="partialExitTargetPercent" type="number" step="0.1" value="@Model.Strategy.PartialExitTargetPercent" /></label>
+            <label>Partial qty %<input name="partialExitQuantityPercent" type="number" step="0.1" value="@Model.Strategy.PartialExitQuantityPercent" /></label>
+            <div style="grid-column:1 / -1;display:flex;gap:.5rem;">
+                <button class="btn btn-primary" type="submit">Re-run backtest</button>
+                <a class="btn btn-ghost" href="/stocks/@Model.Symbol">Reset</a>
+            </div>
+        </form>
+    </article>
+</div>
+
+<article>
+    <header>
+        <span>Trade log</span>
+        <small class="text-muted">Every historical signal with outcome</small>
+    </header>
+    <table>
+        <thead>
+            <tr>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th style="text-align:right;">Qty</th>
+                <th style="text-align:right;">Entry</th>
+                <th style="text-align:right;">Exit</th>
+                <th>Reason</th>
+                <th style="text-align:right;">Net P&amp;L</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (backtest.TradeLog.Count == 0)
+            {
+                <tr><td colspan="7" class="text-muted" style="text-align:center;padding:1rem;">No completed trades for this configuration.</td></tr>
+            }
+            else
+            {
+                foreach (var trade in backtest.TradeLog)
+                {
+                    <tr>
+                        <td>@trade.EntryDate</td>
+                        <td>@trade.ExitDate</td>
+                        <td style="text-align:right;">@trade.Quantity.ToString("N0")</td>
+                        <td style="text-align:right;">@trade.EntryPrice.ToString("N2")</td>
+                        <td style="text-align:right;">@trade.ExitPrice.ToString("N2")</td>
+                        <td>@trade.ExitReason @(trade.IsPartialExit ? "(partial)" : string.Empty)</td>
+                        <td style="text-align:right;" class="@(trade.NetPnL >= 0 ? "text-green" : "text-red")">@trade.NetPnL.ToString("N2")</td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</article>
+
+<article>
+    <header>
+        <span>Equity curve</span>
+        <small class="text-muted">Net value over the backtest window</small>
+    </header>
+    <svg viewBox="0 0 @chartWidth @chartHeight" width="100%" height="@chartHeight" role="img" aria-label="equity curve" style="background:rgba(0,0,0,.02);border:1px solid rgba(0,0,0,.08);border-radius:12px;">
+        <polyline fill="none" stroke="currentColor" stroke-width="2.5" points="@equityPoints" />
+    </svg>
+</article>

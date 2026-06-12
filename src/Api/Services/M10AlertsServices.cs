@@ -21,6 +21,27 @@ namespace Stocky.Api.Services;
 /// <summary>M10 #47 — pure-function indicators over a chronological bar series.</summary>
 public sealed class TechnicalIndicatorService
 {
+    public IReadOnlyList<decimal?> Ema(IReadOnlyList<decimal> closes, int period)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+        var result = new decimal?[closes.Count];
+        if (closes.Count < period) return result;
+
+        decimal sma = 0m;
+        for (var i = 0; i < period; i++)
+            sma += closes[i];
+        var ema = sma / period;
+        result[period - 1] = Math.Round(ema, 6);
+
+        var multiplier = 2m / (period + 1m);
+        for (var i = period; i < closes.Count; i++)
+        {
+            ema = ((closes[i] - ema) * multiplier) + ema;
+            result[i] = Math.Round(ema, 6);
+        }
+        return result;
+    }
+
     public IReadOnlyList<decimal?> Sma(IReadOnlyList<decimal> closes, int period)
     {
         if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
@@ -34,6 +55,95 @@ public sealed class TechnicalIndicatorService
             if (i >= period - 1) result[i] = Math.Round(sum / period, 6);
         }
         return result;
+    }
+
+    public (IReadOnlyList<decimal?> Line, IReadOnlyList<decimal?> Signal, IReadOnlyList<decimal?> Histogram) Macd(
+        IReadOnlyList<decimal> closes,
+        int fastPeriod = 12,
+        int slowPeriod = 26,
+        int signalPeriod = 9)
+    {
+        var fast = Ema(closes, fastPeriod);
+        var slow = Ema(closes, slowPeriod);
+        var line = new decimal?[closes.Count];
+        var signal = new decimal?[closes.Count];
+        var hist = new decimal?[closes.Count];
+
+        var lineValues = new List<decimal>();
+        var lineIndices = new List<int>();
+        for (var i = 0; i < closes.Count; i++)
+        {
+            if (fast[i] is not { } f || slow[i] is not { } s) continue;
+            var value = Math.Round(f - s, 6);
+            line[i] = value;
+            lineValues.Add(value);
+            lineIndices.Add(i);
+        }
+
+        var signalValues = Ema(lineValues, signalPeriod);
+        for (var i = 0; i < lineValues.Count; i++)
+        {
+            var idx = lineIndices[i];
+            if (signalValues[i] is not { } sig) continue;
+            signal[idx] = sig;
+            hist[idx] = Math.Round(line[idx]!.Value - sig, 6);
+        }
+
+        return (line, signal, hist);
+    }
+
+    public IReadOnlyList<decimal?> Atr(IReadOnlyList<decimal> highs, IReadOnlyList<decimal> lows, IReadOnlyList<decimal> closes, int period = 14)
+    {
+        if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+        if (highs.Count != lows.Count || highs.Count != closes.Count)
+            throw new ArgumentException("Input series must have the same length.");
+
+        var result = new decimal?[closes.Count];
+        if (closes.Count <= period) return result;
+
+        var trueRanges = new decimal[closes.Count];
+        trueRanges[0] = highs[0] - lows[0];
+        for (var i = 1; i < closes.Count; i++)
+        {
+            var highLow = highs[i] - lows[i];
+            var highClose = Math.Abs(highs[i] - closes[i - 1]);
+            var lowClose = Math.Abs(lows[i] - closes[i - 1]);
+            trueRanges[i] = Math.Max(highLow, Math.Max(highClose, lowClose));
+        }
+
+        decimal sum = 0m;
+        for (var i = 0; i < period; i++)
+            sum += trueRanges[i];
+        result[period - 1] = Math.Round(sum / period, 6);
+
+        for (var i = period; i < closes.Count; i++)
+        {
+            var prev = result[i - 1]!.Value;
+            result[i] = Math.Round(((prev * (period - 1)) + trueRanges[i]) / period, 6);
+        }
+        return result;
+    }
+
+    public (IReadOnlyList<decimal?> Upper, IReadOnlyList<decimal?> Middle, IReadOnlyList<decimal?> Lower) BollingerBands(
+        IReadOnlyList<decimal> closes,
+        int period = 20,
+        decimal stdDevMultiplier = 2m)
+    {
+        if (period <= 1) throw new ArgumentOutOfRangeException(nameof(period));
+        var middle = Sma(closes, period);
+        var upper = new decimal?[closes.Count];
+        var lower = new decimal?[closes.Count];
+        for (var i = period - 1; i < closes.Count; i++)
+        {
+            var start = i - period + 1;
+            var slice = closes.Skip(start).Take(period).Select(v => (double)v).ToArray();
+            var mean = slice.Average();
+            var variance = slice.Sum(v => (v - mean) * (v - mean)) / slice.Length;
+            var stdev = Math.Sqrt(variance);
+            upper[i] = Math.Round((decimal)(mean + stdev * (double)stdDevMultiplier), 6);
+            lower[i] = Math.Round((decimal)(mean - stdev * (double)stdDevMultiplier), 6);
+        }
+        return (upper, middle, lower);
     }
 
     /// <summary>Wilder-smoothed RSI (period typically 14).</summary>
