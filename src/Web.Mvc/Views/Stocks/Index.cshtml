@@ -213,3 +213,166 @@
         <polyline fill="none" stroke="currentColor" stroke-width="2.5" points="@equityPoints" />
     </svg>
 </article>
+
+@* ─────────────────────────────── TD Sequential section ─────────────────────────────── *@
+@if (Model.TdSequential is { } td)
+{
+    var tdBuy  = "#22c55e";   @* green *@
+    var tdSell = "#ef4444";   @* red *@
+
+    <div class="grid-2">
+        <article>
+            <header>
+                <span>TD Sequential — current state</span>
+                <small class="text-muted">DeMark setup + countdown counts</small>
+            </header>
+            <table>
+                <tbody>
+                    <tr>
+                        <td>Buy Setup</td>
+                        <td style="color:@tdBuy;font-weight:600;">
+                            @(td.BuySetupCurrent > 0 ? td.BuySetupCurrent.ToString() : "–")
+                            @if (td.BuySetupCurrent == 9) { <span>✔ Done</span> }
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Sell Setup</td>
+                        <td style="color:@tdSell;font-weight:600;">
+                            @(td.SellSetupCurrent > 0 ? td.SellSetupCurrent.ToString() : "–")
+                            @if (td.SellSetupCurrent == 9) { <span>✔ Done</span> }
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Buy Countdown</td>
+                        <td style="color:@tdBuy;">
+                            @if (td.BuyCDActive)
+                            {
+                                <span>@td.BuyCountdownCurrent / 13</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">inactive</span>
+                            }
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Sell Countdown</td>
+                        <td style="color:@tdSell;">
+                            @if (td.SellCDActive)
+                            {
+                                <span>@td.SellCountdownCurrent / 13</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">inactive</span>
+                            }
+                        </td>
+                    </tr>
+                    <tr><td>TDST Resistance</td><td>@(td.TdstResistance?.ToString("N2") ?? "–")</td></tr>
+                    <tr><td>TDST Support</td><td>@(td.TdstSupport?.ToString("N2") ?? "–")</td></tr>
+                </tbody>
+            </table>
+        </article>
+
+        @if (td.VolumeProfile is { } vp)
+        {
+            <article>
+                <header>
+                    <span>Volume Profile</span>
+                    <small class="text-muted">Last 250 bars · 24 bins · 70% value area</small>
+                </header>
+                <table>
+                    <tbody>
+                        <tr><td>POC</td><td style="font-weight:600;">@vp.Poc.ToString("N2")</td></tr>
+                        <tr><td>Value Area High</td><td>@vp.Vah.ToString("N2")</td></tr>
+                        <tr><td>Value Area Low</td><td>@vp.Val.ToString("N2")</td></tr>
+                    </tbody>
+                </table>
+                @{
+                    var maxBinVol = td.VolumeProfile!.Bins.Max(b => b.Volume);
+                }
+                <div style="margin-top:.75rem;display:flex;flex-direction:column-reverse;gap:1px;">
+                    @foreach (var bin in vp.Bins)
+                    {
+                        var widthPct = maxBinVol > 0 ? (int)Math.Round(bin.Volume / maxBinVol * 100) : 0;
+                        var bgColor = bin.IsPoc ? "var(--color-warning,#f59e0b)"
+                                    : bin.IsValueArea ? "rgba(59,130,246,.45)"
+                                    : "rgba(100,116,139,.25)";
+                        <div style="display:flex;align-items:center;gap:.4rem;font-size:10px;line-height:1.2;">
+                            <span style="width:4.5rem;text-align:right;color:var(--color-muted);">@bin.PriceLow.ToString("N2")</span>
+                            <div style="height:9px;width:@(widthPct)%;background:@bgColor;border-radius:2px;min-width:2px;"></div>
+                            @if (bin.IsPoc) { <span style="color:var(--color-warning,#f59e0b);font-weight:700;">POC</span> }
+                        </div>
+                    }
+                </div>
+            </article>
+        }
+    </div>
+
+    <article>
+        <header>
+            <span>TD bar annotations — last @td.Bars.Count bars</span>
+            <small class="text-muted">Setup 1-9, sequential countdown, combo, TDST breaks</small>
+        </header>
+        <div style="overflow-x:auto;">
+        <table style="font-size:.8rem;">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th style="text-align:right;">Close</th>
+                    <th style="text-align:center;color:@tdBuy;">Buy<br/>Setup</th>
+                    <th style="text-align:center;color:@tdSell;">Sell<br/>Setup</th>
+                    <th style="text-align:center;color:@tdBuy;">Buy<br/>CD</th>
+                    <th style="text-align:center;color:@tdSell;">Sell<br/>CD</th>
+                    <th style="text-align:center;color:@tdBuy;">Combo<br/>Buy</th>
+                    <th style="text-align:center;color:@tdSell;">Combo<br/>Sell</th>
+                    <th>Signal</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var bar in td.Bars.TakeLast(60))
+                {
+                    var signals = new List<string>();
+                    if (bar.BuySetupDone)   signals.Add("🟢 Setup 9");
+                    if (bar.SellSetupDone)  signals.Add("🔴 Setup 9");
+                    if (bar.BuyCountdown13) signals.Add("🟢 CD 13");
+                    if (bar.SellCountdown13)signals.Add("🔴 CD 13");
+                    if (bar.ComboBuy13)     signals.Add("🟢 Combo 13");
+                    if (bar.ComboSell13)    signals.Add("🔴 Combo 13");
+                    if (bar.TdstResBreak)   signals.Add("↑ TDST");
+                    if (bar.TdstSupBreak)   signals.Add("↓ TDST");
+                    if (bar.IsBuyPerfected) signals.Add("✦ Perf");
+                    if (bar.IsSellPerfected)signals.Add("✦ Perf");
+                    <tr>
+                        <td>@bar.Date.ToString("MMM d")</td>
+                        <td style="text-align:right;">@bar.Close.ToString("N2")</td>
+                        <td style="text-align:center;color:@tdBuy;font-weight:@(bar.BuySetup==9?"700":"400");">
+                            @(bar.BuySetup > 0 ? bar.BuySetup.ToString() : "")
+                        </td>
+                        <td style="text-align:center;color:@tdSell;font-weight:@(bar.SellSetup==9?"700":"400");">
+                            @(bar.SellSetup > 0 ? bar.SellSetup.ToString() : "")
+                        </td>
+                        <td style="text-align:center;color:@(bar.BuyCountdown13?"#166534":tdBuy);font-weight:@(bar.BuyCountdown13?"700":"400");">
+                            @(bar.BuyCountdown > 0 ? bar.BuyCountdown.ToString() : "")
+                            @(bar.BuyCountdown13 ? "✓" : "")
+                        </td>
+                        <td style="text-align:center;color:@(bar.SellCountdown13?"#991b1b":tdSell);font-weight:@(bar.SellCountdown13?"700":"400");">
+                            @(bar.SellCountdown > 0 ? bar.SellCountdown.ToString() : "")
+                            @(bar.SellCountdown13 ? "✓" : "")
+                        </td>
+                        <td style="text-align:center;color:@tdBuy;font-weight:@(bar.ComboBuy13?"700":"400");">
+                            @(bar.BuyCombo > 0 ? ("c" + bar.BuyCombo) : "")
+                            @(bar.ComboBuy13 ? "✓" : "")
+                        </td>
+                        <td style="text-align:center;color:@tdSell;font-weight:@(bar.ComboSell13?"700":"400");">
+                            @(bar.SellCombo > 0 ? ("c" + bar.SellCombo) : "")
+                            @(bar.ComboSell13 ? "✓" : "")
+                        </td>
+                        <td>@string.Join(" ", signals)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        </div>
+    </article>
+}

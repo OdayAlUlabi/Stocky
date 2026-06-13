@@ -94,6 +94,7 @@ public static class StockyServicesExtensions
         services.AddScoped<Services.GoalsService>();
         services.AddScoped<Services.SingleStockTradingBotService>();
         services.AddScoped<Services.SingleStockAnalysisService>();
+        services.AddScoped<Services.TdSequentialService>();
         services.AddSingleton<Services.EarningsSurpriseService>();
 
         // Advanced portfolio analytics (GitHub milestone #8 — issues 1.3, 1.4,

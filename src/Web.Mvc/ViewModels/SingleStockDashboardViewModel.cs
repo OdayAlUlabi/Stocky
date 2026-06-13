@@ -9,4 +9,5 @@ public sealed record SingleStockDashboardViewModel(
     SingleStockAnalysisDto Analysis,
     SingleStockBacktestDto Backtest,
     SingleStockWalkForwardDto WalkForward,
-    IReadOnlyList<OhlcBarDto> Bars);
+    IReadOnlyList<OhlcBarDto> Bars,
+    TdSequentialResultDto? TdSequential);

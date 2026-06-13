@@ -54,6 +54,9 @@ public class StocksController : Controller
             c => c.Get(symbol, from, today, Math.Max(120, strategy.HistoryYears * 252), ct)))?.ToList()
             ?? new List<OhlcBarDto>();
 
+        var tdSequential = await this.InvokeAsync<StockyApi.SingleStockAnalysisController, TdSequentialResultDto>(
+            c => c.TdSequential(symbol, timeframe, 100, 250, 24, 70.0, ct));
+
         var model = new SingleStockDashboardViewModel(
             symbol,
             timeframe,
@@ -65,7 +68,8 @@ public class StocksController : Controller
                 new SingleStockBacktestDto(symbol, timeframe, initialCash, initialCash, 0m, 0m, 0m, 0m, 0m, 0m, 0, 0, 0, 0, 0m, "No walk-forward payload returned", Array.Empty<SingleStockTradeDto>(), Array.Empty<SingleStockEquityPointDto>(), Array.Empty<string>()),
                 "No walk-forward payload returned",
                 Array.Empty<string>()),
-            bars);
+            bars,
+            tdSequential);
 
         ViewBag.WalkForwardWarnings = model.WalkForward.Warnings;
         return View(model);

@@ -868,3 +868,78 @@ public record ApiKeyDto(
 
 public record CreateApiKeyRequest(string Name, string? Scopes, DateTimeOffset? ExpiresAt);
 public record CreatedApiKeyDto(ApiKeyDto Key, string Plaintext);
+
+// ─────────────────────────────────────────────────────────────────────────
+// TD Sequential + Combo + Volume Profile (DeMark)
+// ─────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Per-bar TD Sequential, Combo, and TDST signal annotations.
+/// Index 0 of the list is the oldest bar; the last element is the most recent.
+/// </summary>
+public record TdBarSignalDto(
+    DateOnly Date,
+    decimal Open,
+    decimal High,
+    decimal Low,
+    decimal Close,
+    long Volume,
+    // Setup (1-9)
+    int BuySetup,
+    int SellSetup,
+    bool IsBuyPerfected,
+    bool IsSellPerfected,
+    bool BuySetupDone,
+    bool SellSetupDone,
+    // Sequential Countdown (1-13)
+    int BuyCountdown,
+    int SellCountdown,
+    bool BuyCountdown13,
+    bool SellCountdown13,
+    // Combo (1-13)
+    int BuyCombo,
+    int SellCombo,
+    bool ComboBuy13,
+    bool ComboSell13,
+    // TDST levels at this bar (null until first setup completes)
+    decimal? TdstResistance,
+    decimal? TdstSupport,
+    bool TdstResBreak,
+    bool TdstSupBreak
+);
+
+/// <summary>Single horizontal bin of a fixed-range Volume Profile.</summary>
+public record VolumeProfileBinDto(
+    decimal PriceLow,
+    decimal PriceHigh,
+    double Volume,
+    bool IsPoc,
+    bool IsValueArea
+);
+
+/// <summary>Volume Profile summary including POC, VAH, VAL, and per-bin breakdown.</summary>
+public record VolumeProfileDto(
+    decimal Poc,
+    decimal Vah,
+    decimal Val,
+    IReadOnlyList<VolumeProfileBinDto> Bins
+);
+
+/// <summary>Full TD Sequential result for a symbol returned by the analysis endpoint.</summary>
+public record TdSequentialResultDto(
+    string Symbol,
+    string Timeframe,
+    DateOnly From,
+    DateOnly To,
+    int BuySetupCurrent,
+    int SellSetupCurrent,
+    int BuyCountdownCurrent,
+    int SellCountdownCurrent,
+    bool BuyCDActive,
+    bool SellCDActive,
+    decimal? TdstResistance,
+    decimal? TdstSupport,
+    IReadOnlyList<TdBarSignalDto> Bars,
+    VolumeProfileDto? VolumeProfile,
+    IReadOnlyList<string> Warnings
+);
