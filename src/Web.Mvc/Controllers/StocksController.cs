@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.RegularExpressions;
 using Stocky.Api.Dtos;
 using Stocky.Web.Mvc.Internal;
 using Stocky.Web.Mvc.ViewModels;
@@ -71,7 +72,43 @@ public class StocksController : Controller
             bars,
             tdSequential);
 
+        ViewBag.TradingViewSymbol = ResolveTradingViewSymbol(symbol);
         ViewBag.WalkForwardWarnings = model.WalkForward.Warnings;
         return View(model);
+    }
+
+    private static string ResolveTradingViewSymbol(string symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return "NASDAQ:AAPL";
+        }
+
+        var normalized = symbol.Trim().ToUpperInvariant();
+
+        // Keep explicit exchange-qualified symbols untouched.
+        if (normalized.Contains(':'))
+        {
+            return normalized;
+        }
+
+        // Map FX-style pairs, for example EUR/USD => FX:EURUSD.
+        if (normalized.Contains('/'))
+        {
+            var pair = normalized.Replace("/", string.Empty, StringComparison.Ordinal);
+            if (Regex.IsMatch(pair, "^[A-Z]{6}$"))
+            {
+                return $"FX:{pair}";
+            }
+        }
+
+        // Common crypto pairs routed to Binance.
+        if (Regex.IsMatch(normalized, "^[A-Z0-9]{2,12}USDT?$"))
+        {
+            return normalized.EndsWith("USDT", StringComparison.Ordinal) ? $"BINANCE:{normalized}" : $"BINANCE:{normalized[..^3]}USDT";
+        }
+
+        // Default to US equities.
+        return $"NASDAQ:{normalized}";
     }
 }

@@ -9,6 +9,7 @@
     var equity = backtest.EquityCurve.Select(p => (double)p.Equity).ToList();
     var chartWidth = 920;
     var chartHeight = 260;
+    var tvSymbol = (ViewBag.TradingViewSymbol as string) ?? (Model.Symbol.Contains(':') ? Model.Symbol : $"NASDAQ:{Model.Symbol}");
 
     string BuildPolyline(IReadOnlyList<double> values, int width, int height)
     {
@@ -102,6 +103,14 @@
             }
         </div>
     </div>
+</article>
+
+<article>
+    <header>
+        <span>TradingView chart</span>
+        <small class="text-muted">Interactive chart for @tvSymbol</small>
+    </header>
+    <div id="tradingview-stocky-widget" style="height:460px;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden;"></div>
 </article>
 
 <article>
@@ -375,4 +384,31 @@
         </table>
         </div>
     </article>
+}
+
+@section Scripts {
+    <script src="https://s3.tradingview.com/tv.js"></script>
+    <script>
+    (function () {
+        var containerId = "tradingview-stocky-widget";
+        if (!window.TradingView || !document.getElementById(containerId)) {
+            return;
+        }
+
+        new TradingView.widget({
+            autosize: true,
+            symbol: "@tvSymbol",
+            interval: "D",
+            timezone: "Etc/UTC",
+            theme: "light",
+            style: "1",
+            locale: "en",
+            enable_publishing: false,
+            hide_top_toolbar: false,
+            hide_legend: false,
+            save_image: false,
+            container_id: containerId
+        });
+    }());
+    </script>
 }
