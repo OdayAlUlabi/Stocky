@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "9007716881621743106"
+      "templateHash": "11713865423602598913"
     }
   },
   "parameters": {
@@ -182,6 +182,27 @@
       "metadata": {
         "description": "Key Vault secret URI of the App Gateway TLS certificate. When set, enables HTTPS (443) listener and HTTP→HTTPS redirect. Format: https://kv-xxx.vault.azure.net/secrets/cert-name — use the create-tls-cert.ps1 script to generate one."
       }
+    },
+    "deployObservabilityWorkbook": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Stocky Azure Monitor workbook dashboard."
+      }
+    },
+    "deployObservabilityAlerts": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy baseline metric alerts for latency/failures/restarts."
+      }
+    },
+    "alertActionGroupId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional Action Group resource ID for alert notifications. Leave empty to create rules without actions."
+      }
     }
   },
   "variables": {
@@ -237,7 +258,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "802221248604254037"
+              "templateHash": "16859168804870089478"
             }
           },
           "parameters": {
@@ -302,6 +323,14 @@
             "lawPrimaryKey": {
               "type": "securestring",
               "value": "[listKeys('law', '2023-09-01').primarySharedKey]"
+            },
+            "appiId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/components', format('appi-{0}', parameters('prefix')))]"
+            },
+            "appiName": {
+              "type": "string",
+              "value": "[format('appi-{0}', parameters('prefix'))]"
             },
             "appiConnectionString": {
               "type": "string",
@@ -2245,7 +2274,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "17924211999642559558"
+              "templateHash": "18309142366880414741"
             }
           },
           "parameters": {
@@ -2693,12 +2722,24 @@
                           "value": "true"
                         },
                         {
+                          "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                          "value": "[parameters('appiConnectionString')]"
+                        },
+                        {
+                          "name": "ApplicationInsightsAgent_EXTENSION_VERSION",
+                          "value": "~3"
+                        },
+                        {
                           "name": "StockyApi__BaseUrl",
                           "value": "[format('https://{0}/', reference(resourceId('Microsoft.App/containerApps', format('ca-{0}-api', parameters('prefix'))), '2024-10-02-preview').configuration.ingress.fqdn)]"
                         },
                         {
                           "name": "StockyApi__ServiceKey",
                           "secretRef": "mcp-service-key"
+                        },
+                        {
+                          "name": "App__BaseUrl",
+                          "value": "[format('https://{0}', parameters('publicHostname'))]"
                         },
                         {
                           "name": "PORT",
@@ -3319,7 +3360,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "4003723764062296444"
+              "templateHash": "11459956090363851718"
             }
           },
           "parameters": {
@@ -3423,6 +3464,33 @@
                   "maxRequestBodySizeInKb": 128,
                   "fileUploadLimitInMb": 100
                 },
+                "customRules": [
+                  {
+                    "name": "AllowOAuthPaths",
+                    "priority": 10,
+                    "ruleType": "MatchRule",
+                    "action": "Allow",
+                    "matchConditions": [
+                      {
+                        "matchVariables": [
+                          {
+                            "variableName": "RequestUri"
+                          }
+                        ],
+                        "operator": "BeginsWith",
+                        "negationConditon": false,
+                        "matchValues": [
+                          "/.well-known/oauth-protected-resource",
+                          "/.well-known/oauth-authorization-server",
+                          "/.well-known/acme-challenge/",
+                          "/authorize",
+                          "/token",
+                          "/register"
+                        ]
+                      }
+                    ]
+                  }
+                ],
                 "managedRules": {
                   "managedRuleSets": [
                     {
@@ -3742,6 +3810,28 @@
                               "id": "[resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', variables('agwName'), 'fix-location')]"
                             }
                           }
+                        },
+                        {
+                          "name": "mcp-oauth",
+                          "properties": {
+                            "paths": [
+                              "/.well-known/oauth-protected-resource",
+                              "/.well-known/oauth-authorization-server",
+                              "/.well-known/acme-challenge/*",
+                              "/authorize",
+                              "/token",
+                              "/register"
+                            ],
+                            "backendAddressPool": {
+                              "id": "[resourceId('Microsoft.Network/applicationGateways/backendAddressPools', variables('agwName'), 'pool-mcp')]"
+                            },
+                            "backendHttpSettings": {
+                              "id": "[resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', variables('agwName'), 'https-mcp')]"
+                            },
+                            "rewriteRuleSet": {
+                              "id": "[resourceId('Microsoft.Network/applicationGateways/rewriteRuleSets', variables('agwName'), 'fix-location')]"
+                            }
+                          }
                         }
                       ]
                     }
@@ -3792,6 +3882,394 @@
         "apps",
         "ids",
         "net",
+        "obs"
+      ]
+    },
+    "alerts": {
+      "condition": "[parameters('deployObservabilityAlerts')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "alerts",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "prefix": {
+            "value": "[variables('prefix')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "apiAppId": {
+            "value": "[resourceId('Microsoft.App/containerApps', reference('apps').outputs.apiAppName.value)]"
+          },
+          "webMvcAppId": {
+            "value": "[resourceId('Microsoft.App/containerApps', reference('apps').outputs.webMvcAppName.value)]"
+          },
+          "mcpAppId": {
+            "value": "[resourceId('Microsoft.App/containerApps', reference('apps').outputs.mcpAppName.value)]"
+          },
+          "appGatewayId": {
+            "value": "[resourceId('Microsoft.Network/applicationGateways', format('agw-{0}', variables('prefix')))]"
+          },
+          "actionGroupId": {
+            "value": "[parameters('alertActionGroupId')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "15212512806694206850"
+            }
+          },
+          "parameters": {
+            "prefix": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource name prefix."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags."
+              }
+            },
+            "apiAppId": {
+              "type": "string",
+              "metadata": {
+                "description": "API container app resource ID."
+              }
+            },
+            "webMvcAppId": {
+              "type": "string",
+              "metadata": {
+                "description": "Web MVC container app resource ID."
+              }
+            },
+            "mcpAppId": {
+              "type": "string",
+              "metadata": {
+                "description": "MCP container app resource ID."
+              }
+            },
+            "appGatewayId": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Gateway resource ID."
+              }
+            },
+            "actionGroupId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional Action Group resource ID for notifications."
+              }
+            }
+          },
+          "variables": {
+            "hasActionGroup": "[not(empty(parameters('actionGroupId')))]",
+            "alertActions": "[if(variables('hasActionGroup'), createArray(createObject('actionGroupId', parameters('actionGroupId'), 'webHookProperties', createObject())), createArray())]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('ma-{0}-webmvc-latency', parameters('prefix'))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "description": "Web MVC ResponseTime average is high.",
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('webMvcAppId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "webmvc-response-time",
+                      "metricName": "ResponseTime",
+                      "metricNamespace": "Microsoft.App/containerApps",
+                      "operator": "GreaterThan",
+                      "threshold": 2000,
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": true,
+                "actions": "[variables('alertActions')]"
+              }
+            },
+            {
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('ma-{0}-api-restarts', parameters('prefix'))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "description": "API container restarts detected.",
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('apiAppId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "api-restart-count",
+                      "metricName": "RestartCount",
+                      "metricNamespace": "Microsoft.App/containerApps",
+                      "operator": "GreaterThan",
+                      "threshold": 0,
+                      "timeAggregation": "Total",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": true,
+                "actions": "[variables('alertActions')]"
+              }
+            },
+            {
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('ma-{0}-mcp-latency', parameters('prefix'))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "description": "MCP ResponseTime average is high.",
+                "severity": 3,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('mcpAppId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "mcp-response-time",
+                      "metricName": "ResponseTime",
+                      "metricNamespace": "Microsoft.App/containerApps",
+                      "operator": "GreaterThan",
+                      "threshold": 1000,
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": true,
+                "actions": "[variables('alertActions')]"
+              }
+            },
+            {
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('ma-{0}-agw-failed-requests', parameters('prefix'))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "description": "Application Gateway failed requests are elevated.",
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[parameters('appGatewayId')]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "agw-failed-requests",
+                      "metricName": "FailedRequests",
+                      "metricNamespace": "Microsoft.Network/applicationGateways",
+                      "operator": "GreaterThan",
+                      "threshold": 20,
+                      "timeAggregation": "Total",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": true,
+                "actions": "[variables('alertActions')]"
+              }
+            }
+          ],
+          "outputs": {
+            "webLatencyAlertId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/metricAlerts', format('ma-{0}-webmvc-latency', parameters('prefix')))]"
+            },
+            "apiRestartsAlertId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/metricAlerts', format('ma-{0}-api-restarts', parameters('prefix')))]"
+            },
+            "mcpLatencyAlertId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/metricAlerts', format('ma-{0}-mcp-latency', parameters('prefix')))]"
+            },
+            "agwFailedRequestsAlertId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/metricAlerts', format('ma-{0}-agw-failed-requests', parameters('prefix')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "apps"
+      ]
+    },
+    "workbook": {
+      "condition": "[parameters('deployObservabilityWorkbook')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "workbook",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "appInsightsId": {
+            "value": "[reference('obs').outputs.appiId.value]"
+          },
+          "appInsightsName": {
+            "value": "[reference('obs').outputs.appiName.value]"
+          },
+          "apiAppName": {
+            "value": "[reference('apps').outputs.apiAppName.value]"
+          },
+          "webMvcAppName": {
+            "value": "[reference('apps').outputs.webMvcAppName.value]"
+          },
+          "mcpAppName": {
+            "value": "[reference('apps').outputs.mcpAppName.value]"
+          },
+          "appGatewayName": {
+            "value": "[format('agw-{0}', variables('prefix'))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "16046895510844125385"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags."
+              }
+            },
+            "appInsightsId": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Insights resource ID for workbook source binding."
+              }
+            },
+            "appInsightsName": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Insights resource name."
+              }
+            },
+            "apiAppName": {
+              "type": "string",
+              "metadata": {
+                "description": "API container app name."
+              }
+            },
+            "webMvcAppName": {
+              "type": "string",
+              "metadata": {
+                "description": "Web MVC container app name."
+              }
+            },
+            "mcpAppName": {
+              "type": "string",
+              "metadata": {
+                "description": "MCP container app name."
+              }
+            },
+            "appGatewayName": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Gateway name."
+              }
+            }
+          },
+          "variables": {
+            "workbookTemplate": "{\r\n  \"version\": \"Notebook/1.0\",\r\n  \"isLocked\": false,\r\n  \"fallbackResourceIds\": [\r\n    \"__APPINSIGHTS_ID__\"\r\n  ],\r\n  \"items\": [\r\n    {\r\n      \"type\": 1,\r\n      \"content\": {\r\n        \"json\": \"# Stocky Observability Dashboard\\nThis workbook provides an operational view of API, Web MVC, MCP, and App Gateway load and performance.\\n\\nConnected Application Insights:\\n- __APPINSIGHTS_NAME__\\n\\nTracked resources:\\n- API: __API_APP_NAME__\\n- Web MVC: __WEBMVC_APP_NAME__\\n- MCP: __MCP_APP_NAME__\\n- App Gateway: __APPGATEWAY_NAME__\"\r\n      },\r\n      \"name\": \"header\"\r\n    },\r\n    {\r\n      \"type\": 3,\r\n      \"content\": {\r\n        \"version\": \"KqlItem/1.0\",\r\n        \"query\": \"AzureMetrics\\n| where TimeGenerated > ago(24h)\\n| where ResourceProvider == 'MICROSOFT.APP'\\n| where Resource in ('__API_APP_NAME__','__WEBMVC_APP_NAME__','__MCP_APP_NAME__')\\n| where MetricName == 'Requests'\\n| summarize Requests = sum(Total) by Resource, bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\",\r\n        \"size\": 0,\r\n        \"title\": \"Container Apps Requests (5m)\",\r\n        \"timeContext\": {\r\n          \"durationMs\": 86400000\r\n        },\r\n        \"queryType\": 0,\r\n        \"resourceType\": \"microsoft.insights/components\",\r\n        \"crossComponentResources\": [\r\n          \"__APPINSIGHTS_ID__\"\r\n        ],\r\n        \"visualization\": \"timechart\"\r\n      },\r\n      \"name\": \"requests\"\r\n    },\r\n    {\r\n      \"type\": 3,\r\n      \"content\": {\r\n        \"version\": \"KqlItem/1.0\",\r\n        \"query\": \"AzureMetrics\\n| where TimeGenerated > ago(24h)\\n| where ResourceProvider == 'MICROSOFT.APP'\\n| where Resource in ('__API_APP_NAME__','__WEBMVC_APP_NAME__','__MCP_APP_NAME__')\\n| where MetricName == 'ResponseTime'\\n| summarize AvgResponseTime = avg(Average) by Resource, bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\",\r\n        \"size\": 0,\r\n        \"title\": \"Container Apps Response Time (5m avg)\",\r\n        \"timeContext\": {\r\n          \"durationMs\": 86400000\r\n        },\r\n        \"queryType\": 0,\r\n        \"resourceType\": \"microsoft.insights/components\",\r\n        \"crossComponentResources\": [\r\n          \"__APPINSIGHTS_ID__\"\r\n        ],\r\n        \"visualization\": \"timechart\"\r\n      },\r\n      \"name\": \"response-time\"\r\n    },\r\n    {\r\n      \"type\": 3,\r\n      \"content\": {\r\n        \"version\": \"KqlItem/1.0\",\r\n        \"query\": \"AzureMetrics\\n| where TimeGenerated > ago(24h)\\n| where ResourceProvider == 'MICROSOFT.APP'\\n| where Resource in ('__API_APP_NAME__','__WEBMVC_APP_NAME__','__MCP_APP_NAME__')\\n| where MetricName in ('CpuPercentage','MemoryPercentage')\\n| summarize AvgValue = avg(Average), MaxValue = max(Maximum) by Resource, MetricName, bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\",\r\n        \"size\": 0,\r\n        \"title\": \"Container Apps CPU/Memory Saturation\",\r\n        \"timeContext\": {\r\n          \"durationMs\": 86400000\r\n        },\r\n        \"queryType\": 0,\r\n        \"resourceType\": \"microsoft.insights/components\",\r\n        \"crossComponentResources\": [\r\n          \"__APPINSIGHTS_ID__\"\r\n        ],\r\n        \"visualization\": \"timechart\"\r\n      },\r\n      \"name\": \"saturation\"\r\n    },\r\n    {\r\n      \"type\": 3,\r\n      \"content\": {\r\n        \"version\": \"KqlItem/1.0\",\r\n        \"query\": \"AzureMetrics\\n| where TimeGenerated > ago(24h)\\n| where ResourceProvider == 'MICROSOFT.NETWORK'\\n| where Resource == '__APPGATEWAY_NAME__'\\n| where MetricName in ('TotalRequests','FailedRequests','CurrentConnections','UnhealthyHostCount')\\n| summarize Total=sum(Total), Peak=max(Maximum), Avg=avg(Average) by MetricName, bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\",\r\n        \"size\": 0,\r\n        \"title\": \"Application Gateway Load and Health\",\r\n        \"timeContext\": {\r\n          \"durationMs\": 86400000\r\n        },\r\n        \"queryType\": 0,\r\n        \"resourceType\": \"microsoft.insights/components\",\r\n        \"crossComponentResources\": [\r\n          \"__APPINSIGHTS_ID__\"\r\n        ],\r\n        \"visualization\": \"timechart\"\r\n      },\r\n      \"name\": \"gateway-load\"\r\n    },\r\n    {\r\n      \"type\": 3,\r\n      \"content\": {\r\n        \"version\": \"KqlItem/1.0\",\r\n        \"query\": \"requests\\n| where timestamp > ago(24h)\\n| summarize Requests=count(), Failed=countif(success == false), P50=percentile(duration, 50), P95=percentile(duration, 95) by cloud_RoleName\\n| order by Requests desc\",\r\n        \"size\": 0,\r\n        \"title\": \"APM Requests by Role (App Insights)\",\r\n        \"timeContext\": {\r\n          \"durationMs\": 86400000\r\n        },\r\n        \"queryType\": 0,\r\n        \"resourceType\": \"microsoft.insights/components\",\r\n        \"crossComponentResources\": [\r\n          \"__APPINSIGHTS_ID__\"\r\n        ],\r\n        \"visualization\": \"table\"\r\n      },\r\n      \"name\": \"apm-requests\"\r\n    }\r\n  ]\r\n}\r\n",
+            "workbookData": "[replace(replace(replace(replace(replace(replace(variables('workbookTemplate'), '__APPINSIGHTS_ID__', parameters('appInsightsId')), '__APPINSIGHTS_NAME__', parameters('appInsightsName')), '__API_APP_NAME__', parameters('apiAppName')), '__WEBMVC_APP_NAME__', parameters('webMvcAppName')), '__MCP_APP_NAME__', parameters('mcpAppName')), '__APPGATEWAY_NAME__', parameters('appGatewayName'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(parameters('appInsightsId'), 'stocky-observability-workbook')]",
+              "location": "[parameters('location')]",
+              "kind": "shared",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "displayName": "Stocky - Observability",
+                "sourceId": "[parameters('appInsightsId')]",
+                "category": "workbook",
+                "serializedData": "[variables('workbookData')]",
+                "version": "1.0"
+              }
+            }
+          ],
+          "outputs": {
+            "workbookId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/workbooks', guid(parameters('appInsightsId'), 'stocky-observability-workbook'))]"
+            },
+            "workbookName": {
+              "type": "string",
+              "value": "[guid(parameters('appInsightsId'), 'stocky-observability-workbook')]"
+            },
+            "workbookDisplayName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/workbooks', guid(parameters('appInsightsId'), 'stocky-observability-workbook')), '2022-04-01').displayName]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "apps",
         "obs"
       ]
     }
@@ -3912,6 +4390,10 @@
     "SPOKE_VNET_NAME": {
       "type": "string",
       "value": "[reference('net').outputs.vnetName.value]"
+    },
+    "OBSERVABILITY_WORKBOOK_ID": {
+      "type": "string",
+      "value": "[if(parameters('deployObservabilityWorkbook'), reference('workbook').outputs.workbookId.value, '')]"
     }
   }
 }

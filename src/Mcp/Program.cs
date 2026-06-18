@@ -1,3 +1,4 @@
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Stocky.Mcp.Tools;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
@@ -22,6 +23,13 @@ builder.Services
     .AddMcpServer()
     .WithHttpTransport()
     .WithToolsFromAssembly(typeof(PortfolioTools).Assembly);
+
+var appInsightsConnection = builder.Configuration["ApplicationInsights:ConnectionString"]
+    ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrWhiteSpace(appInsightsConnection))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(o => o.ConnectionString = appInsightsConnection);
+}
 
 var app = builder.Build();
 

@@ -1,0 +1,111 @@
+{
+  "version": "Notebook/1.0",
+  "isLocked": false,
+  "fallbackResourceIds": [
+    "__APPINSIGHTS_ID__"
+  ],
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Stocky Observability Dashboard\nThis workbook provides an operational view of API, Web MVC, MCP, and App Gateway load and performance.\n\nConnected Application Insights:\n- __APPINSIGHTS_NAME__\n\nTracked resources:\n- API: __API_APP_NAME__\n- Web MVC: __WEBMVC_APP_NAME__\n- MCP: __MCP_APP_NAME__\n- App Gateway: __APPGATEWAY_NAME__"
+      },
+      "name": "header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureMetrics\n| where TimeGenerated > ago(24h)\n| where ResourceProvider == 'MICROSOFT.APP'\n| where Resource in ('__API_APP_NAME__','__WEBMVC_APP_NAME__','__MCP_APP_NAME__')\n| where MetricName == 'Requests'\n| summarize Requests = sum(Total) by Resource, bin(TimeGenerated, 5m)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Container Apps Requests (5m)",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "__APPINSIGHTS_ID__"
+        ],
+        "visualization": "timechart"
+      },
+      "name": "requests"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureMetrics\n| where TimeGenerated > ago(24h)\n| where ResourceProvider == 'MICROSOFT.APP'\n| where Resource in ('__API_APP_NAME__','__WEBMVC_APP_NAME__','__MCP_APP_NAME__')\n| where MetricName == 'ResponseTime'\n| summarize AvgResponseTime = avg(Average) by Resource, bin(TimeGenerated, 5m)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Container Apps Response Time (5m avg)",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "__APPINSIGHTS_ID__"
+        ],
+        "visualization": "timechart"
+      },
+      "name": "response-time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureMetrics\n| where TimeGenerated > ago(24h)\n| where ResourceProvider == 'MICROSOFT.APP'\n| where Resource in ('__API_APP_NAME__','__WEBMVC_APP_NAME__','__MCP_APP_NAME__')\n| where MetricName in ('CpuPercentage','MemoryPercentage')\n| summarize AvgValue = avg(Average), MaxValue = max(Maximum) by Resource, MetricName, bin(TimeGenerated, 5m)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Container Apps CPU/Memory Saturation",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "__APPINSIGHTS_ID__"
+        ],
+        "visualization": "timechart"
+      },
+      "name": "saturation"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureMetrics\n| where TimeGenerated > ago(24h)\n| where ResourceProvider == 'MICROSOFT.NETWORK'\n| where Resource == '__APPGATEWAY_NAME__'\n| where MetricName in ('TotalRequests','FailedRequests','CurrentConnections','UnhealthyHostCount')\n| summarize Total=sum(Total), Peak=max(Maximum), Avg=avg(Average) by MetricName, bin(TimeGenerated, 5m)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Application Gateway Load and Health",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "__APPINSIGHTS_ID__"
+        ],
+        "visualization": "timechart"
+      },
+      "name": "gateway-load"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp > ago(24h)\n| summarize Requests=count(), Failed=countif(success == false), P50=percentile(duration, 50), P95=percentile(duration, 95) by cloud_RoleName\n| order by Requests desc",
+        "size": 0,
+        "title": "APM Requests by Role (App Insights)",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "__APPINSIGHTS_ID__"
+        ],
+        "visualization": "table"
+      },
+      "name": "apm-requests"
+    }
+  ]
+}

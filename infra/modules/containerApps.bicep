@@ -311,6 +311,8 @@ resource mcp 'Microsoft.App/containerApps@2024-10-02-preview' = {
           env: [
             { name: 'ASPNETCORE_URLS', value: 'http://+:8080' }
             { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appiConnectionString }
+            { name: 'ApplicationInsightsAgent_EXTENSION_VERSION', value: '~3' }
             // Internal ACA hostname of the API — avoids a round-trip through App Gateway.
             { name: 'StockyApi__BaseUrl', value: 'https://${api.properties.configuration.ingress.fqdn}/' }
             // Key is injected from KV via the mcp UAMI.

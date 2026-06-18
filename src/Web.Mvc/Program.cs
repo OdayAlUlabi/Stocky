@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using Stocky.Api;
 using Stocky.Web.Mvc.Internal;
@@ -59,6 +60,13 @@ builder.Services.AddDbContext<Stocky.Api.Data.StockyDbContext>((sp, options) =>
 });
 
 builder.Services.AddStockyDomainServices(builder.Configuration);
+
+var appInsightsConnection = builder.Configuration["ApplicationInsights:ConnectionString"]
+    ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrWhiteSpace(appInsightsConnection))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(o => o.ConnectionString = appInsightsConnection);
+}
 
 // IProviderCache is registered in Api/Program.cs alongside the Redis /
 // in-memory IDistributedCache setup. We need it here too so that in-process

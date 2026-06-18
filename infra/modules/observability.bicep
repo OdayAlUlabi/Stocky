@@ -30,4 +30,6 @@ output lawId string = law.id
 output lawCustomerId string = law.properties.customerId
 @secure()
 output lawPrimaryKey string = law.listKeys().primarySharedKey
+output appiId string = appi.id
+output appiName string = appi.name
 output appiConnectionString string = appi.properties.ConnectionString

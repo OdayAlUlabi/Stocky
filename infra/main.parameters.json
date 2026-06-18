@@ -17,6 +17,7 @@
     "githubInstallationId": { "value": "${GITHUB_INSTALLATION_ID=}" },
     "githubAppPrivateKeySecretName": { "value": "${GITHUB_APP_KEY_SECRET=github-app-private-key}" },
     "githubRunnerLabels": { "value": "${GITHUB_RUNNER_LABELS=stocky}" },
+    "deployGitHubRunner": { "value": false },
     "tlsCertSecretUri": { "value": "${TLS_CERT_SECRET_URI=}" },
     "mcpServiceKey": { "value": "${MCP_SERVICE_KEY=}" },
     "mcpOwnerId": { "value": "${MCP_OWNER_ID=}" }

@@ -14,6 +14,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.3.0" />
+    <PackageReference Include="OpenTelemetry.Api" Version="1.15.3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!--
       Reuse the API project's domain, DbContext, DTOs, and services.
       The MVC app is a *second* entry point that returns HTML; it must not

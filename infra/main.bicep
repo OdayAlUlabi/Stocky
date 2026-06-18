@@ -85,6 +85,15 @@ param imageTag string = 'placeholder'
 @description('Key Vault secret URI of the App Gateway TLS certificate. When set, enables HTTPS (443) listener and HTTP→HTTPS redirect. Format: https://kv-xxx.vault.azure.net/secrets/cert-name — use the create-tls-cert.ps1 script to generate one.')
 param tlsCertSecretUri string = ''
 
+@description('Deploy the Stocky Azure Monitor workbook dashboard.')
+param deployObservabilityWorkbook bool = true
+
+@description('Deploy baseline metric alerts for latency/failures/restarts.')
+param deployObservabilityAlerts bool = true
+
+@description('Optional Action Group resource ID for alert notifications. Leave empty to create rules without actions.')
+param alertActionGroupId string = ''
+
 var resourceToken = uniqueString(subscription().id, resourceGroup().id, environmentName)
 var prefix = 'stocky-${environmentName}'
 var alzConnected = !empty(hubVnetResourceId)
@@ -304,6 +313,33 @@ module appgw 'modules/appGateway.bicep' = {
   }
 }
 
+module alerts 'modules/alerts.bicep' = if (deployObservabilityAlerts) {
+  name: 'alerts'
+  params: {
+    prefix: prefix
+    tags: tags
+    apiAppId: resourceId('Microsoft.App/containerApps', apps.outputs.apiAppName)
+    webMvcAppId: resourceId('Microsoft.App/containerApps', apps.outputs.webMvcAppName)
+    mcpAppId: resourceId('Microsoft.App/containerApps', apps.outputs.mcpAppName)
+    appGatewayId: resourceId('Microsoft.Network/applicationGateways', 'agw-${prefix}')
+    actionGroupId: alertActionGroupId
+  }
+}
+
+module workbook 'modules/workbook.bicep' = if (deployObservabilityWorkbook) {
+  name: 'workbook'
+  params: {
+    location: location
+    tags: tags
+    appInsightsId: obs.outputs.appiId
+    appInsightsName: obs.outputs.appiName
+    apiAppName: apps.outputs.apiAppName
+    webMvcAppName: apps.outputs.webMvcAppName
+    mcpAppName: apps.outputs.mcpAppName
+    appGatewayName: 'agw-${prefix}'
+  }
+}
+
 // MCP service key stored in Key Vault (ARM management-plane write works even
 // when publicNetworkAccess is Disabled, because AzureServices bypass is set).
 // Bicep creates/updates it on every 'azd up'; skipped when mcpServiceKey is empty.
@@ -350,3 +386,4 @@ output ALZ_CONNECTED bool = alzConnected
 output DNS_MODE string = dns.outputs.dnsMode
 output SPOKE_VNET_ID string = net.outputs.vnetId
 output SPOKE_VNET_NAME string = net.outputs.vnetName
+output OBSERVABILITY_WORKBOOK_ID string = deployObservabilityWorkbook ? workbook!.outputs.workbookId : ''
