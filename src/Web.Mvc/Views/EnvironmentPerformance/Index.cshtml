@@ -1,0 +1,151 @@
+@model Stocky.Web.Mvc.ViewModels.EnvironmentPerformanceViewModel
+@{
+    ViewData["Title"] = "Environment Performance";
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-speedometer"></i> Environment Performance</h2>
+    <div class="actions">
+        <button class="btn btn-ghost btn-sm" type="button" id="btnRefreshPerf">
+            <i class="bi bi-arrow-clockwise"></i> Refresh now
+        </button>
+    </div>
+</div>
+
+<div class="kpi-grid" id="perfKpis">
+    <div class="kpi">
+        <div class="label"><i class="bi bi-heart-pulse"></i> Service health</div>
+        <div class="value" id="kpiHealth">@Model.HealthyServiceCount / @Model.TotalServiceCount</div>
+        <div class="delta text-muted" id="kpiHealthText">healthy services</div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-stopwatch"></i> Average latency</div>
+        <div class="value" id="kpiLatency">@(Model.Services.Count == 0 ? 0 : (long)Model.Services.Average(s => s.ResponseTimeMs)) ms</div>
+        <div class="delta text-muted">across API, Web, MCP</div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-memory"></i> Working set</div>
+        <div class="value" id="kpiWorkingSet">@Model.WorkingSetMb MB</div>
+        <div class="delta text-muted">GC heap: <span id="kpiHeap">@Model.GcHeapMb MB</span></div>
+    </div>
+    <div class="kpi">
+        <div class="label"><i class="bi bi-clock-history"></i> Uptime</div>
+        <div class="value" id="kpiUptime">@Model.Uptime</div>
+        <div class="delta text-muted">threads: <span id="kpiThreads">@Model.ThreadCount</span></div>
+    </div>
+</div>
+
+<article>
+    <header>
+        <span><i class="bi bi-hdd-network"></i> Service probes</span>
+        <small class="text-muted">
+            Environment: <strong id="envName">@Model.EnvironmentName</strong> ·
+            Host: <strong id="machineName">@Model.MachineName</strong> ·
+            Updated: <strong id="updatedAt">@Model.GeneratedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</strong>
+        </small>
+    </header>
+
+    <table id="serviceTable" class="sortable">
+        <thead>
+            <tr>
+                <th>Service</th>
+                <th>Status</th>
+                <th style="text-align:right;">HTTP</th>
+                <th style="text-align:right;">Latency</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var svc in Model.Services)
+        {
+            <tr>
+                <td><a href="@svc.Url" target="_blank" rel="noopener">@svc.Name</a></td>
+                <td>
+                    @if (svc.IsHealthy)
+                    {
+                        <span class="badge-up"><i class="bi bi-check-circle"></i> Healthy</span>
+                    }
+                    else
+                    {
+                        <span class="badge-down"><i class="bi bi-exclamation-triangle"></i> Degraded</span>
+                    }
+                </td>
+                <td style="text-align:right;">@(svc.StatusCode == 0 ? "-" : svc.StatusCode.ToString())</td>
+                <td style="text-align:right;">@svc.ResponseTimeMs ms</td>
+                <td class="text-muted">@svc.Details</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</article>
+
+@section Scripts {
+<script>
+(function () {
+    const statusUrl = '/EnvironmentPerformance/Status';
+    const refreshButton = document.getElementById('btnRefreshPerf');
+
+    function escapeHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function render(model) {
+        const healthy = model.healthyServiceCount;
+        const total = model.totalServiceCount;
+        const avgLatency = model.services.length
+            ? Math.round(model.services.reduce((sum, x) => sum + x.responseTimeMs, 0) / model.services.length)
+            : 0;
+
+        document.getElementById('kpiHealth').textContent = `${healthy} / ${total}`;
+        document.getElementById('kpiHealthText').textContent = healthy === total ? 'all services healthy' : 'some services degraded';
+        document.getElementById('kpiLatency').textContent = `${avgLatency} ms`;
+        document.getElementById('kpiWorkingSet').textContent = `${model.workingSetMb} MB`;
+        document.getElementById('kpiHeap').textContent = `${model.gcHeapMb} MB`;
+        document.getElementById('kpiUptime').textContent = model.uptime;
+        document.getElementById('kpiThreads').textContent = model.threadCount;
+        document.getElementById('envName').textContent = model.environmentName;
+        document.getElementById('machineName').textContent = model.machineName;
+
+        const updated = new Date(model.generatedAtUtc);
+        document.getElementById('updatedAt').textContent = updated.toLocaleString();
+
+        const tbody = document.querySelector('#serviceTable tbody');
+        tbody.innerHTML = model.services.map(svc => {
+            const statusBadge = svc.isHealthy
+                ? '<span class="badge-up"><i class="bi bi-check-circle"></i> Healthy</span>'
+                : '<span class="badge-down"><i class="bi bi-exclamation-triangle"></i> Degraded</span>';
+            const httpCode = svc.statusCode === 0 ? '-' : svc.statusCode;
+            return `<tr>
+                <td><a href="${escapeHtml(svc.url)}" target="_blank" rel="noopener">${escapeHtml(svc.name)}</a></td>
+                <td>${statusBadge}</td>
+                <td style="text-align:right;">${httpCode}</td>
+                <td style="text-align:right;">${svc.responseTimeMs} ms</td>
+                <td class="text-muted">${escapeHtml(svc.details)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function refresh() {
+        refreshButton.disabled = true;
+        try {
+            const res = await fetch(statusUrl, { cache: 'no-store' });
+            if (!res.ok) return;
+            const model = await res.json();
+            render(model);
+        } catch {
+            // Keep existing data if refresh fails.
+        } finally {
+            refreshButton.disabled = false;
+        }
+    }
+
+    refreshButton.addEventListener('click', refresh);
+    setInterval(refresh, 30000);
+})();
+</script>
+}

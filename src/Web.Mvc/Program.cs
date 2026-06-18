@@ -27,6 +27,7 @@ builder.Services.AddAntiforgery(o => o.HeaderName = "X-CSRF-TOKEN");
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 builder.Services.AddDistributedMemoryCache();
+builder.Services.AddHttpClient();
 
 // -----------------------------------------------------------------------------
 // Shared domain services + DbContext (same wiring as src/Api/Program.cs, via
