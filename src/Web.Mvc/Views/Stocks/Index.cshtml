@@ -107,6 +107,38 @@
 
 <article>
     <header>
+        <span>VWAP Mean Reversion</span>
+        <small class="text-muted">Volume-Weighted Average Price for mean reversion signals</small>
+    </header>
+    <div class="grid-2" style="grid-template-columns:1fr 1fr;align-items:start;">
+        <div>
+            <table>
+                <tbody>
+                    <tr><td>Current Price</td><td>@((analysis.CurrentPrice ?? 0m).ToString("N2"))</td></tr>
+                    <tr><td>VWAP (Cumulative)</td><td>@(analysis.Vwap?.ToString("N2") ?? "n/a")</td></tr>
+                    <tr><td>Deviation from VWAP</td><td>@(analysis.VwapDeviation?.ToString("N4") + "%" ?? "n/a")</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div>
+            @if (!string.IsNullOrEmpty(analysis.MeanReversionSignal))
+            {
+                var signalClass = analysis.VwapDeviation > 0 ? "alert-warning" : "alert-info";
+                <div class="alert @signalClass">
+                    <strong>@(analysis.VwapDeviation > 2m || analysis.VwapDeviation < -2m ? "Strong Signal" : "Weak Signal")</strong><br />
+                    @analysis.MeanReversionSignal
+                </div>
+            }
+            else
+            {
+                <p class="text-muted">No VWAP data available</p>
+            }
+        </div>
+    </div>
+</article>
+
+<article>
+    <header>
         <span>TradingView chart</span>
         <small class="text-muted">Interactive chart for @tvSymbol</small>
     </header>

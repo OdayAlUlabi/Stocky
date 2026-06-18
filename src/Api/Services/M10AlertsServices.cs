@@ -200,6 +200,43 @@ public sealed class TechnicalIndicatorService
         if (sLast is null || sPrev is null) return false;
         return closes[^2] >= sPrev && closes[^1] < sLast;
     }
+
+    /// <summary>
+    /// Volume-Weighted Average Price (VWAP) — cumulative price×volume / cumulative volume.
+    /// Used for mean reversion strategies to identify overbought/oversold conditions.
+    /// </summary>
+    public IReadOnlyList<decimal?> Vwap(IReadOnlyList<decimal> closes, IReadOnlyList<long> volumes)
+    {
+        if (closes.Count != volumes.Count)
+            throw new ArgumentException("Closes and volumes must have the same length.");
+        if (closes.Count == 0) return Array.Empty<decimal?>();
+
+        var result = new decimal?[closes.Count];
+        decimal cumulativePriceVolume = 0m;
+        decimal cumulativeVolume = 0m;
+
+        for (var i = 0; i < closes.Count; i++)
+        {
+            var volume = (decimal)volumes[i];
+            cumulativePriceVolume += closes[i] * volume;
+            cumulativeVolume += volume;
+
+            if (cumulativeVolume > 0m)
+                result[i] = Math.Round(cumulativePriceVolume / cumulativeVolume, 6);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Calculate the percentage deviation of current price from VWAP.
+    /// Positive = price above VWAP (potential overbought), Negative = below VWAP (potential oversold).
+    /// </summary>
+    public decimal? VwapDeviation(decimal currentPrice, decimal vwap)
+    {
+        if (vwap <= 0m) return null;
+        return Math.Round(((currentPrice - vwap) / vwap) * 100m, 4);
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -51,6 +51,8 @@ public sealed class SingleStockAnalysisService(
 
         var orderedBars = bars.OrderBy(b => b.Date).ToList();
         var closes = orderedBars.Select(b => b.Close).ToArray();
+        var highs = orderedBars.Select(b => b.High ?? b.Close).ToArray();
+        var lows = orderedBars.Select(b => b.Low ?? b.Close).ToArray();
         var volumes = orderedBars.Select(b => b.Volume ?? 0L).ToArray();
         var lastBar = orderedBars[^1];
 
@@ -59,8 +61,10 @@ public sealed class SingleStockAnalysisService(
 
         var sma = indicators.Sma(closes, strategy.TrendSmaPeriod);
         var rsi = indicators.Rsi(closes, strategy.FastRsiPeriod);
+        var vwap = indicators.Vwap(closes, volumes);
         var lastSma = sma.LastOrDefault();
         var lastRsi = rsi.LastOrDefault();
+        var lastVwap = vwap.LastOrDefault();
 
         var trendMet = lastSma.HasValue && lastBar.Close > lastSma.Value;
         var momentumMet = lastRsi.HasValue && lastRsi.Value < 35m;
@@ -70,6 +74,21 @@ public sealed class SingleStockAnalysisService(
         var latestVolume = lastBar.Volume.HasValue ? lastBar.Volume.Value : 0L;
         var volumeMet = volumeAverage > 0m && latestVolume >= volumeAverage * strategy.VolumeConfirmationMultiplier;
         var setupTriggerMet = false;
+
+        // VWAP Mean Reversion Signal
+        var vwapDeviation = lastVwap.HasValue ? indicators.VwapDeviation(lastBar.Close, lastVwap.Value) : null;
+        string? meanReversionSignal = null;
+        if (vwapDeviation.HasValue)
+        {
+            if (vwapDeviation.Value > 2m)
+                meanReversionSignal = "Overbought (Price > VWAP +2%) - Consider Selling";
+            else if (vwapDeviation.Value < -2m)
+                meanReversionSignal = "Oversold (Price < VWAP -2%) - Consider Buying";
+            else if (vwapDeviation.Value > 0)
+                meanReversionSignal = "Above VWAP - Slightly Overbought";
+            else
+                meanReversionSignal = "Below VWAP - Slightly Oversold";
+        }
 
         var nextEarnings = (await marketData.GetEarningsAsync(today.AddDays(-strategy.EarningsBlockDaysAfter), today.AddDays(60), ct))
             .Where(e => string.Equals(e.Symbol, symbol, StringComparison.OrdinalIgnoreCase))
@@ -139,6 +158,9 @@ public sealed class SingleStockAnalysisService(
                 confidence,
                 conditions),
             strategy,
-            warnings);
+            warnings,
+            lastVwap,
+            vwapDeviation,
+            meanReversionSignal);
     }
 }

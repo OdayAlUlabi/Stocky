@@ -616,7 +616,10 @@ public record SingleStockAnalysisDto(
     DateOnly? NextEarningsDate,
     SetupSnapshotDto Setup,
     SingleStockStrategyConfigDto Strategy,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    decimal? Vwap = null,
+    decimal? VwapDeviation = null,
+    string? MeanReversionSignal = null);
 
 public record SingleStockTradeDto(
     DateOnly EntryDate,
