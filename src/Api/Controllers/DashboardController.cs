@@ -20,7 +20,7 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
     {
         var ownerId = User.GetOwnerId();
 
-        var portfolioQuery = db.Portfolios.Where(p => p.OwnerId == ownerId);
+        var portfolioQuery = db.Portfolios.AsNoTracking().Where(p => p.OwnerId == ownerId);
         if (portfolioId.HasValue) portfolioQuery = portfolioQuery.Where(p => p.Id == portfolioId.Value);
 
         var portfolios = await portfolioQuery.ToListAsync(ct);
@@ -57,19 +57,17 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
 
         var symbols = holdings.Select(h => h.Symbol).Distinct().ToList();
 
-        var latestQuotes = await db.PriceQuotes
-            .Where(q => symbols.Contains(q.Symbol))
-            .GroupBy(q => q.Symbol)
-            .Select(g => g.OrderByDescending(x => x.AsOf).First())
-            .ToDictionaryAsync(q => q.Symbol, q => q);
+        var latestQuotes = await LoadLatestQuotesAsync(symbols, ct);
 
         var instruments = await db.Instruments
+            .AsNoTracking()
             .Where(i => symbols.Contains(i.Symbol))
-            .ToDictionaryAsync(i => i.Symbol, i => i);
+            .ToDictionaryAsync(i => i.Symbol, i => i, ct);
 
         var metadata = await db.InstrumentMetadata
+            .AsNoTracking()
             .Where(m => symbols.Contains(m.Symbol))
-            .ToDictionaryAsync(m => m.Symbol, m => m);
+            .ToDictionaryAsync(m => m.Symbol, m => m, ct);
 
         decimal totalValue = 0m, costBasis = 0m, dayPnL = 0m;
         var perSymbolValue = new Dictionary<string, decimal>();
@@ -149,6 +147,28 @@ public class DashboardController(StockyDbContext db, PortfolioLedgerService ledg
             .OrderByDescending(kv => kv.Value)
             .Select(kv => new AllocationSliceDto(kv.Key, kv.Value, Math.Round(kv.Value / total * 100m, 2)))
             .ToList();
+    }
+
+    private async Task<Dictionary<string, PriceQuote>> LoadLatestQuotesAsync(
+        IReadOnlyCollection<string> symbols,
+        CancellationToken ct)
+    {
+        if (symbols.Count == 0)
+            return new Dictionary<string, PriceQuote>();
+
+        var latestQuotes = await db.PriceQuotes
+            .AsNoTracking()
+            .Where(q => symbols.Contains(q.Symbol))
+            .Select(q => q.Symbol)
+            .Distinct()
+            .SelectMany(symbol => db.PriceQuotes
+                .AsNoTracking()
+                .Where(q => q.Symbol == symbol)
+                .OrderByDescending(q => q.AsOf)
+                .Take(1))
+            .ToListAsync(ct);
+
+        return latestQuotes.ToDictionary(q => q.Symbol, q => q);
     }
 
     /// <summary>

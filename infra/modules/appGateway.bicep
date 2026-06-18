@@ -243,10 +243,10 @@ resource appgw 'Microsoft.Network/applicationGateways@2024-01-01' = {
         name: 'probe-web'
         properties: {
           protocol: 'Https'
-          path: '/'
+          path: '/css/site.css'
           host: webBackendFqdn
           interval: 30
-          timeout: 30
+          timeout: 60
           unhealthyThreshold: 3
           pickHostNameFromBackendHttpSettings: false
           match: { statusCodes: [ '200-399' ] }
