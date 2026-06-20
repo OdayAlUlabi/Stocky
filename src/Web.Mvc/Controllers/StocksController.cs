@@ -11,6 +11,11 @@ namespace Stocky.Web.Mvc.Controllers;
 [Authorize]
 public class StocksController : Controller
 {
+    private static readonly HashSet<string> SupportedTimeframes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "5m", "15m", "30m", "1H", "4H", "1D", "1W", "1M"
+    };
+
     [HttpGet("/stocks/{symbol?}")]
     public async Task<IActionResult> Index(
         string? symbol = "AAPL",
@@ -28,6 +33,7 @@ public class StocksController : Controller
         CancellationToken ct = default)
     {
         symbol = string.IsNullOrWhiteSpace(symbol) ? "AAPL" : symbol.Trim().ToUpperInvariant();
+        timeframe = NormalizeTimeframe(timeframe);
         var strategy = new SingleStockStrategyConfigDto(
             HistoryYears: Math.Clamp(historyYears, 1, 10),
             TakeProfitPercent: takeProfitPercent,
@@ -56,7 +62,7 @@ public class StocksController : Controller
             ?? new List<OhlcBarDto>();
 
         var tdSequential = await this.InvokeAsync<StockyApi.SingleStockAnalysisController, TdSequentialResultDto>(
-            c => c.TdSequential(symbol, timeframe, 100, 250, 24, 70.0, ct));
+            c => c.TdSequential(symbol, timeframe, 30, 250, 24, 70.0, ct));
 
         var model = new SingleStockDashboardViewModel(
             symbol,
@@ -73,9 +79,40 @@ public class StocksController : Controller
             tdSequential);
 
         ViewBag.TradingViewSymbol = ResolveTradingViewSymbol(symbol);
+        ViewBag.TradingViewInterval = ResolveTradingViewInterval(timeframe);
         ViewBag.WalkForwardWarnings = model.WalkForward.Warnings;
         return View(model);
     }
+
+    private static string NormalizeTimeframe(string? timeframe)
+    {
+        if (string.IsNullOrWhiteSpace(timeframe))
+        {
+            return "1D";
+        }
+
+        var normalized = timeframe.Trim();
+        normalized = normalized.Equals("60", StringComparison.OrdinalIgnoreCase) ? "1H" : normalized;
+        normalized = normalized.Equals("240", StringComparison.OrdinalIgnoreCase) ? "4H" : normalized;
+        normalized = normalized.Equals("D", StringComparison.OrdinalIgnoreCase) ? "1D" : normalized;
+        normalized = normalized.Equals("W", StringComparison.OrdinalIgnoreCase) ? "1W" : normalized;
+        normalized = normalized.Equals("M", StringComparison.OrdinalIgnoreCase) ? "1M" : normalized;
+
+        return SupportedTimeframes.Contains(normalized) ? normalized.ToUpperInvariant() : "1D";
+    }
+
+    private static string ResolveTradingViewInterval(string timeframe)
+        => timeframe.ToUpperInvariant() switch
+        {
+            "5M" => "5",
+            "15M" => "15",
+            "30M" => "30",
+            "1H" => "60",
+            "4H" => "240",
+            "1W" => "W",
+            "1M" => "M",
+            _ => "D"
+        };
 
     private static string ResolveTradingViewSymbol(string symbol)
     {

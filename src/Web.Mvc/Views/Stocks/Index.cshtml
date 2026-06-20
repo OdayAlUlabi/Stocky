@@ -10,6 +10,8 @@
     var chartWidth = 920;
     var chartHeight = 260;
     var tvSymbol = (ViewBag.TradingViewSymbol as string) ?? (Model.Symbol.Contains(':') ? Model.Symbol : $"NASDAQ:{Model.Symbol}");
+    var tvInterval = (ViewBag.TradingViewInterval as string) ?? "D";
+    var timeframeOptions = new[] { "5m", "15m", "30m", "1H", "4H", "1D", "1W", "1M" };
 
     string BuildPolyline(IReadOnlyList<double> values, int width, int height)
     {
@@ -42,7 +44,17 @@
         <label>
             Timeframe<br />
             <select name="timeframe">
-                <option value="1D" selected="@(Model.Timeframe == "1D")">1D</option>
+                @foreach (var tf in timeframeOptions)
+                {
+                    if (string.Equals(Model.Timeframe, tf, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <option value="@tf" selected>@tf</option>
+                    }
+                    else
+                    {
+                        <option value="@tf">@tf</option>
+                    }
+                }
             </select>
         </label>
         <label>
@@ -72,6 +84,91 @@
     var winRateColor = backtest.WinRate >= 55 ? "#22c55e" : backtest.WinRate >= 45 ? "#f59e0b" : "#ef4444";
     var vwapChange = analysis.VwapDeviation;
     var priceVsVwapColor = vwapChange > 0 ? "#22c55e" : vwapChange < 0 ? "#ef4444" : "#94a3b8";
+    var entryLower = setup.EntryLowerBound;
+    var entryUpper = setup.EntryUpperBound;
+    var suggestedEntry = entryLower.HasValue && entryUpper.HasValue
+        ? Math.Round((entryLower.Value + entryUpper.Value) / 2m, 4)
+        : setup.EntryPrice ?? analysis.CurrentPrice ?? 0m;
+    var suggestedStop = setup.StopLossPrice ?? (suggestedEntry > 0m
+        ? Math.Round(suggestedEntry * (1m - (Model.Strategy.StopLossPercent / 100m)), 4)
+        : 0m);
+    var riskPerShare = suggestedEntry > 0m && suggestedStop > 0m
+        ? suggestedEntry - suggestedStop
+        : 0m;
+    var target1 = setup.TakeProfitPrice ?? (suggestedEntry > 0m
+        ? Math.Round(suggestedEntry * (1m + (Model.Strategy.TakeProfitPercent / 100m)), 4)
+        : 0m);
+    var tdstResistance = Model.TdSequential?.TdstResistance;
+    var target2 = tdstResistance.HasValue && tdstResistance.Value > target1
+        ? tdstResistance.Value
+        : (riskPerShare > 0m ? Math.Round(suggestedEntry + (riskPerShare * 2.5m), 4) : target1);
+    var target3 = riskPerShare > 0m
+        ? Math.Round(suggestedEntry + (riskPerShare * 3.5m), 4)
+        : target2;
+    var rr1 = riskPerShare > 0m ? Math.Round((target1 - suggestedEntry) / riskPerShare, 2) : 0m;
+    var rr2 = riskPerShare > 0m ? Math.Round((target2 - suggestedEntry) / riskPerShare, 2) : 0m;
+    var rr3 = riskPerShare > 0m ? Math.Round((target3 - suggestedEntry) / riskPerShare, 2) : 0m;
+    var metConditions = setup.Conditions.Count(c => c.IsMet);
+    var totalConditions = setup.Conditions.Count;
+    var currentPrice = analysis.CurrentPrice ?? 0m;
+    var taBias = setup.State == "Triggered" && setup.Confidence >= 0.60m
+        ? "Constructive long bias"
+        : (setup.Confidence >= 0.40m ? "Neutral-to-bullish bias" : "Weak setup - wait for confirmation");
+
+    var latestBar = Model.Bars.LastOrDefault();
+    var sessionOpen = latestBar?.Open ?? 0m;
+    var sessionHigh = latestBar?.High ?? 0m;
+    var sessionLow = latestBar?.Low ?? 0m;
+    var openingRangeHigh = Math.Max(sessionOpen, sessionHigh);
+    var openingRangeLow = Math.Min(sessionOpen, sessionLow);
+    var openingRangePct = sessionOpen > 0m
+        ? Math.Round(((openingRangeHigh - openingRangeLow) / sessionOpen) * 100m, 2)
+        : 0m;
+
+    var recentVolumes = Model.Bars.TakeLast(20).Select(b => (decimal)b.Volume).ToList();
+    var avgVol20 = recentVolumes.Count > 0 ? recentVolumes.Average() : 0m;
+    var latestVol = latestBar is not null ? (decimal)latestBar.Volume : 0m;
+    var rvol20 = avgVol20 > 0m ? Math.Round(latestVol / avgVol20, 2) : 0m;
+
+    var recentCloses = Model.Bars.TakeLast(20).Select(b => b.Close).ToList();
+    var closeMean = recentCloses.Count > 0 ? recentCloses.Average() : 0m;
+    var closeVariance = recentCloses.Count > 1
+        ? recentCloses.Sum(c => (c - closeMean) * (c - closeMean)) / recentCloses.Count
+        : 0m;
+    var closeSigma = (decimal)Math.Sqrt((double)closeVariance);
+
+    var vwapBasis = analysis.Vwap ?? currentPrice;
+    var vwapUpper1 = vwapBasis + closeSigma;
+    var vwapLower1 = Math.Max(0m, vwapBasis - closeSigma);
+    var vwapUpper2 = vwapBasis + (closeSigma * 2m);
+    var vwapLower2 = Math.Max(0m, vwapBasis - (closeSigma * 2m));
+
+    var setupStatus = analysis.EarningsBlackoutActive
+        ? "Invalidated"
+        : setup.State == "Triggered"
+            ? "Triggered"
+            : setup.Confidence >= 0.45m ? "Watching" : "Invalidated";
+    var setupStatusColor = setupStatus switch
+    {
+        "Triggered" => "#22c55e",
+        "Watching" => "#f59e0b",
+        _ => "#ef4444"
+    };
+    var entryZoneReady = entryLower.HasValue && entryUpper.HasValue;
+    var inEntryZone = entryZoneReady && currentPrice >= entryLower!.Value && currentPrice <= entryUpper!.Value;
+
+    var bullProbability = (int)Math.Clamp(
+        Math.Round((double)(setup.Confidence * 100m)
+            + (analysis.VwapDeviation.HasValue ? (analysis.VwapDeviation.Value < 0m ? 8 : -4) : 0)
+            + (double)((backtest.WinRate - 50m) / 2m)),
+        10,
+        80);
+    var bearProbability = (int)Math.Clamp(100 - bullProbability - 20, 10, 70);
+    var baseProbability = 100 - bullProbability - bearProbability;
+
+    var baseTarget = target1;
+    var bullTarget = target2;
+    var bearTarget = suggestedStop;
 }
 <div class="kpi-grid">
     <div class="kpi">
@@ -218,6 +315,176 @@
 </div>
 </article>
 
+<article class="ta-plan">
+    <header>
+        <span>Technical analysis plan</span>
+        <small class="text-muted">Rules-based suggestion for entry and profit taking</small>
+    </header>
+    <div class="ta-plan-grid">
+        <div>
+            <div class="ta-bias">@taBias</div>
+            <p class="text-muted" style="margin:.5rem 0 0;">@metConditions / @totalConditions setup conditions are currently met. Treat this as a planning aid, not financial advice.</p>
+            <table style="margin-top:.75rem;">
+                <tbody>
+                    <tr><td>Suggested entry</td><td style="font-weight:700;">@(suggestedEntry > 0m ? suggestedEntry.ToString("N2") : "n/a")</td></tr>
+                    <tr><td>Suggested stop</td><td>@(suggestedStop > 0m ? suggestedStop.ToString("N2") : "n/a")</td></tr>
+                    <tr><td>Risk per share</td><td>@(riskPerShare > 0m ? riskPerShare.ToString("N2") : "n/a")</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div>
+            <div class="ta-targets">
+                <div class="ta-target">
+                    <strong>Take profit 1</strong>
+                    <span>@(target1 > 0m ? target1.ToString("N2") : "n/a")</span>
+                    <small>Scale out 40% · R:R @rr1</small>
+                </div>
+                <div class="ta-target">
+                    <strong>Take profit 2</strong>
+                    <span>@(target2 > 0m ? target2.ToString("N2") : "n/a")</span>
+                    <small>Scale out 40% · R:R @rr2</small>
+                </div>
+                <div class="ta-target">
+                    <strong>Take profit 3</strong>
+                    <span>@(target3 > 0m ? target3.ToString("N2") : "n/a")</span>
+                    <small>Runner 20% · R:R @rr3</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</article>
+
+<article class="analysis-block intraday-context">
+    <header style="display:flex;justify-content:space-between;gap:.75rem;align-items:center;flex-wrap:wrap;">
+        <div>
+            <span>Intraday context (analysis)</span>
+            <small class="text-muted" style="display:block;">Opening range, RVOL, and VWAP bands for monitoring</small>
+        </div>
+        <div class="refresh-controls">
+            <label style="display:inline-flex;gap:.35rem;align-items:center;margin:0;">
+                <input id="auto-refresh-toggle" type="checkbox" />
+                Auto refresh
+            </label>
+            <select id="auto-refresh-interval" aria-label="Auto refresh interval">
+                <option value="15">15s</option>
+                <option value="30" selected>30s</option>
+                <option value="60">60s</option>
+                <option value="120">120s</option>
+            </select>
+        </div>
+    </header>
+    <div class="intraday-grid">
+        <div class="intraday-card">
+            <strong>Opening range</strong>
+            <div class="intraday-main">@openingRangeHigh.ToString("N2") / @openingRangeLow.ToString("N2")</div>
+            <small class="text-muted">Range width: @openingRangePct.ToString("N2")%</small>
+        </div>
+        <div class="intraday-card">
+            <strong>RVOL (20)</strong>
+            <div class="intraday-main @(rvol20 >= 1.5m ? "text-green" : rvol20 >= 1.0m ? string.Empty : "text-red")">@rvol20.ToString("N2")x</div>
+            <small class="text-muted">Last vol @latestVol.ToString("N0") vs avg @avgVol20.ToString("N0")</small>
+        </div>
+        <div class="intraday-card">
+            <strong>VWAP bands</strong>
+            <div class="intraday-main">@vwapBasis.ToString("N2")</div>
+            <small class="text-muted">±1σ: @vwapLower1.ToString("N2") - @vwapUpper1.ToString("N2")</small>
+            <small class="text-muted" style="display:block;">±2σ: @vwapLower2.ToString("N2") - @vwapUpper2.ToString("N2")</small>
+        </div>
+        <div class="intraday-card">
+            <strong>Session positioning</strong>
+            <div class="intraday-main">@(currentPrice > vwapBasis ? "Above VWAP" : "Below VWAP")</div>
+            <small class="text-muted">Price @currentPrice.ToString("N2") | Basis @vwapBasis.ToString("N2")</small>
+        </div>
+    </div>
+</article>
+
+<article class="analysis-block">
+    <header>
+        <span>Setup state machine</span>
+        <small class="text-muted">Analysis-only workflow: Watching -> Triggered -> Invalidated</small>
+    </header>
+    <div class="state-machine-grid">
+        <div class="state-card" style="border-color:@setupStatusColor;">
+            <div class="state-title">
+                <span class="state-dot" style="background:@setupStatusColor;"></span>
+                <strong>@setupStatus</strong>
+            </div>
+            <p class="text-muted" style="margin:.35rem 0 0;">@taBias</p>
+            <p style="margin:.5rem 0 0;font-size:.88rem;">Conditions met: @metConditions / @totalConditions</p>
+        </div>
+        <div class="state-card">
+            <strong>Why this status</strong>
+            <ul class="state-list">
+                <li>Entry zone: @(entryZoneReady ? $"{entryLower:0.00} - {entryUpper:0.00}" : "Not available")</li>
+                <li>Current price: @(currentPrice > 0m ? currentPrice.ToString("N2") : "n/a") (@(inEntryZone ? "inside" : "outside") zone)</li>
+                <li>VWAP signal: @(string.IsNullOrWhiteSpace(analysis.MeanReversionSignal) ? "n/a" : analysis.MeanReversionSignal)</li>
+                <li>Earnings blackout: @(analysis.EarningsBlackoutActive ? "Active" : "None")</li>
+            </ul>
+        </div>
+    </div>
+</article>
+
+<article class="analysis-block">
+    <header>
+        <span>Scenario board</span>
+        <small class="text-muted">Probability-weighted analysis paths (no order execution)</small>
+    </header>
+    <div class="scenario-grid">
+        <div class="scenario-card scenario-base">
+            <div class="scenario-head">
+                <strong>Base case</strong>
+                <span>@baseProbability%</span>
+            </div>
+            <p>Price respects the current range and mean-reverts around VWAP.</p>
+            <div class="scenario-level">Reference target: @(baseTarget > 0m ? baseTarget.ToString("N2") : "n/a")</div>
+        </div>
+        <div class="scenario-card scenario-bull">
+            <div class="scenario-head">
+                <strong>Bull case</strong>
+                <span>@bullProbability%</span>
+            </div>
+            <p>Setup confirms with momentum and pushes toward higher resistance.</p>
+            <div class="scenario-level">Upside path: @(bullTarget > 0m ? bullTarget.ToString("N2") : "n/a")</div>
+        </div>
+        <div class="scenario-card scenario-bear">
+            <div class="scenario-head">
+                <strong>Bear case</strong>
+                <span>@bearProbability%</span>
+            </div>
+            <p>Setup loses structure and re-tests invalidation support.</p>
+            <div class="scenario-level">Risk level: @(bearTarget > 0m ? bearTarget.ToString("N2") : "n/a")</div>
+        </div>
+    </div>
+</article>
+
+<article class="analysis-block">
+    <header>
+        <span>Alert rules (analysis-only)</span>
+        <small class="text-muted">Use as monitoring conditions; no broker integration</small>
+    </header>
+    <div class="alerts-grid">
+        <div class="alert-rule">
+            <strong>Entry-zone touch</strong>
+            <p>Alert when price enters the suggested entry zone.</p>
+            <span class="rule-state @(inEntryZone ? "is-on" : "is-off")">@(inEntryZone ? "Live now" : "Waiting")</span>
+        </div>
+        <div class="alert-rule">
+            <strong>VWAP reclaim/loss</strong>
+            <p>Alert when VWAP deviation crosses back toward neutral.</p>
+            <span class="rule-state @(analysis.VwapDeviation.HasValue && Math.Abs(analysis.VwapDeviation.Value) <= 0.5m ? "is-on" : "is-off")">
+                @(analysis.VwapDeviation.HasValue && Math.Abs(analysis.VwapDeviation.Value) <= 0.5m ? "Near trigger" : "Waiting")
+            </span>
+        </div>
+        <div class="alert-rule">
+            <strong>Structure break</strong>
+            <p>Alert when price breaks TDST support/resistance context.</p>
+            <span class="rule-state @(Model.TdSequential?.TdstResistance.HasValue == true && currentPrice > Model.TdSequential.TdstResistance.Value ? "is-on" : "is-off")">
+                @(Model.TdSequential?.TdstResistance.HasValue == true && currentPrice > Model.TdSequential.TdstResistance.Value ? "Resistance break" : "Waiting")
+            </span>
+        </div>
+    </div>
+</article>
+
 <article>
     <header>
         <span>TradingView chart</span>
@@ -266,7 +533,21 @@
         </header>
         <form method="get" action="/stocks/@Model.Symbol" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;">
             <input type="hidden" name="symbol" value="@Model.Symbol" />
-            <input type="hidden" name="timeframe" value="@Model.Timeframe" />
+            <label>Timeframe
+                <select name="timeframe">
+                    @foreach (var tf in timeframeOptions)
+                    {
+                        if (string.Equals(Model.Timeframe, tf, StringComparison.OrdinalIgnoreCase))
+                        {
+                            <option value="@tf" selected>@tf</option>
+                        }
+                        else
+                        {
+                            <option value="@tf">@tf</option>
+                        }
+                    }
+                </select>
+            </label>
             <label>History years<input name="historyYears" type="number" min="1" max="10" value="@Model.Strategy.HistoryYears" /></label>
             <label>Take profit %<input name="takeProfitPercent" type="number" step="0.1" value="@Model.Strategy.TakeProfitPercent" /></label>
             <label>Stop loss %<input name="stopLossPercent" type="number" step="0.1" value="@Model.Strategy.StopLossPercent" /></label>
@@ -430,73 +711,6 @@
             </article>
         }
     </div>
-
-    <article>
-        <header>
-            <span>TD bar annotations — last @td.Bars.Count bars</span>
-            <small class="text-muted">Setup 1-9, sequential countdown, combo, TDST breaks</small>
-        </header>
-        <div style="overflow-x:auto;">
-        <table style="font-size:.8rem;">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th style="text-align:right;">Close</th>
-                    <th style="text-align:center;color:@tdBuy;">Buy<br/>Setup</th>
-                    <th style="text-align:center;color:@tdSell;">Sell<br/>Setup</th>
-                    <th style="text-align:center;color:@tdBuy;">Buy<br/>CD</th>
-                    <th style="text-align:center;color:@tdSell;">Sell<br/>CD</th>
-                    <th style="text-align:center;color:@tdBuy;">Combo<br/>Buy</th>
-                    <th style="text-align:center;color:@tdSell;">Combo<br/>Sell</th>
-                    <th>Signal</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var bar in td.Bars.TakeLast(60))
-                {
-                    var signals = new List<string>();
-                    if (bar.BuySetupDone)   signals.Add("🟢 Setup 9");
-                    if (bar.SellSetupDone)  signals.Add("🔴 Setup 9");
-                    if (bar.BuyCountdown13) signals.Add("🟢 CD 13");
-                    if (bar.SellCountdown13)signals.Add("🔴 CD 13");
-                    if (bar.ComboBuy13)     signals.Add("🟢 Combo 13");
-                    if (bar.ComboSell13)    signals.Add("🔴 Combo 13");
-                    if (bar.TdstResBreak)   signals.Add("↑ TDST");
-                    if (bar.TdstSupBreak)   signals.Add("↓ TDST");
-                    if (bar.IsBuyPerfected) signals.Add("✦ Perf");
-                    if (bar.IsSellPerfected)signals.Add("✦ Perf");
-                    <tr>
-                        <td>@bar.Date.ToString("MMM d")</td>
-                        <td style="text-align:right;">@bar.Close.ToString("N2")</td>
-                        <td style="text-align:center;color:@tdBuy;font-weight:@(bar.BuySetup==9?"700":"400");">
-                            @(bar.BuySetup > 0 ? bar.BuySetup.ToString() : "")
-                        </td>
-                        <td style="text-align:center;color:@tdSell;font-weight:@(bar.SellSetup==9?"700":"400");">
-                            @(bar.SellSetup > 0 ? bar.SellSetup.ToString() : "")
-                        </td>
-                        <td style="text-align:center;color:@(bar.BuyCountdown13?"#166534":tdBuy);font-weight:@(bar.BuyCountdown13?"700":"400");">
-                            @(bar.BuyCountdown > 0 ? bar.BuyCountdown.ToString() : "")
-                            @(bar.BuyCountdown13 ? "✓" : "")
-                        </td>
-                        <td style="text-align:center;color:@(bar.SellCountdown13?"#991b1b":tdSell);font-weight:@(bar.SellCountdown13?"700":"400");">
-                            @(bar.SellCountdown > 0 ? bar.SellCountdown.ToString() : "")
-                            @(bar.SellCountdown13 ? "✓" : "")
-                        </td>
-                        <td style="text-align:center;color:@tdBuy;font-weight:@(bar.ComboBuy13?"700":"400");">
-                            @(bar.BuyCombo > 0 ? ("c" + bar.BuyCombo) : "")
-                            @(bar.ComboBuy13 ? "✓" : "")
-                        </td>
-                        <td style="text-align:center;color:@tdSell;font-weight:@(bar.ComboSell13?"700":"400");">
-                            @(bar.SellCombo > 0 ? ("c" + bar.SellCombo) : "")
-                            @(bar.ComboSell13 ? "✓" : "")
-                        </td>
-                        <td>@string.Join(" ", signals)</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        </div>
-    </article>
 }
 
 @section Scripts {
@@ -511,7 +725,7 @@
         new TradingView.widget({
             autosize: true,
             symbol: "@tvSymbol",
-            interval: "D",
+            interval: "@tvInterval",
             timezone: "Etc/UTC",
             theme: "light",
             style: "1",
@@ -522,6 +736,54 @@
             save_image: false,
             container_id: containerId
         });
+    }());
+
+    (function () {
+        var toggle = document.getElementById("auto-refresh-toggle");
+        var intervalSelect = document.getElementById("auto-refresh-interval");
+        if (!toggle || !intervalSelect || !window.localStorage) {
+            return;
+        }
+
+        var enabledKey = "stocky.analysis.autorefresh.enabled";
+        var intervalKey = "stocky.analysis.autorefresh.interval";
+        var savedEnabled = window.localStorage.getItem(enabledKey) === "true";
+        var savedInterval = window.localStorage.getItem(intervalKey);
+
+        if (savedInterval) {
+            intervalSelect.value = savedInterval;
+        }
+        toggle.checked = savedEnabled;
+
+        var timerId = null;
+        function applyRefresh() {
+            if (timerId) {
+                window.clearInterval(timerId);
+                timerId = null;
+            }
+
+            var enabled = toggle.checked;
+            var seconds = parseInt(intervalSelect.value, 10);
+            if (!enabled || Number.isNaN(seconds) || seconds < 10) {
+                return;
+            }
+
+            timerId = window.setInterval(function () {
+                window.location.reload();
+            }, seconds * 1000);
+        }
+
+        toggle.addEventListener("change", function () {
+            window.localStorage.setItem(enabledKey, toggle.checked ? "true" : "false");
+            applyRefresh();
+        });
+
+        intervalSelect.addEventListener("change", function () {
+            window.localStorage.setItem(intervalKey, intervalSelect.value);
+            applyRefresh();
+        });
+
+        applyRefresh();
     }());
     </script>
 }
